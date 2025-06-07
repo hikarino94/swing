@@ -23,9 +23,9 @@ from typing import Final
 
 import pandas as pd
 
-# ────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
 # Configuration
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Config:
     db_path: Path = Path("../db/stock.db")
@@ -40,9 +40,9 @@ BOOL_COLS: Final = [
     "ChangesInAccountingEstimates",
 ]
 
-# ────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
 # Helpers
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
 def _cast_bool(series: pd.Series) -> pd.Series:
     """"true"/"false"/"1"/"0"/NaN/空文字 → bool へ正規化"""
@@ -54,9 +54,9 @@ def _cast_bool(series: pd.Series) -> pd.Series:
         .astype(bool)
     )
 
-# ────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
 # Data Access
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
 def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
     """Load recent statements rows from DB and return as DataFrame."""
@@ -97,9 +97,9 @@ def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
     df.sort_values(["LocalCode", "DisclosedAt"], inplace=True)
     return df
 
-# ────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
 # Feature Engineering
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
 def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     """Add QoQ / YoY / quality metrics per LocalCode."""
@@ -145,9 +145,9 @@ def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
 
     return df.groupby("LocalCode", group_keys=False).apply(_add)
 
-# ────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
 # Screening
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
 def screen_signals(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     """Apply sequential filters and log stage counts."""
@@ -177,9 +177,9 @@ def screen_signals(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     logging.debug("Stage counts: %s", stage)
     return df.loc[m].copy()
 
-# ────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
 # Persistence
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
 def save_signals(sig_df: pd.DataFrame, conn: sqlite3.Connection) -> int:
     if sig_df.empty:
@@ -212,9 +212,9 @@ def save_signals(sig_df: pd.DataFrame, conn: sqlite3.Connection) -> int:
     conn.commit()
     return len(sig)
 
-# ────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
 # CLI / Main
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Screen statements for fundamental signals.")

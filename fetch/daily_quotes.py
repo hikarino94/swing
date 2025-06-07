@@ -44,7 +44,9 @@ LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("daily_quotes")
 DB_PATH ="../db/stock.db"
-# ------------------------------------------------------------------ helpers --
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
 
 def _load_token() -> str:
     with open("idtoken.json", "r", encoding="utf-8") as f:
@@ -62,7 +64,9 @@ def _daterange(s: dt.date, e: dt.date) -> List[dt.date]:
         d += dt.timedelta(days=1)
     return out
 
-# -------------------------- API with pagination -----------------------------
+# ---------------------------------------------------------------------------
+# API with pagination
+# ---------------------------------------------------------------------------
 
 def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
     headers = {"Authorization": f"Bearer {token}"}
@@ -103,7 +107,9 @@ def _by_date(sess: Session, tok: str, d: dt.date) -> pd.DataFrame:
 def _by_code(sess: Session, tok: str, code: str) -> pd.DataFrame:
     return _fetch_all(sess, {"code": code}, tok)
 
-# --------------------------- dataframe utils -------------------------------
+# ---------------------------------------------------------------------------
+# dataframe utils
+# ---------------------------------------------------------------------------
 
 def _norm(df: pd.DataFrame) -> pd.DataFrame:
     rename = {"Code": "code", "Date": "date", "Open": "open", "High": "high", "Low": "low",
@@ -125,7 +131,9 @@ def _norm(df: pd.DataFrame) -> pd.DataFrame:
              "adj_close", "adj_volume"]
     return df[[c for c in order if c in df.columns]]
 
-# ------------------------------- SQLite ------------------------------------
+# ---------------------------------------------------------------------------
+# SQLite
+# ---------------------------------------------------------------------------
 
 def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
     if df.empty:
@@ -140,7 +148,9 @@ def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
         DROP TABLE _tmp_q;
     """)
 
-# ------------------------------- main --------------------------------------
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
 
 def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
     tok = _load_token()
@@ -167,7 +177,9 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
                 _upsert(conn, _norm(_by_code(sess, tok, c)))
     logger.info("Done")
 
-# ------------------------------- CLI ---------------------------------------
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 def _cli() -> None:
     ap = argparse.ArgumentParser(description="Download J‑Quants daily quotes → SQLite")

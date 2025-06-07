@@ -25,7 +25,9 @@ import pandas as pd
 TD_FMT = "%Y-%m-%d"
 DEFAULT_CAPITAL = 1_000_000  # JPY
 
-# ── DB helpers ───────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# DB helpers
+# ---------------------------------------------------------------------------
 
 def read_prices(conn: sqlite3.Connection) -> pd.DataFrame:
     q = (
@@ -49,14 +51,18 @@ def read_signals(conn: sqlite3.Connection, start: str | None, end: str | None) -
     df = pd.read_sql(q, conn, parse_dates=["DisclosedAt"])
     return df
 
-# ── Trading‑days utility ────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Trading-days utility
+# ---------------------------------------------------------------------------
 
 def add_n_trading_days(s: pd.Series, n: int, calendar: pd.DatetimeIndex) -> pd.Series:
     idx = calendar.searchsorted(s) + n
     idx[idx >= len(calendar)] = len(calendar) - 1
     return calendar[idx]
 
-# ── Backtest core ───────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Backtest core
+# ---------------------------------------------------------------------------
 
 def run_backtest(prices: pd.DataFrame, signals: pd.DataFrame, *,
                  hold: int, offset: int, capital: int) -> pd.DataFrame:
@@ -107,7 +113,9 @@ def summarize(trades: pd.DataFrame) -> pd.DataFrame:
     })
     return summary
 
-# ── Excel output ────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Excel output
+# ---------------------------------------------------------------------------
 
 def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
     with pd.ExcelWriter(path, engine="xlsxwriter") as writer:
@@ -134,7 +142,9 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
         chart.set_y_axis({"num_format": "#,##0"})
         sheet.insert_chart("L2", chart)
 
-# ── CLI ─────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
