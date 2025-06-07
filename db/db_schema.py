@@ -208,6 +208,23 @@ CREATE TABLE IF NOT EXISTS fundamental_signals (
 );
 CREATE INDEX IF NOT EXISTS idx_fsignals_localcode ON fundamental_signals(LocalCode);
 CREATE INDEX IF NOT EXISTS idx_fsignals_created  ON fundamental_signals(created_at);
+
+-- technical_indicators ----------------------------------------------
+CREATE TABLE IF NOT EXISTS technical_indicators (
+    code TEXT       NOT NULL,
+    signal_date TEXT       NOT NULL,
+    signal_ma INTEGER,
+    signal_rsi INTEGER,
+    signal_adx INTEGER,
+    signal_bb INTEGER,
+    signal_macd INTEGER,
+    signals_count INTEGER,
+    PRIMARY KEY (code, date)
+);
+CREATE INDEX IF NOT EXISTS idx_tindicators_code ON technical_indicators(code);
+CREATE INDEX IF NOT EXISTS idx_tindicators_date ON technical_indicators(signal_date);
+
+
 """
 
 
