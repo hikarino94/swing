@@ -4,7 +4,7 @@
 SQLite schema initializer for the swing‑trade project.
 
 Usage:
-    python db_schema.py 
+    python db_schema.py
 
 This file intentionally contains **only ASCII characters** to avoid the
 `unicodeescape` issue on Windows.
@@ -14,7 +14,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-DB_PATH ="./stock.db"
+DB_PATH = "./stock.db"
 
 DDL = """
 PRAGMA journal_mode = WAL;

@@ -48,6 +48,7 @@ DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 # helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_token() -> str:
     """Read the JWT token stored in ``idtoken.json``."""
     with open("idtoken.json", "r", encoding="utf-8") as f:
@@ -66,9 +67,11 @@ def _daterange(s: dt.date, e: dt.date) -> List[dt.date]:
         d += dt.timedelta(days=1)
     return out
 
+
 # ---------------------------------------------------------------------------
 # API with pagination
 # ---------------------------------------------------------------------------
+
 
 def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
     """Send one API request with simple retry and rate limiting."""
@@ -78,7 +81,7 @@ def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
         if r.status_code < 400:
             time.sleep(RATE_SLEEP)
             return r.json()
-        wait = 2 ** i
+        wait = 2**i
         logger.warning("HTTP %s → retry in %ss", r.status_code, wait)
         time.sleep(wait)
     r.raise_for_status()
@@ -109,56 +112,105 @@ def _by_date(sess: Session, tok: str, d: dt.date) -> pd.DataFrame:
     """Fetch quotes for a single date."""
     return _fetch_all(sess, {"date": d.strftime("%Y%m%d")}, tok)
 
+
 def _by_code(sess: Session, tok: str, code: str) -> pd.DataFrame:
     """Fetch all quotes for the specified stock code."""
     return _fetch_all(sess, {"code": code}, tok)
+
 
 # ---------------------------------------------------------------------------
 # dataframe utils
 # ---------------------------------------------------------------------------
 
+
 def _norm(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize API columns and types for the database."""
-    rename = {"Code": "code", "Date": "date", "Open": "open", "High": "high", "Low": "low",
-              "Close": "close", "UpperLimit": "upper_limit", "LowerLimit": "lower_limit",
-              "Volume": "volume", "TurnoverValue": "turnover_value",
-              "AdjustmentFactor": "adj_factor", "AdjustmentOpen": "adj_open",
-              "AdjustmentHigh": "adj_high", "AdjustmentLow": "adj_low",
-              "AdjustmentClose": "adj_close", "AdjustmentVolume": "adj_volume"}
+    rename = {
+        "Code": "code",
+        "Date": "date",
+        "Open": "open",
+        "High": "high",
+        "Low": "low",
+        "Close": "close",
+        "UpperLimit": "upper_limit",
+        "LowerLimit": "lower_limit",
+        "Volume": "volume",
+        "TurnoverValue": "turnover_value",
+        "AdjustmentFactor": "adj_factor",
+        "AdjustmentOpen": "adj_open",
+        "AdjustmentHigh": "adj_high",
+        "AdjustmentLow": "adj_low",
+        "AdjustmentClose": "adj_close",
+        "AdjustmentVolume": "adj_volume",
+    }
     df = df.rename(columns=rename)
-    num = ["open", "high", "low", "close", "upper_limit", "lower_limit", "volume",
-           "turnover_value", "adj_factor", "adj_open", "adj_high", "adj_low", "adj_close",
-           "adj_volume"]
+    num = [
+        "open",
+        "high",
+        "low",
+        "close",
+        "upper_limit",
+        "lower_limit",
+        "volume",
+        "turnover_value",
+        "adj_factor",
+        "adj_open",
+        "adj_high",
+        "adj_low",
+        "adj_close",
+        "adj_volume",
+    ]
     for c in num:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y%m%d")
-    order = ["code", "date", "open", "high", "low", "close", "upper_limit", "lower_limit",
-             "volume", "turnover_value", "adj_factor", "adj_open", "adj_high", "adj_low",
-             "adj_close", "adj_volume"]
+    order = [
+        "code",
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "upper_limit",
+        "lower_limit",
+        "volume",
+        "turnover_value",
+        "adj_factor",
+        "adj_open",
+        "adj_high",
+        "adj_low",
+        "adj_close",
+        "adj_volume",
+    ]
     return df[[c for c in order if c in df.columns]]
+
 
 # ---------------------------------------------------------------------------
 # SQLite
 # ---------------------------------------------------------------------------
+
 
 def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
     """Insert or update the dataframe into the ``prices`` table."""
     if df.empty:
         return
     df.to_sql("_tmp_q", conn, if_exists="replace", index=False)
-    conn.executescript("""
+    conn.executescript(
+        """
         INSERT OR REPLACE INTO prices
         SELECT code, date, open, high, low, close,
                upper_limit, lower_limit, volume, turnover_value,
                adj_factor, adj_open, adj_high, adj_low, adj_close, adj_volume
         FROM _tmp_q;
         DROP TABLE _tmp_q;
-    """)
+    """
+    )
+
 
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
+
 
 def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
     """Fetch quotes from the API and load them into SQLite."""
@@ -166,7 +218,11 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
     sess = requests.Session()
     with sqlite3.connect(DB_PATH) as conn:
         if start or end:
-            s = dt.datetime.strptime(start, "%Y%m%d").date() if start else dt.date.today()
+            s = (
+                dt.datetime.strptime(start, "%Y%m%d").date()
+                if start
+                else dt.date.today()
+            )
             e = dt.datetime.strptime(end, "%Y%m%d").date() if end else dt.date.today()
             for d in _daterange(s, e):
                 df = _by_date(sess, tok, d)
@@ -174,21 +230,25 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
                     logger.info("%s: no data (holiday/closed)", d)
                     continue
                 logger.info("%s by date", d)
-                _upsert(conn, _norm(df))            
+                _upsert(conn, _norm(df))
         else:
             today = dt.date.today()
             logger.info("today %s", today)
             df_today = _norm(_by_date(sess, tok, today))
             _upsert(conn, df_today)
-            splits = df_today.loc[df_today["adj_factor"].fillna(1.0) != 1.0, "code"].unique()
+            splits = df_today.loc[
+                df_today["adj_factor"].fillna(1.0) != 1.0, "code"
+            ].unique()
             for c in splits:
                 logger.info("split detected %s → full history", c)
                 _upsert(conn, _norm(_by_code(sess, tok, c)))
     logger.info("Done")
 
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def _cli() -> None:
     """Command‑line entry point."""
@@ -197,6 +257,7 @@ def _cli() -> None:
     ap.add_argument("--end", help="YYYYMMDD")
     a = ap.parse_args()
     fetch_and_load(a.start, a.end)
+
 
 if __name__ == "__main__":
     # • 開始日と終了日を受け取り日足データを取得
