@@ -18,7 +18,7 @@ import sqlite3
 import pandas as pd
 import sys
 
-DB_PATH ="./stock.db"
+DB_PATH ="../db/stock.db"
 
 # --- Compute flags ----------------------------------------------------------
 
@@ -27,30 +27,30 @@ def compute_indicators(df):
     df = df.copy()
     df['date'] = pd.to_datetime(df['date'], errors='coerce')
     df = df.dropna(subset=['date']).sort_values('date').set_index('date')
-    for col in ['open', 'high', 'low', 'close']:
+    for col in ['adj_open', 'adj_high', 'adj_low', 'adj_close']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
-    df[['open','high','low','close']] = df[['open','high','low','close']].ffill().bfill()
+    df[['adj_open','adj_high','adj_low','adj_close']] = df[['adj_open','adj_high','adj_low','adj_close']].ffill().bfill()
     if len(df) < 50:
         return pd.DataFrame()
-    sma10 = df['close'].rolling(10).mean()
-    sma20 = df['close'].rolling(20).mean()
-    sma50 = df['close'].rolling(50).mean()
+    sma10 = df['adj_close'].rolling(10).mean()
+    sma20 = df['adj_close'].rolling(20).mean()
+    sma50 = df['adj_close'].rolling(50).mean()
     slope10 = sma10.diff()
     slope20 = sma20.diff()
     slope50 = sma50.diff()
-    delta = df['close'].diff()
+    delta = df['adj_close'].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
     avg_gain = gain.rolling(14).mean()
     avg_loss = loss.rolling(14).mean()
     rs = avg_gain / avg_loss
     rsi14 = 100 - (100 / (1 + rs))
-    plus_dm = df['high'].diff().clip(lower=0)
-    minus_dm = df['low'].diff().clip(upper=0).abs()
+    plus_dm = df['adj_high'].diff().clip(lower=0)
+    minus_dm = df['adj_low'].diff().clip(upper=0).abs()
     tr = pd.concat([
-        df['high'] - df['low'],
-        (df['high'] - df['close'].shift()).abs(),
-        (df['low'] - df['close'].shift()).abs()
+        df['adj_high'] - df['adj_low'],
+        (df['adj_high'] - df['adj_close'].shift()).abs(),
+        (df['adj_low'] - df['adj_close'].shift()).abs()
     ], axis=1).max(axis=1)
     atr = tr.rolling(14).mean()
     plus_di = 100 * plus_dm.rolling(14).sum() / atr
@@ -58,18 +58,18 @@ def compute_indicators(df):
     dx = (plus_di - minus_di).abs() / (plus_di + minus_di) * 100
     adx14 = dx.rolling(14).mean()
     ma20 = sma20
-    std20 = df['close'].rolling(20).std()
+    std20 = df['adj_close'].rolling(20).std()
     bb_up1 = ma20 + std20
     bb_low1 = ma20 - std20
-    ema12 = df['close'].ewm(span=12, adjust=False).mean()
-    ema26 = df['close'].ewm(span=26, adjust=False).mean()
+    ema12 = df['adj_close'].ewm(span=12, adjust=False).mean()
+    ema26 = df['adj_close'].ewm(span=26, adjust=False).mean()
     macd = ema12 - ema26
     macd_signal = macd.ewm(span=9, adjust=False).mean()
     flags = pd.DataFrame({
         'signal_ma': ((sma10 > sma20) & (sma20 > sma50) & (slope10 > 0) & (slope20 > 0) & (slope50 > 0)).astype(int),
         'signal_rsi': (rsi14 >= 50).astype(int),
         'signal_adx': (adx14 >= 20).astype(int),
-        'signal_bb': ((df['close'] >= bb_up1) | (df['close'] <= bb_low1)).astype(int),
+        'signal_bb': ((df['adj_close'] >= bb_up1) | (df['adj_close'] <= bb_low1)).astype(int),
         'signal_macd': (macd > macd_signal).astype(int)
     }, index=df.index)
     flags['signals_count'] = flags.sum(axis=1)
@@ -87,7 +87,7 @@ def run_indicators(conn, as_of=None):
         print(f"[{idx}/{total}] 銘柄 {code} のシグナル算出中...", flush=True)
         try:
             df = pd.read_sql(
-                "SELECT date, open, high, low, close FROM prices "
+                "SELECT date, adj_open, adj_high, adj_low, adj_close FROM prices "
                 "WHERE code=? AND date<=? ORDER BY date", conn,
                 params=(code, as_of)
             )
