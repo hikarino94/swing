@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""backtest_signals.py – Capital‑sized swing back‑tester + Excel output
+"""backtest_statements.py – Capital‑sized swing back‑tester + Excel output
 =======================================================================
 * 1 取引あたり指定資金 (default 1,000,000 JPY) で最大株数を購入
 * Entry : DisclosedAt + entry_offset 営業日の adj_close
@@ -9,7 +9,7 @@
 
 Usage
 -----
-$ python backtest_signals.py \
+$ python backtest_statements.py \
        --db ../db/stock.db \
        --hold 40 --entry-offset 1 \
        --capital 1000000 --xlsx trades.xlsx -v

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-technical_swing_tools.py
+technical_technical.py
 
 Swing-trade signal extraction tool based on technical indicators.
 
@@ -10,8 +10,8 @@ Commands:
   screen       Preview today’s signals (optional)
 
 Usage examples:
-  python technical_swing_tools.py indicators --db ./db/stock.db --as-of 2025-06-07
-  python technical_swing_tools.py screen     --db ./db/stock.db --as-of 2025-06-07
+  python technical_technical.py indicators --db ./db/stock.db --as-of 2025-06-07
+  python technical_technical.py screen     --db ./db/stock.db --as-of 2025-06-07
 """
 import argparse
 import sqlite3
