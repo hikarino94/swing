@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-backtest_swing.py
+backtest_technical.py
 
 Standalone back-test utility for the technical swing-trade framework using adjusted prices.
 
@@ -15,7 +15,7 @@ Scenario
 Usage example
 -------------
 ```bash
-python backtest_swing.py --as-of 20240314
+python backtest_technical.py --as-of 20240314
 ```
 
 Optional parameters:
