@@ -32,7 +32,7 @@ import sys
 CAPITAL_DEFAULT = 1_000_000
 HOLD_DAYS_DEFAULT = 60
 STOP_LOSS_PCT_DEFAULT = 0.05
-DB_PATH ="../db/stock.db"
+DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 # ---------------------------------------------------------------------------
 # Back-test core

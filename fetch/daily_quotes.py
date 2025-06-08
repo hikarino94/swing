@@ -43,7 +43,7 @@ RATE_SLEEP = 0.35  # ~3 req/sec safety
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("daily_quotes")
-DB_PATH ="../db/stock.db"
+DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------

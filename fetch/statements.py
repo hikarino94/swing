@@ -40,7 +40,7 @@ API_ENDPOINT = "https://api.jquants.com/v1/fins/statements"
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("statements")
-DB_PATH = "../db/stock.db"
+DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 # ---------------------------------------------------------------------------
 # SQLite側の statements テーブルに合わせたカラム一覧

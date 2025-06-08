@@ -24,6 +24,7 @@ import pandas as pd
 
 TD_FMT = "%Y-%m-%d"
 DEFAULT_CAPITAL = 1_000_000  # JPY
+DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 # ---------------------------------------------------------------------------
 # DB helpers
@@ -148,7 +149,7 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    p.add_argument("--db", default="../db/stock.db", help="SQLite DB file")
+    p.add_argument("--db", default=DB_PATH, help="SQLite DB file")
     p.add_argument("--hold", type=int, default=40, help="Holding period (trading days)")
     p.add_argument("--entry-offset", type=int, default=1, help="Entry day offset")
     p.add_argument("--capital", type=int, default=DEFAULT_CAPITAL, help="Capital per trade (JPY)")

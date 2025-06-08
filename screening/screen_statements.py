@@ -28,7 +28,7 @@ import pandas as pd
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Config:
-    db_path: Path = Path("../db/stock.db")
+    db_path: Path = Path(__file__).resolve().parents[1] / "db/stock.db"
     lookback_days: int = 365 * 3      # 3 年分ロード
     recent_days: int = 7              # 開示から何日以内を対象にするか
     window_q: int = 4                 # 四半期 MA
