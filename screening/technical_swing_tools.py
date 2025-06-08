@@ -33,12 +33,17 @@ def compute_indicators(df):
     df[['adj_open','adj_high','adj_low','adj_close']] = df[['adj_open','adj_high','adj_low','adj_close']].ffill().bfill()
     if len(df) < 50:
         return pd.DataFrame()
+    # --- Moving averages ---
     sma10 = df['adj_close'].rolling(10).mean()
     sma20 = df['adj_close'].rolling(20).mean()
     sma50 = df['adj_close'].rolling(50).mean()
+
+    # price slope of each MA
     slope10 = sma10.diff()
     slope20 = sma20.diff()
     slope50 = sma50.diff()
+
+    # --- RSI(14) ---
     delta = df['adj_close'].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -46,6 +51,8 @@ def compute_indicators(df):
     avg_loss = loss.rolling(14).mean()
     rs = avg_gain / avg_loss
     rsi14 = 100 - (100 / (1 + rs))
+
+    # --- ADX(14) ---
     plus_dm = df['adj_high'].diff().clip(lower=0)
     minus_dm = df['adj_low'].diff().clip(upper=0).abs()
     tr = pd.concat([
@@ -58,15 +65,21 @@ def compute_indicators(df):
     minus_di = 100 * minus_dm.rolling(14).sum() / atr
     dx = (plus_di - minus_di).abs() / (plus_di + minus_di) * 100
     adx14 = dx.rolling(14).mean()
+
+    # --- Bollinger Bands (20-day, 1σ) ---
     ma20 = sma20
     std20 = df['adj_close'].rolling(20).std()
     bb_up1 = ma20 + std20
     bb_low1 = ma20 - std20
+
+    # --- MACD ---
     ema12 = df['adj_close'].ewm(span=12, adjust=False).mean()
     ema26 = df['adj_close'].ewm(span=26, adjust=False).mean()
     macd = ema12 - ema26
     macd_signal = macd.ewm(span=9, adjust=False).mean()
-    overheat = (df['adj_close'] > sma10 * 1.1).astype(int)
+
+    # --- Overheating check ---
+    overheat = (df['adj_close'] > sma10 * 1.1).astype(int)  # 10% above 10MA is considered overheated
 
     flags = pd.DataFrame({
         'signal_ma': ((sma10 > sma20) & (sma20 > sma50) & (slope10 > 0) & (slope20 > 0) & (slope50 > 0)).astype(int),
@@ -74,6 +87,7 @@ def compute_indicators(df):
         'signal_adx': (adx14 >= 20).astype(int),
         'signal_bb': ((df['adj_close'] >= bb_up1) | (df['adj_close'] <= bb_low1)).astype(int),
         'signal_macd': (macd > macd_signal).astype(int),
+        # signals_overheating: flag when close is >10% above its 10MA
         'signals_overheating': overheat
     }, index=df.index)
     flags['signals_count'] = flags[['signal_ma','signal_rsi','signal_adx','signal_bb','signal_macd']].sum(axis=1)
