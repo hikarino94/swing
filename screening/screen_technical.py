@@ -201,15 +201,22 @@ if __name__ == "__main__":
     parser.add_argument("command", choices=["indicators", "screen"])
     parser.add_argument("--db", default=DB_PATH, help="SQLite DB path")
     parser.add_argument("--as-of", help="Date (YYYYMMDD) to compute or screen")
+    parser.add_argument(
+        "--lookback",
+        type=int,
+        default=50,
+        help="Number of days before --as-of to process",
+    )
     args = parser.parse_args()
     conn = sqlite3.connect(args.db)
     if args.command == "indicators":
         if args.as_of:
             # 引数 --as-of に YYYYMMDD 形式の日付が指定されていたら、
-            # 50日前から実施
+            # 指定された期間ぶん遡って処理する
             end_date = datetime.strptime(args.as_of, "%Y%m%d").date()
-            start_date = end_date - timedelta(days=50)
-            for i in range(51):
+            back_days = max(args.lookback, 0)
+            start_date = end_date - timedelta(days=back_days)
+            for i in range(back_days + 1):
                 target = (start_date + timedelta(days=i)).strftime("%Y%m%d")
                 print(f"\n===== 実行日: {target} =====")
                 run_indicators(conn, target)
