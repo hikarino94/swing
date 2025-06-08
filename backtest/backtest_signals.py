@@ -31,6 +31,13 @@ DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 # ---------------------------------------------------------------------------
 
 def read_prices(conn: sqlite3.Connection) -> pd.DataFrame:
+    """価格テーブルを読み込む。
+
+    入力パラメータ: SQLite の接続オブジェクト。
+    戻り値: 銘柄コードと取引日をインデックスとした DataFrame。
+    処理内容: prices テーブルを取得しマルチインデックスで整形して返す。
+    """
+
     q = (
         "SELECT code   AS LocalCode,"
         "       date   AS trade_date,"
@@ -42,6 +49,13 @@ def read_prices(conn: sqlite3.Connection) -> pd.DataFrame:
 
 
 def read_signals(conn: sqlite3.Connection, start: str | None, end: str | None) -> pd.DataFrame:
+    """シグナルを日付範囲で取得する。
+
+    入力パラメータ: SQLite 接続と開始・終了日の文字列。
+    戻り値: DisclosedAt を持つ DataFrame。
+    処理内容: fundamental_signals テーブルから期間で絞り込んで読み込む。
+    """
+
     q = "SELECT LocalCode, DisclosedAt FROM fundamental_signals"
     if start or end:
         q += " WHERE 1=1"
@@ -57,6 +71,13 @@ def read_signals(conn: sqlite3.Connection, start: str | None, end: str | None) -
 # ---------------------------------------------------------------------------
 
 def add_n_trading_days(s: pd.Series, n: int, calendar: pd.DatetimeIndex) -> pd.Series:
+    """営業日ベースで日付をずらす。
+
+    入力パラメータ: 日付シリーズ、加算日数、取引日カレンダー。
+    戻り値: カレンダー上で n 日後の日付を並べた Series。
+    処理内容: searchsorted を使い範囲外は最終日に丸めて返す。
+    """
+
     idx = calendar.searchsorted(s) + n
     idx[idx >= len(calendar)] = len(calendar) - 1
     return calendar[idx]
@@ -67,6 +88,13 @@ def add_n_trading_days(s: pd.Series, n: int, calendar: pd.DatetimeIndex) -> pd.S
 
 def run_backtest(prices: pd.DataFrame, signals: pd.DataFrame, *,
                  hold: int, offset: int, capital: int) -> pd.DataFrame:
+    """シグナルに基づくバックテストを実施する。
+
+    入力パラメータ: 価格データ、シグナル、保有日数、エントリーオフセット、資金量。
+    戻り値: 各トレードの結果をまとめた DataFrame。
+    処理内容: エントリー日とイグジット日を計算し損益などを算出する。
+    """
+
     calendar = prices.index.get_level_values(1).unique().sort_values()
 
     signals = signals.copy()
@@ -103,6 +131,13 @@ def run_backtest(prices: pd.DataFrame, signals: pd.DataFrame, *,
 
 
 def summarize(trades: pd.DataFrame) -> pd.DataFrame:
+    """バックテスト結果のサマリーを作成する。
+
+    入力パラメータ: トレード結果の DataFrame。
+    戻り値: 指標をまとめた DataFrame。
+    処理内容: 総損益や勝率などを計算して表形式にまとめる。
+    """
+
     total_profit = trades["profit_jpy"].sum()
     win_rate     = (trades["profit_jpy"] > 0).mean()
     mean_ret_pct = trades["ret_pct"].mean()
@@ -119,6 +154,13 @@ def summarize(trades: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
+    """バックテスト結果を Excel ファイルに出力する。
+
+    入力パラメータ: トレード表、サマリー表、保存先パス。
+    戻り値: なし。
+    処理内容: trades と summary をシートに書き込み、グラフを追加する。
+    """
+
     with pd.ExcelWriter(path, engine="xlsxwriter") as writer:
         trades.to_excel(writer, sheet_name="trades", index=False)
         summary.to_excel(writer, sheet_name="summary", index=False)
