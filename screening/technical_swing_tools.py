@@ -158,7 +158,7 @@ if __name__ == '__main__':
                 # 50日前から実施
                 end_date = datetime.strptime(args.as_of, '%Y%m%d').date()
                 start_date =end_date - timedelta(days=50)
-                for i in range(50):
+                for i in range(51):
                     target = (start_date + timedelta(days=i)).strftime('%Y%m%d')
                     print(f"\n===== 実行日: {target} =====")
                     run_indicators(conn, target)

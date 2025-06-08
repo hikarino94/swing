@@ -15,7 +15,7 @@ Scenario
 Usage example
 -------------
 ```bash
-python backtest_swing.py --db ./db/stock.db --as-of 2024-03-14 --outfile backtest_result.xlsx
+python backtest_swing.py --as-of 20240314
 ```
 
 Optional parameters:
@@ -28,7 +28,7 @@ import sqlite3
 import pandas as pd
 import datetime as dt
 import sys
-
+from pathlib import Path
 CAPITAL_DEFAULT = 1_000_000
 HOLD_DAYS_DEFAULT = 60
 STOP_LOSS_PCT_DEFAULT = 0.05
