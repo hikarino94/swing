@@ -186,6 +186,8 @@ CREATE TABLE IF NOT EXISTS statements (
 
 CREATE INDEX IF NOT EXISTS idx_statements_localcode  ON statements(LocalCode);
 CREATE INDEX IF NOT EXISTS idx_statements_disclosure_no ON statements(DisclosureNumber);
+CREATE INDEX IF NOT EXISTS idx_statements_disclosed_date
+    ON statements(DisclosedDate);
 -- fundamental_signals ----------------------------------------------
 -- スクリーニング結果を永続化し、後から検証・可視化できるようにする
 CREATE TABLE IF NOT EXISTS fundamental_signals (
