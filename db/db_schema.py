@@ -243,4 +243,5 @@ def main() -> None:  # pragma: no cover
 
 
 if __name__ == "__main__":
+    # • 必要なテーブルとインデックスを作成
     main()

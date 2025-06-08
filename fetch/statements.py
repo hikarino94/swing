@@ -262,6 +262,8 @@ def main(mode: str) -> None:
             logger.error("Invalid mode: %s. Use '1' or '2'.", mode)
 
 if __name__ == "__main__":
+    # • モードを指定して決算データを取得
+    # • SQLite DB の statements テーブルへ upsert
     parser = argparse.ArgumentParser(description="Fetch statements into SQLite")
     parser.add_argument("mode", choices=["1", "2"], help="1: bulk by code, 2: daily by date")
     args = parser.parse_args()

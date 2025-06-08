@@ -166,6 +166,9 @@ def run_backtest(conn, as_of: str, outfile: str,
 # ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
+    # • コマンドライン引数を解析して各種設定を取得
+    # • 指定 DB に接続
+    # • run_backtest() を呼び出し結果を Excel へ保存
     parser = argparse.ArgumentParser(description='Swing-trade back-test tool')
     parser.add_argument('--db', default=DB_PATH, help="SQLite DB path")
     parser.add_argument('--as-of', required=True, help='Entry date (YYYYMMDD)')

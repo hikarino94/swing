@@ -159,6 +159,9 @@ def screen_signals(conn, as_of=None):
 
 # --- Main -------------------------------------------------------------------
 if __name__ == '__main__':
+    # • 引数を解析してコマンドを判定
+    # • SQLite DB に接続
+    # • indicators: run_indicators() / screen: screen_signals()
     parser = argparse.ArgumentParser(description="Swing-trade technical signal tool")
     parser.add_argument('command', choices=['indicators','screen'])
     parser.add_argument('--db', default=DB_PATH, help="SQLite DB path")
