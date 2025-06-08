@@ -39,7 +39,7 @@ API_ENDPOINT = "https://api.jquants.com/v1/listed/info"
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("listed_info")
-DB_PATH ="../db/stock.db"
+DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

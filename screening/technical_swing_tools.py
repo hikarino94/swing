@@ -18,7 +18,8 @@ import sqlite3
 import pandas as pd
 import sys
 from datetime import datetime, timedelta
-DB_PATH ="../db/stock.db"
+from pathlib import Path
+DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 # --- Compute flags ----------------------------------------------------------
 
