@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-technical_technical.py
+screen_technical.py
 
 Swing-trade signal extraction tool based on technical indicators.
 
@@ -10,8 +10,8 @@ Commands:
   screen       Preview today’s signals (optional)
 
 Usage examples:
-  python technical_technical.py indicators --db ./db/stock.db --as-of 2025-06-07
-  python technical_technical.py screen     --db ./db/stock.db --as-of 2025-06-07
+  python screen_technical.py indicators --db ./db/stock.db --as-of 2025-06-07
+  python screen_technical.py screen     --db ./db/stock.db --as-of 2025-06-07
 """
 import argparse
 import sqlite3
@@ -125,6 +125,7 @@ def run_indicators(conn, as_of=None):
     ]
     total = len(codes)
     print(f"開始: {total} 銘柄を処理します (as_of={as_of})")
+    records = []
     for idx, code in enumerate(codes, start=1):
         # print(f"[{idx}/{total}] 銘柄 {code} のシグナル算出中...", flush=True)
         try:
@@ -158,20 +159,22 @@ def run_indicators(conn, as_of=None):
                 rec["signals_first"] = 1 if cnt == 0 else 0
             else:
                 rec["signals_first"] = 0
-            conn.execute(
-                "INSERT OR REPLACE INTO technical_indicators "
-                "(code,signal_date,signal_ma,signal_rsi,signal_adx,signal_bb,signal_macd,"
-                "signals_count,signals_overheating,signals_first) "
-                "VALUES (:code,:signal_date,:signal_ma,:signal_rsi,:signal_adx,:signal_bb,"
-                ":signal_macd,:signals_count,:signals_overheating,:signals_first)",
-                rec,
-            )
-            conn.commit()
+            records.append(rec)
             print(
                 f"  → 完了 (signal_date={rec['signal_date']},signals_count={rec['signals_count']}, overheating={rec['signals_overheating']})"
             )
         except Exception as e:
             print(f"Skipping {code}: {e}", file=sys.stderr)
+    if records:
+        sql = (
+            """INSERT OR REPLACE INTO technical_indicators
+            (code, signal_date, signal_ma, signal_rsi, signal_adx, signal_bb, signal_macd,
+            signals_count, signals_overheating, signals_first)
+            VALUES (:code, :signal_date, :signal_ma, :signal_rsi, :signal_adx, :signal_bb,
+            :signal_macd, :signals_count, :signals_overheating, :signals_first)"""
+        )
+        conn.executemany(sql, records)
+        conn.commit()
     print("全処理完了")
 
 
