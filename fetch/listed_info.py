@@ -151,4 +151,6 @@ def _cli() -> None:  # pragma: no cover
     update_listed_info()
 
 if __name__ == "__main__":  # pragma: no cover
+    # • J-Quants の上場銘柄一覧を取得
+    # • SQLite DB の listed_info を更新
     _cli()

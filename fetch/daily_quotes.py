@@ -189,4 +189,6 @@ def _cli() -> None:
     fetch_and_load(a.start, a.end)
 
 if __name__ == "__main__":
+    # • 開始日と終了日を受け取り日足データを取得
+    # • prices テーブルへ保存
     _cli()
