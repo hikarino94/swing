@@ -219,7 +219,10 @@ CREATE TABLE IF NOT EXISTS technical_indicators (
     signal_bb INTEGER,
     signal_macd INTEGER,
     signals_count INTEGER,
-    PRIMARY KEY (code, date)
+    signals_overheating INTEGER,
+    signals_first INTEGER,
+
+    PRIMARY KEY (code, signal_date)
 );
 CREATE INDEX IF NOT EXISTS idx_tindicators_code ON technical_indicators(code);
 CREATE INDEX IF NOT EXISTS idx_tindicators_date ON technical_indicators(signal_date);

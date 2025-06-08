@@ -44,7 +44,7 @@ def run_backtest(conn, as_of: str, outfile: str,
                  stop_loss_pct: float = STOP_LOSS_PCT_DEFAULT):
     # Entry signals
     sig_df = pd.read_sql(
-        "SELECT code FROM technical_indicators WHERE signal_date=? AND signals_count>=3",
+        "SELECT code FROM technical_indicators WHERE signal_date=? AND signals_count>=3 AND signals_overheating !=1",
         conn, params=(as_of,)
     )
     if sig_df.empty:
@@ -52,7 +52,7 @@ def run_backtest(conn, as_of: str, outfile: str,
         return
 
     # Convert as_of to date and integer YYYYMMDD for SQL filter
-    entry_dt = dt.datetime.strptime(as_of, "%Y-%m-%d").date()
+    entry_dt = dt.datetime.strptime(as_of, "%Y%m%d").date()
     as_of_int = int(entry_dt.strftime('%Y%m%d'))
     exit_cut_dt = entry_dt + dt.timedelta(days=hold_days)
 
@@ -168,7 +168,7 @@ def run_backtest(conn, as_of: str, outfile: str,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Swing-trade back-test tool')
     parser.add_argument('--db', default=DB_PATH, help="SQLite DB path")
-    parser.add_argument('--as-of', required=True, help='Entry date (YYYY-MM-DD)')
+    parser.add_argument('--as-of', required=True, help='Entry date (YYYYMMDD)')
     parser.add_argument('--outfile', default='backtest_results.xlsx', help='Excel output path')
     parser.add_argument('--capital', type=int, default=CAPITAL_DEFAULT, help='Capital per trade')
     parser.add_argument('--hold-days', type=int, default=HOLD_DAYS_DEFAULT, help='Holding period days')
