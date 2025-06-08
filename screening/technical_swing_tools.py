@@ -83,7 +83,7 @@ def compute_indicators(df):
 # --- Run indicators ---------------------------------------------------------
 def run_indicators(conn, as_of=None):
     if not as_of:
-        as_of = conn.execute("SELECT MAX(date) FROM prices").fetchone()[0]
+        as_of = datetime.today().strftime('%Y%m%d')
     codes = [row[0] for row in conn.execute("SELECT DISTINCT code FROM prices").fetchall()]
     total = len(codes)
     print(f"開始: {total} 銘柄を処理します (as_of={as_of})")
@@ -97,12 +97,12 @@ def run_indicators(conn, as_of=None):
             )
             flags = compute_indicators(df)
             if flags.empty:
-                #print(f"  → スキップ (データ不足)")
+                print(f" {code}  → スキップ (データ不足)")
                 continue
             today = pd.to_datetime(as_of)
             row = flags[flags['signal_date'] == today]
             if row.empty:
-                #print(f"  → 当日分なし")
+                print(f"{code}  → 当日分なし")
                 continue
             rec = row.iloc[0].to_dict()
             rec['signal_date'] = rec['signal_date'].strftime('%Y%m%d')
@@ -152,7 +152,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     conn = sqlite3.connect(args.db)
     if args.command == 'indicators':
-        if args.command == 'indicators':
             if args.as_of:
                 # 引数 --as-of に YYYYMMDD 形式の日付が指定されていたら、
                 # 50日前から実施
@@ -162,8 +161,8 @@ if __name__ == '__main__':
                     target = (start_date + timedelta(days=i)).strftime('%Y%m%d')
                     print(f"\n===== 実行日: {target} =====")
                     run_indicators(conn, target)
-        else:
+            else:
             # 日付指定なしなら従来通り最新日だけ処理
-            run_indicators(conn, None)
+                run_indicators(conn, None)
     else:
         screen_signals(conn, args.as_of)
