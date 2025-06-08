@@ -49,6 +49,7 @@ DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 # ---------------------------------------------------------------------------
 
 def _load_token() -> str:
+    """Read the JWT token stored in ``idtoken.json``."""
     with open("idtoken.json", "r", encoding="utf-8") as f:
         tok = json.load(f).get("idToken")
     if not tok:
@@ -57,6 +58,7 @@ def _load_token() -> str:
 
 
 def _daterange(s: dt.date, e: dt.date) -> List[dt.date]:
+    """Return all weekdays between ``s`` and ``e`` (inclusive)."""
     d, out = s, []
     while d <= e:
         if d.weekday() < 5:
@@ -69,6 +71,7 @@ def _daterange(s: dt.date, e: dt.date) -> List[dt.date]:
 # ---------------------------------------------------------------------------
 
 def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
+    """Send one API request with simple retry and rate limiting."""
     headers = {"Authorization": f"Bearer {token}"}
     for i in range(retries):
         r: Response = session.get(API_URL, headers=headers, params=params, timeout=60)
@@ -82,6 +85,7 @@ def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
 
 
 def _fetch_all(session: Session, base_params: dict, token: str) -> pd.DataFrame:
+    """Retrieve all pages for the given API parameters."""
     frames: List[pd.DataFrame] = []
     params = base_params.copy()
     seen: set[str] = set()
@@ -102,9 +106,11 @@ def _fetch_all(session: Session, base_params: dict, token: str) -> pd.DataFrame:
 
 
 def _by_date(sess: Session, tok: str, d: dt.date) -> pd.DataFrame:
+    """Fetch quotes for a single date."""
     return _fetch_all(sess, {"date": d.strftime("%Y%m%d")}, tok)
 
 def _by_code(sess: Session, tok: str, code: str) -> pd.DataFrame:
+    """Fetch all quotes for the specified stock code."""
     return _fetch_all(sess, {"code": code}, tok)
 
 # ---------------------------------------------------------------------------
@@ -112,6 +118,7 @@ def _by_code(sess: Session, tok: str, code: str) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def _norm(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize API columns and types for the database."""
     rename = {"Code": "code", "Date": "date", "Open": "open", "High": "high", "Low": "low",
               "Close": "close", "UpperLimit": "upper_limit", "LowerLimit": "lower_limit",
               "Volume": "volume", "TurnoverValue": "turnover_value",
@@ -136,6 +143,7 @@ def _norm(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
+    """Insert or update the dataframe into the ``prices`` table."""
     if df.empty:
         return
     df.to_sql("_tmp_q", conn, if_exists="replace", index=False)
@@ -153,6 +161,7 @@ def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 
 def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
+    """Fetch quotes from the API and load them into SQLite."""
     tok = _load_token()
     sess = requests.Session()
     with sqlite3.connect(DB_PATH) as conn:
@@ -182,6 +191,7 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
 # ---------------------------------------------------------------------------
 
 def _cli() -> None:
+    """Command‑line entry point."""
     ap = argparse.ArgumentParser(description="Download J‑Quants daily quotes → SQLite")
     ap.add_argument("--start", help="YYYYMMDD")
     ap.add_argument("--end", help="YYYYMMDD")
