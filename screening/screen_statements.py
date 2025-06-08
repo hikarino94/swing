@@ -23,15 +23,17 @@ from typing import Final
 
 import pandas as pd
 
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Config:
     db_path: Path = Path(__file__).resolve().parents[1] / "db/stock.db"
-    lookback_days: int = 365 * 3      # 3 年分ロード
-    recent_days: int = 7              # 開示から何日以内を対象にするか
-    window_q: int = 4                 # 四半期 MA
+    lookback_days: int = 365 * 3  # 3 年分ロード
+    recent_days: int = 7  # 開示から何日以内を対象にするか
+    window_q: int = 4  # 四半期 MA
+
 
 # ブール列名（statements テーブル側では TEXT 型）
 BOOL_COLS: Final = [
@@ -44,19 +46,31 @@ BOOL_COLS: Final = [
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _cast_bool(series: pd.Series) -> pd.Series:
-    """"true"/"false"/"1"/"0"/NaN/空文字 → bool へ正規化"""
+    """ "true"/"false"/"1"/"0"/NaN/空文字 → bool へ正規化"""
     return (
         series.astype(str)
         .str.lower()
-        .map({"true": True, "1": True, "false": False, "0": False, "nan": False, "": False})
+        .map(
+            {
+                "true": True,
+                "1": True,
+                "false": False,
+                "0": False,
+                "nan": False,
+                "": False,
+            }
+        )
         .fillna(False)
         .astype(bool)
     )
 
+
 # ---------------------------------------------------------------------------
 # Data Access
 # ---------------------------------------------------------------------------
+
 
 def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
     """Load recent statements rows from DB and return as DataFrame."""
@@ -91,15 +105,19 @@ def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
 
     # Combine date & time
     df["DisclosedAt"] = pd.to_datetime(
-        df["DisclosedDate"].fillna("1970-01-01") + " " + df["DisclosedTime"].fillna("00:00:00")
+        df["DisclosedDate"].fillna("1970-01-01")
+        + " "
+        + df["DisclosedTime"].fillna("00:00:00")
     )
 
     df.sort_values(["LocalCode", "DisclosedAt"], inplace=True)
     return df
 
+
 # ---------------------------------------------------------------------------
 # Feature Engineering
 # ---------------------------------------------------------------------------
+
 
 def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     """Add QoQ / YoY / quality metrics per LocalCode."""
@@ -135,19 +153,25 @@ def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
 
         # FY YoY
         fy_mask = g["TypeOfCurrentPeriod"] == "FY"
-        g.loc[fy_mask, "eps_yoy_fy"] = g.loc[fy_mask, "EarningsPerShare"].pct_change(fill_method=None)
+        g.loc[fy_mask, "eps_yoy_fy"] = g.loc[fy_mask, "EarningsPerShare"].pct_change(
+            fill_method=None
+        )
 
         # Quarter YoY
         g["q_num"] = g["TypeOfCurrentPeriod"].map(quarter_map)
-        g["eps_yoy_q"] = g.groupby("q_num")["EarningsPerShare"].pct_change(fill_method=None)
+        g["eps_yoy_q"] = g.groupby("q_num")["EarningsPerShare"].pct_change(
+            fill_method=None
+        )
         g.drop(columns="q_num", inplace=True)
         return g
 
     return df.groupby("LocalCode", group_keys=False).apply(_add)
 
+
 # ---------------------------------------------------------------------------
 # Screening
 # ---------------------------------------------------------------------------
+
 
 def screen_signals(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     """Apply sequential filters and log stage counts."""
@@ -177,9 +201,11 @@ def screen_signals(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     logging.debug("Stage counts: %s", stage)
     return df.loc[m].copy()
 
+
 # ---------------------------------------------------------------------------
 # Persistence
 # ---------------------------------------------------------------------------
+
 
 def save_signals(sig_df: pd.DataFrame, conn: sqlite3.Connection) -> int:
     if sig_df.empty:
@@ -212,15 +238,31 @@ def save_signals(sig_df: pd.DataFrame, conn: sqlite3.Connection) -> int:
     conn.commit()
     return len(sig)
 
+
 # ---------------------------------------------------------------------------
 # CLI / Main
 # ---------------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Screen statements for fundamental signals.")
-    p.add_argument("--db", type=Path, default=Config.db_path, help="Path to SQLite DB file")
-    p.add_argument("--lookback", type=int, default=Config.lookback_days, help="Lookback window (days)")
-    p.add_argument("--recent", type=int, default=Config.recent_days, help="Recent disclosure window (days)")
+    p = argparse.ArgumentParser(
+        description="Screen statements for fundamental signals."
+    )
+    p.add_argument(
+        "--db", type=Path, default=Config.db_path, help="Path to SQLite DB file"
+    )
+    p.add_argument(
+        "--lookback",
+        type=int,
+        default=Config.lookback_days,
+        help="Lookback window (days)",
+    )
+    p.add_argument(
+        "--recent",
+        type=int,
+        default=Config.recent_days,
+        help="Recent disclosure window (days)",
+    )
     p.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
     return p.parse_args()
 

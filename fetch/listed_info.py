@@ -44,6 +44,7 @@ DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_token() -> str:
     with open("idtoken.json", "r", encoding="utf-8") as f:
         tok = json.load(f).get("idToken")
@@ -67,9 +68,11 @@ def _fetch_listed_info(idtoken: str) -> pd.DataFrame:
     logger.debug("API columns: %s", df.columns.tolist())
     return df
 
+
 # ---------------------------------------------------------------------------
 # DB loader
 # ---------------------------------------------------------------------------
+
 
 def _to_db(df: pd.DataFrame, conn: sqlite3.Connection) -> None:
     """Extract, rename, NULL-fill → INSERT OR REPLACE into listed_info, then set delete_flag."""
@@ -78,27 +81,31 @@ def _to_db(df: pd.DataFrame, conn: sqlite3.Connection) -> None:
         return
 
     # === 明示的に取り出す列を指定して新しい DataFrame を作成 ===
-    mapped = pd.DataFrame({
-        "code": df.get("Code", pd.NA),
-        "date": df.get("Date", pd.NA),
-        "company_name": df.get("CompanyName", pd.NA),
-        "company_name_en": df.get("CompanyNameEnglish", pd.NA),
-        "sector17_code": df.get("Sector17Code", pd.NA),
-        # API のキーは Sector17CodeName
-        "sector17_name": df.get("Sector17CodeName", pd.NA),
-        "sector33_code": df.get("Sector33Code", pd.NA),
-        # API のキーは Sector33CodeName
-        "sector33_name": df.get("Sector33CodeName", pd.NA),
-        "scale_category": df.get("ScaleCategory", pd.NA),
-        "market_code": df.get("MarketCode", pd.NA),
-        # API のキーは MarketCodeName
-        "market_name": df.get("MarketCodeName", pd.NA),
-        "margin_code": df.get("MarginCode", pd.NA),
-        "margin_name": df.get("MarginCodeName", pd.NA),
-    })
+    mapped = pd.DataFrame(
+        {
+            "code": df.get("Code", pd.NA),
+            "date": df.get("Date", pd.NA),
+            "company_name": df.get("CompanyName", pd.NA),
+            "company_name_en": df.get("CompanyNameEnglish", pd.NA),
+            "sector17_code": df.get("Sector17Code", pd.NA),
+            # API のキーは Sector17CodeName
+            "sector17_name": df.get("Sector17CodeName", pd.NA),
+            "sector33_code": df.get("Sector33Code", pd.NA),
+            # API のキーは Sector33CodeName
+            "sector33_name": df.get("Sector33CodeName", pd.NA),
+            "scale_category": df.get("ScaleCategory", pd.NA),
+            "market_code": df.get("MarketCode", pd.NA),
+            # API のキーは MarketCodeName
+            "market_name": df.get("MarketCodeName", pd.NA),
+            "margin_code": df.get("MarginCode", pd.NA),
+            "margin_name": df.get("MarginCodeName", pd.NA),
+        }
+    )
 
     # 日付を YYYY-MM-DD に揃える
-    mapped["date"] = pd.to_datetime(mapped["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    mapped["date"] = pd.to_datetime(mapped["date"], errors="coerce").dt.strftime(
+        "%Y-%m-%d"
+    )
 
     # Upsert via temp table (delete_flag を除く) --------------------------------
     mapped.to_sql("_tmp_listed", conn, if_exists="replace", index=False)
@@ -122,13 +129,15 @@ def _to_db(df: pd.DataFrame, conn: sqlite3.Connection) -> None:
     today_str = dt.date.today().strftime("%Y-%m-%d")
     conn.execute(
         "UPDATE listed_info SET delete_flag = CASE WHEN date = ? THEN 0 ELSE 1 END;",
-        (today_str,)
+        (today_str,),
     )
     logger.info("Updated delete_flag based on date (today: %s)", today_str)
+
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def update_listed_info() -> None:
     db_path = Path(DB_PATH).expanduser().resolve()
@@ -142,13 +151,16 @@ def update_listed_info() -> None:
 
     logger.info("listed_info update complete ✔︎")
 
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def _cli() -> None:  # pragma: no cover
     parser = argparse.ArgumentParser(description="Fetch listed_info into SQLite")
     update_listed_info()
+
 
 if __name__ == "__main__":  # pragma: no cover
     # • J-Quants の上場銘柄一覧を取得

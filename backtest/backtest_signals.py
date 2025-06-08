@@ -30,6 +30,7 @@ DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 # DB helpers
 # ---------------------------------------------------------------------------
 
+
 def read_prices(conn: sqlite3.Connection) -> pd.DataFrame:
     """価格テーブルを読み込む。
 
@@ -48,7 +49,9 @@ def read_prices(conn: sqlite3.Connection) -> pd.DataFrame:
     return df.set_index(["LocalCode", "trade_date"]).sort_index()
 
 
-def read_signals(conn: sqlite3.Connection, start: str | None, end: str | None) -> pd.DataFrame:
+def read_signals(
+    conn: sqlite3.Connection, start: str | None, end: str | None
+) -> pd.DataFrame:
     """シグナルを日付範囲で取得する。
 
     入力パラメータ: SQLite 接続と開始・終了日の文字列。
@@ -66,9 +69,11 @@ def read_signals(conn: sqlite3.Connection, start: str | None, end: str | None) -
     df = pd.read_sql(q, conn, parse_dates=["DisclosedAt"])
     return df
 
+
 # ---------------------------------------------------------------------------
 # Trading-days utility
 # ---------------------------------------------------------------------------
+
 
 def add_n_trading_days(s: pd.Series, n: int, calendar: pd.DatetimeIndex) -> pd.Series:
     """営業日ベースで日付をずらす。
@@ -82,12 +87,15 @@ def add_n_trading_days(s: pd.Series, n: int, calendar: pd.DatetimeIndex) -> pd.S
     idx[idx >= len(calendar)] = len(calendar) - 1
     return calendar[idx]
 
+
 # ---------------------------------------------------------------------------
 # Backtest core
 # ---------------------------------------------------------------------------
 
-def run_backtest(prices: pd.DataFrame, signals: pd.DataFrame, *,
-                 hold: int, offset: int, capital: int) -> pd.DataFrame:
+
+def run_backtest(
+    prices: pd.DataFrame, signals: pd.DataFrame, *, hold: int, offset: int, capital: int
+) -> pd.DataFrame:
     """シグナルに基づくバックテストを実施する。
 
     入力パラメータ: 価格データ、シグナル、保有日数、エントリーオフセット、資金量。
@@ -99,34 +107,36 @@ def run_backtest(prices: pd.DataFrame, signals: pd.DataFrame, *,
 
     signals = signals.copy()
     signals["entry_date"] = add_n_trading_days(signals["DisclosedAt"], offset, calendar)
-    signals["exit_date"]  = add_n_trading_days(signals["entry_date"],  hold,   calendar)
+    signals["exit_date"] = add_n_trading_days(signals["entry_date"], hold, calendar)
 
     # マルチ‑インデックスで価格取得
     entry_idx = signals.set_index(["LocalCode", "entry_date"]).index
-    exit_idx  = signals.set_index(["LocalCode", "exit_date"]).index
+    exit_idx = signals.set_index(["LocalCode", "exit_date"]).index
 
     entry_px = prices.reindex(entry_idx)["adj_close"].values
-    exit_px  = prices.reindex(exit_idx)["adj_close"].values
+    exit_px = prices.reindex(exit_idx)["adj_close"].values
 
-    shares   = (capital // entry_px).astype(int)
-    invest   = shares * entry_px
-    proceed  = shares * exit_px
-    profit   = proceed - invest
+    shares = (capital // entry_px).astype(int)
+    invest = shares * entry_px
+    proceed = shares * exit_px
+    profit = proceed - invest
 
-    trades = pd.DataFrame({
-        "code":        signals["LocalCode"],
-        "DisclosedAt": signals["DisclosedAt"].dt.date,
-        "entry_date":  signals["entry_date"].dt.date,
-        "exit_date":   signals["exit_date"].dt.date,
-        "entry_px":    entry_px,
-        "exit_px":     exit_px,
-        "shares":      shares,
-        "invest":      invest,
-        "proceed":     proceed,
-        "profit_jpy":  profit,
-        "ret_pct":     profit / invest,
-        "days":        hold,
-    })
+    trades = pd.DataFrame(
+        {
+            "code": signals["LocalCode"],
+            "DisclosedAt": signals["DisclosedAt"].dt.date,
+            "entry_date": signals["entry_date"].dt.date,
+            "exit_date": signals["exit_date"].dt.date,
+            "entry_px": entry_px,
+            "exit_px": exit_px,
+            "shares": shares,
+            "invest": invest,
+            "proceed": proceed,
+            "profit_jpy": profit,
+            "ret_pct": profit / invest,
+            "days": hold,
+        }
+    )
     return trades
 
 
@@ -139,19 +149,23 @@ def summarize(trades: pd.DataFrame) -> pd.DataFrame:
     """
 
     total_profit = trades["profit_jpy"].sum()
-    win_rate     = (trades["profit_jpy"] > 0).mean()
+    win_rate = (trades["profit_jpy"] > 0).mean()
     mean_ret_pct = trades["ret_pct"].mean()
-    sharpe       = trades["ret_pct"].mean() / trades["ret_pct"].std(ddof=0)
+    sharpe = trades["ret_pct"].mean() / trades["ret_pct"].std(ddof=0)
 
-    summary = pd.DataFrame({
-        "metric": ["trades", "total_profit", "win_rate", "avg_ret_pct", "sharpe"],
-        "value":  [len(trades), total_profit, win_rate, mean_ret_pct, sharpe],
-    })
+    summary = pd.DataFrame(
+        {
+            "metric": ["trades", "total_profit", "win_rate", "avg_ret_pct", "sharpe"],
+            "value": [len(trades), total_profit, win_rate, mean_ret_pct, sharpe],
+        }
+    )
     return summary
+
 
 # ---------------------------------------------------------------------------
 # Excel output
 # ---------------------------------------------------------------------------
+
 
 def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
     """バックテスト結果を Excel ファイルに出力する。
@@ -165,8 +179,8 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
         trades.to_excel(writer, sheet_name="trades", index=False)
         summary.to_excel(writer, sheet_name="summary", index=False)
 
-        workbook  = writer.book
-        sheet     = writer.sheets["trades"]
+        workbook = writer.book
+        sheet = writer.sheets["trades"]
 
         # 自動列幅調整
         for i, col in enumerate(trades.columns):
@@ -176,39 +190,53 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
         # Profit bar chart
         chart = workbook.add_chart({"type": "column"})
         n = len(trades)
-        chart.add_series({
-            "name":       "profit_jpy",
-            "categories": ["trades", 1, 0, n, 0],  # code 列
-            "values":     ["trades", 1, trades.columns.get_loc("profit_jpy"), n, trades.columns.get_loc("profit_jpy")],
-        })
+        chart.add_series(
+            {
+                "name": "profit_jpy",
+                "categories": ["trades", 1, 0, n, 0],  # code 列
+                "values": [
+                    "trades",
+                    1,
+                    trades.columns.get_loc("profit_jpy"),
+                    n,
+                    trades.columns.get_loc("profit_jpy"),
+                ],
+            }
+        )
         chart.set_title({"name": "Profit per Trade (JPY)"})
         chart.set_y_axis({"num_format": "#,##0"})
         sheet.insert_chart("L2", chart)
 
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument("--db", default=DB_PATH, help="SQLite DB file")
     p.add_argument("--hold", type=int, default=40, help="Holding period (trading days)")
     p.add_argument("--entry-offset", type=int, default=1, help="Entry day offset")
-    p.add_argument("--capital", type=int, default=DEFAULT_CAPITAL, help="Capital per trade (JPY)")
+    p.add_argument(
+        "--capital", type=int, default=DEFAULT_CAPITAL, help="Capital per trade (JPY)"
+    )
     p.add_argument("--start", type=str, default=None, help="Start date YYYY-MM-DD")
-    p.add_argument("--end",   type=str, default=None, help="End date YYYY-MM-DD")
-    p.add_argument("--xlsx",  type=str, default="trades.xlsx", help="Excel output path")
+    p.add_argument("--end", type=str, default=None, help="End date YYYY-MM-DD")
+    p.add_argument("--xlsx", type=str, default="trades.xlsx", help="Excel output path")
     p.add_argument("-v", "--verbose", action="store_true")
     return p.parse_args(argv)
 
 
 def main():
     args = parse_args()
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
-                        format="[%(levelname)s] %(message)s")
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="[%(levelname)s] %(message)s",
+    )
 
     with sqlite3.connect(args.db) as conn:
-        prices  = read_prices(conn)
+        prices = read_prices(conn)
         signals = read_signals(conn, args.start, args.end)
 
     logging.info("signals : %d rows", len(signals))
@@ -218,7 +246,9 @@ def main():
         logging.warning("No signals to back‑test.")
         sys.exit()
 
-    trades  = run_backtest(prices, signals, hold=args.hold, offset=args.entry_offset, capital=args.capital)
+    trades = run_backtest(
+        prices, signals, hold=args.hold, offset=args.entry_offset, capital=args.capital
+    )
     summary = summarize(trades)
 
     logging.info("Saving Excel → %s", args.xlsx)
