@@ -187,7 +187,10 @@ if __name__ == "__main__":
         "--outfile", default="backtest_results.xlsx", help="Excel 出力ファイル"
     )
     parser.add_argument(
-        "--capital", type=int, default=CAPITAL_DEFAULT, help="1 トレードあたりの資金 (JPY)"
+        "--capital",
+        type=int,
+        default=CAPITAL_DEFAULT,
+        help="1 トレードあたりの資金 (JPY)",
     )
     parser.add_argument(
         "--hold-days", type=int, default=HOLD_DAYS_DEFAULT, help="保有日数"

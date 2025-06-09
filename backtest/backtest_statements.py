@@ -217,9 +217,14 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument("--db", default=DB_PATH, help="SQLite DB ファイル")
     p.add_argument("--hold", type=int, default=40, help="保有期間（日数）")
-    p.add_argument("--entry-offset", type=int, default=1, help="エントリー日のオフセット")
     p.add_argument(
-        "--capital", type=int, default=DEFAULT_CAPITAL, help="1 トレードあたりの資金 (JPY)"
+        "--entry-offset", type=int, default=1, help="エントリー日のオフセット"
+    )
+    p.add_argument(
+        "--capital",
+        type=int,
+        default=DEFAULT_CAPITAL,
+        help="1 トレードあたりの資金 (JPY)",
     )
     p.add_argument("--start", type=str, default=None, help="開始日 YYYY-MM-DD")
     p.add_argument("--end", type=str, default=None, help="終了日 YYYY-MM-DD")
