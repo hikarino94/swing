@@ -44,6 +44,26 @@ LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("daily_quotes")
 DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
+
+# SQLite prices テーブルのカラム順序を定義
+_PRICE_COLS = [
+    "code",
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "upper_limit",
+    "lower_limit",
+    "volume",
+    "turnover_value",
+    "adj_factor",
+    "adj_open",
+    "adj_high",
+    "adj_low",
+    "adj_close",
+    "adj_volume",
+]
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
@@ -164,25 +184,7 @@ def _norm(df: pd.DataFrame) -> pd.DataFrame:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y%m%d")
-    order = [
-        "code",
-        "date",
-        "open",
-        "high",
-        "low",
-        "close",
-        "upper_limit",
-        "lower_limit",
-        "volume",
-        "turnover_value",
-        "adj_factor",
-        "adj_open",
-        "adj_high",
-        "adj_low",
-        "adj_close",
-        "adj_volume",
-    ]
-    return df[[c for c in order if c in df.columns]]
+    return df[[c for c in _PRICE_COLS if c in df.columns]]
 
 
 # ---------------------------------------------------------------------------
@@ -191,20 +193,17 @@ def _norm(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
-    """Insert or update the dataframe into the ``prices`` table."""
+    """Insert or update rows into ``prices`` using executemany."""
+
     if df.empty:
         return
-    df.to_sql("_tmp_q", conn, if_exists="replace", index=False)
-    conn.executescript(
-        """
-        INSERT OR REPLACE INTO prices
-        SELECT code, date, open, high, low, close,
-               upper_limit, lower_limit, volume, turnover_value,
-               adj_factor, adj_open, adj_high, adj_low, adj_close, adj_volume
-        FROM _tmp_q;
-        DROP TABLE _tmp_q;
-    """
-    )
+
+    cols = [c for c in _PRICE_COLS if c in df.columns]
+    placeholders = ", ".join("?" for _ in cols)
+    sql = f"INSERT OR REPLACE INTO prices ({', '.join(cols)}) VALUES ({placeholders})"
+
+    records = df[cols].itertuples(index=False, name=None)
+    conn.executemany(sql, records)
 
 
 # ---------------------------------------------------------------------------
