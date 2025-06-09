@@ -171,8 +171,8 @@ def build_screen_tech_tab(nb, output):
         cmd = f"python screening/screen_technical.py {cmd_var.get()}"
         if asof_var.get():
             cmd += f" --as-of {asof_var.get()}"
-            if back_var.get():
-                cmd += f" --as-of {back_var.get()}"
+        if back_var.get():
+            cmd += f" --lookback {back_var.get()}"
         run_command(cmd, output)
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
@@ -190,6 +190,8 @@ def build_backtest_stmt_tab(nb, output):
     hold = tk.StringVar(value="40")
     offset = tk.StringVar(value="1")
     cap = tk.StringVar(value="1000000")
+    start_var = tk.StringVar()
+    end_var = tk.StringVar()
     xlsx = tk.StringVar(value="trades.xlsx")
     ttk.Label(arg, text="保有日数:").grid(row=0, column=0)
     ttk.Entry(arg, textvariable=hold, width=6).grid(row=0, column=1)
@@ -197,14 +199,22 @@ def build_backtest_stmt_tab(nb, output):
     ttk.Entry(arg, textvariable=offset, width=6).grid(row=0, column=3)
     ttk.Label(arg, text="資金:").grid(row=1, column=0)
     ttk.Entry(arg, textvariable=cap, width=10).grid(row=1, column=1)
-    ttk.Label(arg, text="出力ファイル:").grid(row=1, column=2)
-    ttk.Entry(arg, textvariable=xlsx, width=15).grid(row=1, column=3)
+    ttk.Label(arg, text="開始日:").grid(row=1, column=2)
+    ttk.Entry(arg, textvariable=start_var, width=12).grid(row=1, column=3)
+    ttk.Label(arg, text="終了日:").grid(row=2, column=0)
+    ttk.Entry(arg, textvariable=end_var, width=12).grid(row=2, column=1)
+    ttk.Label(arg, text="出力ファイル:").grid(row=2, column=2)
+    ttk.Entry(arg, textvariable=xlsx, width=15).grid(row=2, column=3)
 
     def _run():
         cmd = (
             f"python backtest/backtest_statements.py --hold {hold.get()} "
             f"--entry-offset {offset.get()} --capital {cap.get()} --xlsx {xlsx.get()}"
         )
+        if start_var.get():
+            cmd += f" --start {start_var.get()}"
+        if end_var.get():
+            cmd += f" --end {end_var.get()}"
         run_command(cmd, output)
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
