@@ -134,9 +134,14 @@ def build_screen_fund_tab(nb, output):
     ttk.Label(arg, text="開示閾値:").grid(row=0, column=2)
     recent = tk.StringVar(value="7")
     ttk.Entry(arg, textvariable=recent, width=5).grid(row=0, column=3)
+    ttk.Label(arg, text="基準日 (省略可):").grid(row=1, column=0, sticky="e")
+    as_of = tk.StringVar()
+    ttk.Entry(arg, textvariable=as_of, width=12).grid(row=1, column=1)
 
     def _run():
         cmd = f"python screening/screen_statements.py --lookback {lookback.get()} --recent {recent.get()}"
+        if as_of.get():
+            cmd += f" --as-of {as_of.get()}"
         run_command(cmd, output)
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
