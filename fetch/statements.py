@@ -29,6 +29,9 @@ import json
 import datetime as dt
 from pathlib import Path
 from typing import List
+from concurrent.futures import ThreadPoolExecutor
+import time
+from requests import Session
 
 import pandas as pd
 import requests
@@ -168,13 +171,13 @@ def _load_token() -> str:
     return tok
 
 
-def _fetch_statements_by_code(idtoken: str, code: str) -> List[dict]:
+def _fetch_statements_by_code(session: Session, idtoken: str, code: str) -> List[dict]:
     """GET /statements?code=<code> with pagination and return all statement dicts."""
     headers = {"Authorization": f"Bearer {idtoken}"}
     params = {"code": code}
     all_statements: List[dict] = []
     while True:
-        resp = requests.get(API_ENDPOINT, headers=headers, params=params, timeout=60)
+        resp = session.get(API_ENDPOINT, headers=headers, params=params, timeout=60)
         if resp.status_code != 200:
             logger.warning("API error for code %s: %s", code, resp.text)
             break
@@ -191,13 +194,13 @@ def _fetch_statements_by_code(idtoken: str, code: str) -> List[dict]:
     return all_statements
 
 
-def _fetch_statements_by_date(idtoken: str, date_str: str) -> List[dict]:
+def _fetch_statements_by_date(session: Session, idtoken: str, date_str: str) -> List[dict]:
     """GET /statements?date=<YYYYMMDD> with pagination and return all statement dicts."""
     headers = {"Authorization": f"Bearer {idtoken}"}
     params = {"date": date_str}
     all_statements: List[dict] = []
     while True:
-        resp = requests.get(API_ENDPOINT, headers=headers, params=params, timeout=60)
+        resp = session.get(API_ENDPOINT, headers=headers, params=params, timeout=60)
         if resp.status_code != 200:
             logger.warning("API error for date %s: %s", date_str, resp.text)
             break
@@ -212,6 +215,21 @@ def _fetch_statements_by_date(idtoken: str, date_str: str) -> List[dict]:
         else:
             break
     return all_statements
+
+
+def _fetch_multiple_codes(idtoken: str, codes: List[str], workers: int = 5) -> List[dict]:
+    """Fetch statements for many codes concurrently."""
+    results: List[dict] = []
+
+    def _task(code: str) -> List[dict]:
+        with requests.Session() as sess:
+            return _fetch_statements_by_code(sess, idtoken, code)
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        for stmts in ex.map(_task, codes):
+            if stmts:
+                results.extend(stmts)
+    return results
 
 
 def _normalize(df: pd.DataFrame) -> pd.DataFrame:
@@ -241,21 +259,20 @@ def _upsert(conn: sqlite3.Connection, records: List[dict]) -> None:
 
 def main(mode: str) -> None:
     idtoken = _load_token()
+    start = time.perf_counter()
     with sqlite3.connect(DB_PATH) as conn:
         if mode == "1":
             cur = conn.execute("SELECT code FROM listed_info WHERE delete_flag = 0")
             codes = [row[0] for row in cur.fetchall()]
             logger.info("Found %d active codes", len(codes))
-            total = 0
-            for code in codes:
-                stmts = _fetch_statements_by_code(idtoken, code)
-                if stmts:
-                    _upsert(conn, stmts)
-                    total += len(stmts)
-            logger.info("Completed bulk fetch: %d total records", total)
+            stmts = _fetch_multiple_codes(idtoken, codes)
+            if stmts:
+                _upsert(conn, stmts)
+            logger.info("Completed bulk fetch: %d total records", len(stmts))
         elif mode == "2":
             today = dt.date.today().strftime("%Y%m%d")
-            stmts = _fetch_statements_by_date(idtoken, today)
+            with requests.Session() as sess:
+                stmts = _fetch_statements_by_date(sess, idtoken, today)
             if stmts:
                 _upsert(conn, stmts)
             logger.info(
@@ -263,6 +280,8 @@ def main(mode: str) -> None:
             )
         else:
             logger.error("Invalid mode: %s. Use '1' or '2'.", mode)
+    elapsed = time.perf_counter() - start
+    logger.info("Elapsed %.2f sec", elapsed)
 
 
 if __name__ == "__main__":
