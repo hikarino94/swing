@@ -302,9 +302,11 @@ def main(mode: str) -> None:
 if __name__ == "__main__":
     # • モードを指定して決算データを取得
     # • SQLite DB の statements テーブルへ upsert
-    parser = argparse.ArgumentParser(description="Fetch statements into SQLite")
+    parser = argparse.ArgumentParser(description="財務諸表を取得して SQLite に保存")
     parser.add_argument(
-        "mode", choices=["1", "2"], help="1: bulk by code, 2: daily by date"
+        "mode",
+        choices=["1", "2"],
+        help="1: 銘柄ごとに一括取得、2: 本日分のみ取得",
     )
     args = parser.parse_args()
     main(args.mode)

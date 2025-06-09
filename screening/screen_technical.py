@@ -195,15 +195,17 @@ if __name__ == "__main__":
     # • 引数を解析してコマンドを判定
     # • SQLite DB に接続
     # • indicators: run_indicators() / screen: screen_signals()
-    parser = argparse.ArgumentParser(description="Swing-trade technical signal tool")
+    parser = argparse.ArgumentParser(
+        description="スイングトレード向けテクニカルシグナルツール"
+    )
     parser.add_argument("command", choices=["indicators", "screen"])
-    parser.add_argument("--db", default=DB_PATH, help="SQLite DB path")
-    parser.add_argument("--as-of", help="Date (YYYY-MM-DD) to compute or screen")
+    parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
+    parser.add_argument("--as-of", help="計算またはスクリーニング対象日 YYYY-MM-DD")
     parser.add_argument(
         "--lookback",
         type=int,
         default=50,
-        help="Number of days before --as-of to process",
+        help="--as-of から遡る日数",
     )
     args = parser.parse_args()
     conn = sqlite3.connect(args.db)
