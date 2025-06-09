@@ -22,7 +22,7 @@ def run_command(cmd, output_widget):
 
 def build_fetch_quotes_tab(nb, output):
     frame = ttk.Frame(nb)
-    nb.add(frame, text="Fetch Quotes")
+    nb.add(frame, text="株価取得")
     desc = (
         "Download daily quotes from J-Quants and upsert into the prices table.\n"
         "Dates are optional; format YYYYMMDD.")
@@ -42,23 +42,23 @@ def build_fetch_quotes_tab(nb, output):
         if end_var.get():
             cmd += f" --end {end_var.get()}"
         run_command(cmd, output)
-    ttk.Button(frame, text="Run", command=_run).pack(pady=5)
+    ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
 def build_listed_info_tab(nb, output):
     frame = ttk.Frame(nb)
-    nb.add(frame, text="Fetch Listed Info")
+    nb.add(frame, text="上場情報取得")
     desc = "Fetch /listed/info snapshot and update the listed_info table."
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(anchor="w", padx=5, pady=5)
     def _run():
         cmd = "python fetch/listed_info.py"
         run_command(cmd, output)
-    ttk.Button(frame, text="Run", command=_run).pack(pady=5)
+    ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
 def build_statements_tab(nb, output):
     frame = ttk.Frame(nb)
-    nb.add(frame, text="Fetch Statements")
+    nb.add(frame, text="財務諸表取得")
     desc = (
         "Fetch /fins/statements data. Mode 1: bulk by code. Mode 2: today only." )
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(anchor="w", padx=5, pady=5)
@@ -68,12 +68,12 @@ def build_statements_tab(nb, output):
     def _run():
         cmd = f"python fetch/statements.py {mode_var.get()}"
         run_command(cmd, output)
-    ttk.Button(frame, text="Run", command=_run).pack(pady=5)
+    ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
 def build_screen_fund_tab(nb, output):
     frame = ttk.Frame(nb)
-    nb.add(frame, text="Screen Fundamentals")
+    nb.add(frame, text="財務スクリーニング")
     desc = (
         "Screen statements for fundamental signals and insert into fundamental_signals." )
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(anchor="w", padx=5, pady=5)
@@ -88,12 +88,12 @@ def build_screen_fund_tab(nb, output):
     def _run():
         cmd = f"python screening/screen_statements.py --lookback {lookback.get()} --recent {recent.get()}"
         run_command(cmd, output)
-    ttk.Button(frame, text="Run", command=_run).pack(pady=5)
+    ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
 def build_screen_tech_tab(nb, output):
     frame = ttk.Frame(nb)
-    nb.add(frame, text="Screen Technical")
+    nb.add(frame, text="テクニカルスクリーニング")
     desc = (
         "Run technical indicator computation or display today's signals." )
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(anchor="w", padx=5, pady=5)
@@ -108,12 +108,12 @@ def build_screen_tech_tab(nb, output):
         if asof_var.get():
             cmd += f" --as-of {asof_var.get()}"
         run_command(cmd, output)
-    ttk.Button(frame, text="Run", command=_run).pack(pady=5)
+    ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
 def build_backtest_stmt_tab(nb, output):
     frame = ttk.Frame(nb)
-    nb.add(frame, text="Backtest Fundamentals")
+    nb.add(frame, text="ファンダメンタルバックテスト")
     desc = "Run fundamental signal backtest and export Excel results."
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(anchor="w", padx=5, pady=5)
     arg = ttk.Frame(frame)
@@ -136,12 +136,12 @@ def build_backtest_stmt_tab(nb, output):
             f"--entry-offset {offset.get()} --capital {cap.get()} --xlsx {xlsx.get()}"
         )
         run_command(cmd, output)
-    ttk.Button(frame, text="Run", command=_run).pack(pady=5)
+    ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
 def build_backtest_tech_tab(nb, output):
     frame = ttk.Frame(nb)
-    nb.add(frame, text="Backtest Technical")
+    nb.add(frame, text="テクニカルバックテスト")
     desc = "Run swing-trade backtest using technical indicators."
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(anchor="w", padx=5, pady=5)
     arg = ttk.Frame(frame)
@@ -171,7 +171,7 @@ def build_backtest_tech_tab(nb, output):
             f"--capital {cap.get()} --outfile {out.get()}"
         )
         run_command(cmd, output)
-    ttk.Button(frame, text="Run", command=_run).pack(pady=5)
+    ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
 def main():
