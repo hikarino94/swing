@@ -39,6 +39,6 @@ pre-commit install
   `--hold` 保有日数、`--entry-offset` エントリー日のオフセット、`--capital` 資金、  
   `--start` と `--end` で対象期間、`--xlsx` 出力ファイル名を指定します。
 * `backtest/backtest_technical.py`
-  テクニカル指標を用いたスイングトレードのバックテストを行います。  
-  `--as-of` エントリー日、`--hold-days` 保有日数、`--stop-loss` 損切り率、  
-  `--capital` 資金、`--outfile` 出力ファイル名を指定します。
+  テクニカル指標を用いたスイングトレードのバックテストを行います。
+  `--start` と `--end` でエントリー期間を指定し、`--hold-days` 保有日数、
+  `--stop-loss` 損切り率、`--capital` 資金、`--outfile` 出力ファイル名を指定します。

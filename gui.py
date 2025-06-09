@@ -219,9 +219,12 @@ def build_backtest_tech_tab(nb, output):
     )
     arg = ttk.Frame(frame)
     arg.pack(anchor="w", padx=5)
-    as_of = tk.StringVar()
-    ttk.Label(arg, text="エントリー日 YYYY-MM-DD:").grid(row=0, column=0)
-    ttk.Entry(arg, textvariable=as_of, width=12).grid(row=0, column=1)
+    start_var = tk.StringVar()
+    ttk.Label(arg, text="エントリー開始日:").grid(row=0, column=0, sticky="e")
+    ttk.Entry(arg, textvariable=start_var, width=12).grid(row=0, column=1)
+    end_var = tk.StringVar()
+    ttk.Label(arg, text="エントリー終了日:").grid(row=0, column=2, sticky="e")
+    ttk.Entry(arg, textvariable=end_var, width=12).grid(row=0, column=3)
     hold = tk.StringVar(value="60")
     stop = tk.StringVar(value="0.05")
     cap = tk.StringVar(value="1000000")
@@ -236,14 +239,16 @@ def build_backtest_tech_tab(nb, output):
     ttk.Entry(arg, textvariable=out, width=20).grid(row=2, column=3)
 
     def _run():
-        if not as_of.get():
-            messagebox.showerror("エラー", "エントリー日を入力してください")
+        if not start_var.get():
+            messagebox.showerror("エラー", "開始日を入力してください")
             return
         cmd = (
-            f"python backtest/backtest_technical.py --as-of {as_of.get()} "
+            f"python backtest/backtest_technical.py --start {start_var.get()} "
             f"--hold-days {hold.get()} --stop-loss {stop.get()} "
             f"--capital {cap.get()} --outfile {out.get()}"
         )
+        if end_var.get():
+            cmd += f" --end {end_var.get()}"
         run_command(cmd, output)
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
