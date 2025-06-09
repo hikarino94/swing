@@ -161,7 +161,7 @@ SCHEMA_COLUMNS: List[str] = [
 
 
 def _load_token() -> str:
-    with open("idtoken.json", "r", encoding="utf-8") as f:
+    with open("../idtoken.json", "r", encoding="utf-8") as f:
         tok = json.load(f).get("idToken")
     if not tok:
         raise RuntimeError("idToken not found in idtoken.json")
