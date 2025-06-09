@@ -2,22 +2,34 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 import subprocess
 import shlex
+import threading
 
 
 def run_command(cmd, output_widget):
-    output_widget.delete(1.0, tk.END)
-    try:
-        result = subprocess.run(
-            shlex.split(cmd), capture_output=True, text=True, check=True
-        )
-        output_widget.insert(tk.END, result.stdout)
-        if result.stderr:
-            output_widget.insert(tk.END, "\n" + result.stderr)
-    except subprocess.CalledProcessError as e:
-        output_widget.insert(tk.END, e.stdout)
-        output_widget.insert(tk.END, "\n" + str(e))
-        if e.stderr:
-            output_widget.insert(tk.END, "\n" + e.stderr)
+    """Execute *cmd* in a background thread and stream output to *output_widget*."""
+
+    def _worker():
+        output_widget.delete(1.0, tk.END)
+        try:
+            proc = subprocess.Popen(
+                shlex.split(cmd),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            assert proc.stdout is not None  # for type checkers
+            for line in proc.stdout:
+                output_widget.insert(tk.END, line)
+                output_widget.see(tk.END)
+            proc.wait()
+            if proc.returncode:
+                output_widget.insert(
+                    tk.END, f"\nCommand exited with code {proc.returncode}"
+                )
+        except Exception as exc:  # pylint: disable=broad-except
+            output_widget.insert(tk.END, f"\nError: {exc}")
+
+    threading.Thread(target=_worker, daemon=True).start()
 
 
 def build_fetch_quotes_tab(nb, output):
