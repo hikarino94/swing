@@ -181,20 +181,20 @@ if __name__ == "__main__":
     # • コマンドライン引数を解析して各種設定を取得
     # • 指定 DB に接続
     # • run_backtest() を呼び出し結果を Excel へ保存
-    parser = argparse.ArgumentParser(description="Swing-trade back-test tool")
-    parser.add_argument("--db", default=DB_PATH, help="SQLite DB path")
-    parser.add_argument("--as-of", required=True, help="Entry date (YYYYMMDD)")
+    parser = argparse.ArgumentParser(description="スイングトレードのバックテストツール")
+    parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
+    parser.add_argument("--as-of", required=True, help="エントリー日 YYYYMMDD")
     parser.add_argument(
-        "--outfile", default="backtest_results.xlsx", help="Excel output path"
+        "--outfile", default="backtest_results.xlsx", help="Excel 出力ファイル"
     )
     parser.add_argument(
-        "--capital", type=int, default=CAPITAL_DEFAULT, help="Capital per trade"
+        "--capital", type=int, default=CAPITAL_DEFAULT, help="1 トレードあたりの資金 (JPY)"
     )
     parser.add_argument(
-        "--hold-days", type=int, default=HOLD_DAYS_DEFAULT, help="Holding period days"
+        "--hold-days", type=int, default=HOLD_DAYS_DEFAULT, help="保有日数"
     )
     parser.add_argument(
-        "--stop-loss", type=float, default=STOP_LOSS_PCT_DEFAULT, help="Stop-loss pct"
+        "--stop-loss", type=float, default=STOP_LOSS_PCT_DEFAULT, help="損切り率"
     )
     args = parser.parse_args()
     conn = sqlite3.connect(args.db)

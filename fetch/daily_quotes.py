@@ -252,9 +252,9 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
 
 def _cli() -> None:
     """Command‑line entry point."""
-    ap = argparse.ArgumentParser(description="Download J‑Quants daily quotes → SQLite")
-    ap.add_argument("--start", help="YYYYMMDD")
-    ap.add_argument("--end", help="YYYYMMDD")
+    ap = argparse.ArgumentParser(description="J‑Quants の日足データを SQLite に保存")
+    ap.add_argument("--start", help="開始日 YYYYMMDD")
+    ap.add_argument("--end", help="終了日 YYYYMMDD")
     a = ap.parse_args()
     fetch_and_load(a.start, a.end)
 
