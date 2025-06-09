@@ -117,10 +117,11 @@ def build_statements_tab(nb, output):
 def build_screen_fund_tab(nb, output):
     frame = ttk.Frame(nb)
     nb.add(frame, text="財務スクリーニング")
-    desc = ("財務データをスクリーニングし、シグナルを fundamental_signals に保存します。\n"
-             "開示閾値で指定された期間の間に発表された決算をもとにscreeningします。\n" 
-             "テストのために日付を設定する場合は日付から開示閾値の間で検知を行います \n"
-             "実施する場合は開示閾値＋1095してください"
+    desc = (
+        "財務データをスクリーニングし、シグナルを fundamental_signals に保存します。\n"
+        "開示閾値で指定された期間の間に発表された決算をもとにscreeningします。\n"
+        "テストのために日付を設定する場合は日付から開示閾値の間で検知を行います \n"
+        "実施する場合は開示閾値＋1095してください"
     )
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
         anchor="w", padx=5, pady=5
@@ -144,9 +145,10 @@ def build_screen_fund_tab(nb, output):
 def build_screen_tech_tab(nb, output):
     frame = ttk.Frame(nb)
     nb.add(frame, text="テクニカルスクリーニング")
-    desc = ("テクニカル指標を計算するか、当日のシグナルを表示します。\n"
-            "対象日付を入力する場合はテストとみなし、過去参照日数分のデータを処理します。"
-            )
+    desc = (
+        "テクニカル指標を計算するか、当日のシグナルを表示します。\n"
+        "対象日付を入力する場合はテストとみなし、過去参照日数分のデータを処理します。"
+    )
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
         anchor="w", padx=5, pady=5
     )
