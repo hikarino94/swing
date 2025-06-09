@@ -130,8 +130,9 @@ def _fetch_all(session: Session, base_params: dict, token: str) -> pd.DataFrame:
 
 
 def _by_date(sess: Session, tok: str, d: dt.date) -> pd.DataFrame:
-    """Fetch quotes for a single date."""
-    return _fetch_all(sess, {"date": d.strftime("%Y%m%d")}, tok)
+    """指定日の株価を取得する."""
+    # API は YYYY-MM-DD 形式を受け付ける
+    return _fetch_all(sess, {"date": d.strftime("%Y-%m-%d")}, tok)
 
 
 def _by_code(sess: Session, tok: str, code: str) -> pd.DataFrame:
@@ -184,7 +185,8 @@ def _norm(df: pd.DataFrame) -> pd.DataFrame:
     for c in num:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y%m%d")
+    # Store dates as YYYY-MM-DD in the DB
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
     return df[[c for c in _PRICE_COLS if c in df.columns]]
 
 
@@ -219,11 +221,13 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
     with sqlite3.connect(DB_PATH) as conn:
         if start or end:
             s = (
-                dt.datetime.strptime(start, "%Y%m%d").date()
+                dt.datetime.strptime(start, "%Y-%m-%d").date()
                 if start
                 else dt.date.today()
             )
-            e = dt.datetime.strptime(end, "%Y%m%d").date() if end else dt.date.today()
+            e = (
+                dt.datetime.strptime(end, "%Y-%m-%d").date() if end else dt.date.today()
+            )
             for d in _daterange(s, e):
                 df = _by_date(sess, tok, d)
                 if df.empty:
@@ -253,8 +257,8 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
 def _cli() -> None:
     """Command‑line entry point."""
     ap = argparse.ArgumentParser(description="J‑Quants の日足データを SQLite に保存")
-    ap.add_argument("--start", help="開始日 YYYYMMDD")
-    ap.add_argument("--end", help="終了日 YYYYMMDD")
+    ap.add_argument("--start", help="開始日 YYYY-MM-DD")
+    ap.add_argument("--end", help="終了日 YYYY-MM-DD")
     a = ap.parse_args()
     fetch_and_load(a.start, a.end)
 

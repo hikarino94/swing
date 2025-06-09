@@ -15,7 +15,7 @@ Usage
 機能
 ----
 - モード "1": listed_info テーブルから delete_flag=0 の銘柄コードを取得し、各コードごとに /statements API を呼び出して全過去開示情報を取得 (pagination_keyによるページネーションを考慮) → statements テーブルに Upsert
-- モード "2": 当日日付をキーに /statements?date=<YYYYMMDD> を呼び出し、本日の開示情報を取得 (pagination_keyを考慮) → statements テーブルに Upsert
+- モード "2": 当日日付をキーに /statements?date=<YYYY-MM-DD> を呼び出し、本日の開示情報を取得 (pagination_keyを考慮) → statements テーブルに Upsert
 
 テーブル定義（schema）は db_schema.py に記載の CREATE TABLE 文に準拠しています。
 """
@@ -198,7 +198,7 @@ def _fetch_statements_by_code(session: Session, idtoken: str, code: str) -> List
 
 
 def _fetch_statements_by_date(session: Session, idtoken: str, date_str: str) -> List[dict]:
-    """GET /statements?date=<YYYYMMDD> with pagination and return all statement dicts."""
+    """GET /statements?date=<YYYY-MM-DD> and return all rows."""
     headers = {"Authorization": f"Bearer {idtoken}"}
     params = {"date": date_str}
     all_statements: List[dict] = []
@@ -282,7 +282,7 @@ def main(mode: str) -> None:
                 _upsert(conn, stmts)
             logger.info("一括取得完了: 合計 %d 件", len(stmts))
         elif mode == "2":
-            today = dt.date.today().strftime("%Y%m%d")
+            today = dt.date.today().strftime("%Y-%m-%d")
             with requests.Session() as sess:
                 stmts = _fetch_statements_by_date(sess, idtoken, today)
             if stmts:
