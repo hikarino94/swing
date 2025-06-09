@@ -176,19 +176,23 @@ def _fetch_statements_by_code(session: Session, idtoken: str, code: str) -> List
     headers = {"Authorization": f"Bearer {idtoken}"}
     params = {"code": code}
     all_statements: List[dict] = []
+    page = 1
     while True:
+        logger.info("%s ページ %d を取得します", code, page)
         resp = session.get(API_ENDPOINT, headers=headers, params=params, timeout=60)
         if resp.status_code != 200:
-            logger.warning("API error for code %s: %s", code, resp.text)
+            logger.warning("コード %s のAPIエラー: %s", code, resp.text)
             break
         data = resp.json()
         stmts = data.get("statements", [])
+        logger.info("%s ページ %d: %d 件", code, page, len(stmts))
         if not stmts:
             break
         all_statements.extend(stmts)
         pagination_key = data.get("pagination_key")
         if pagination_key:
             params["pagination_key"] = pagination_key
+            page += 1
         else:
             break
     return all_statements
@@ -199,19 +203,23 @@ def _fetch_statements_by_date(session: Session, idtoken: str, date_str: str) -> 
     headers = {"Authorization": f"Bearer {idtoken}"}
     params = {"date": date_str}
     all_statements: List[dict] = []
+    page = 1
     while True:
+        logger.info("%s のページ %d を取得します", date_str, page)
         resp = session.get(API_ENDPOINT, headers=headers, params=params, timeout=60)
         if resp.status_code != 200:
-            logger.warning("API error for date %s: %s", date_str, resp.text)
+            logger.warning("日付 %s のAPIエラー: %s", date_str, resp.text)
             break
         data = resp.json()
         stmts = data.get("statements", [])
+        logger.info("%s のページ %d: %d 件", date_str, page, len(stmts))
         if not stmts:
             break
         all_statements.extend(stmts)
         pagination_key = data.get("pagination_key")
         if pagination_key:
             params["pagination_key"] = pagination_key
+            page += 1
         else:
             break
     return all_statements
@@ -220,15 +228,20 @@ def _fetch_statements_by_date(session: Session, idtoken: str, date_str: str) -> 
 def _fetch_multiple_codes(idtoken: str, codes: List[str], workers: int = 5) -> List[dict]:
     """Fetch statements for many codes concurrently."""
     results: List[dict] = []
+    logger.info("%d 件のコードのデータ取得を開始します", len(codes))
 
     def _task(code: str) -> List[dict]:
+        logger.info("%s の取得を開始", code)
         with requests.Session() as sess:
-            return _fetch_statements_by_code(sess, idtoken, code)
+            stmts = _fetch_statements_by_code(sess, idtoken, code)
+        logger.info("%s の取得完了: %d 件", code, len(stmts))
+        return stmts
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        for stmts in ex.map(_task, codes):
+        for i, stmts in enumerate(ex.map(_task, codes), 1):
             if stmts:
                 results.extend(stmts)
+            logger.info("進捗 %d/%d", i, len(codes))
     return results
 
 
@@ -254,34 +267,33 @@ def _upsert(conn: sqlite3.Connection, records: List[dict]) -> None:
         DROP TABLE _tmp_statements;
         """
     )
-    logger.info("Upserted %d rows into statements", len(df))
+    logger.info("statements テーブルに %d 行 upsert しました", len(df))
 
 
 def main(mode: str) -> None:
     idtoken = _load_token()
     start = time.perf_counter()
+    logger.info("モード%sで処理を開始します", mode)
     with sqlite3.connect(DB_PATH) as conn:
         if mode == "1":
             cur = conn.execute("SELECT code FROM listed_info WHERE delete_flag = 0")
             codes = [row[0] for row in cur.fetchall()]
-            logger.info("Found %d active codes", len(codes))
+            logger.info("有効な銘柄コードを %d 件取得しました", len(codes))
             stmts = _fetch_multiple_codes(idtoken, codes)
             if stmts:
                 _upsert(conn, stmts)
-            logger.info("Completed bulk fetch: %d total records", len(stmts))
+            logger.info("一括取得完了: 合計 %d 件", len(stmts))
         elif mode == "2":
             today = dt.date.today().strftime("%Y%m%d")
             with requests.Session() as sess:
                 stmts = _fetch_statements_by_date(sess, idtoken, today)
             if stmts:
                 _upsert(conn, stmts)
-            logger.info(
-                "Completed daily fetch: %d records for date %s", len(stmts), today
-            )
+            logger.info("日付 %s の取得完了: %d 件", today, len(stmts))
         else:
-            logger.error("Invalid mode: %s. Use '1' or '2'.", mode)
+            logger.error("無効なモードです: %s。'1' または '2' を指定してください", mode)
     elapsed = time.perf_counter() - start
-    logger.info("Elapsed %.2f sec", elapsed)
+    logger.info("処理時間: %.2f 秒", elapsed)
 
 
 if __name__ == "__main__":
