@@ -7,7 +7,7 @@ Standalone back-test utility for the technical swing-trade framework using adjus
 
 Scenario
 --------
-• Entry: 指定日 (as_of) に technical_indicators テーブルで signals_count ≥ 3 の銘柄を購入。
+• Entry: 指定期間内の各日について technical_indicators テーブルで signals_count ≥ 3 の銘柄を購入。
 • Position size: 100 万円 (デフォルト) に近い整数株。
 • Exit: 保有日数が 60 日（≒2 ヶ月）経過、または調整後終値が −5 % に達した最初の日。
 • Output: 取引履歴 & サマリを Excel に保存。
@@ -15,7 +15,7 @@ Scenario
 Usage example
 -------------
 ```bash
-python backtest_technical.py --as-of 2024-03-14
+python backtest_technical.py --start 2024-03-01 --end 2024-03-14
 ```
 
 Optional parameters:
@@ -43,11 +43,10 @@ DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 def run_backtest(
     conn,
     as_of: str,
-    outfile: str,
     capital: int = CAPITAL_DEFAULT,
     hold_days: int = HOLD_DAYS_DEFAULT,
     stop_loss_pct: float = STOP_LOSS_PCT_DEFAULT,
-):
+) -> pd.DataFrame:
     # Entry signals
     sig_df = pd.read_sql(
         "SELECT code FROM technical_indicators WHERE signal_date=? AND signals_count>=3 AND signals_overheating !=1",
@@ -56,7 +55,7 @@ def run_backtest(
     )
     if sig_df.empty:
         print(f"[Backtest] No signals on {as_of}")
-        return
+        return pd.DataFrame()
 
     # Convert as_of to date for comparisons
     entry_dt = dt.datetime.strptime(as_of, "%Y-%m-%d").date()
@@ -155,7 +154,7 @@ def run_backtest(
 
     if not trades:
         print("[Backtest] No trades executed.")
-        return
+        return pd.DataFrame()
 
     df = pd.DataFrame(trades)
     total_pnl = df["pnl_yen"].sum()
@@ -163,9 +162,50 @@ def run_backtest(
     print(df)
     print(f"\nTotal P&L: {total_pnl}")
 
+    return df
+
+
+def run_backtest_range(
+    conn,
+    start: str,
+    end: str | None,
+    capital: int = CAPITAL_DEFAULT,
+    hold_days: int = HOLD_DAYS_DEFAULT,
+    stop_loss_pct: float = STOP_LOSS_PCT_DEFAULT,
+    outfile: str | None = None,
+) -> None:
+    """Run backtest for each entry date between start and end."""
+
+    start_dt = dt.datetime.strptime(start, "%Y-%m-%d").date()
+    end_dt = dt.datetime.strptime(end, "%Y-%m-%d").date() if end else start_dt
+
+    all_trades = []
+    for i in range((end_dt - start_dt).days + 1):
+        as_of = (start_dt + dt.timedelta(days=i)).strftime("%Y-%m-%d")
+        print(f"\n===== Entry date: {as_of} =====")
+        df = run_backtest(
+            conn,
+            as_of,
+            capital=capital,
+            hold_days=hold_days,
+            stop_loss_pct=stop_loss_pct,
+        )
+        if not df.empty:
+            all_trades.append(df)
+
+    if not all_trades:
+        print("[Backtest] No trades in the specified period.")
+        return
+
+    result = pd.concat(all_trades, ignore_index=True)
+    total_pnl = result["pnl_yen"].sum()
+    print("\n=== All Trades ===")
+    print(result)
+    print(f"\nTotal P&L: {total_pnl}")
+
     if outfile:
         with pd.ExcelWriter(outfile, engine="xlsxwriter") as writer:
-            df.to_excel(writer, sheet_name="trades", index=False)
+            result.to_excel(writer, sheet_name="trades", index=False)
             pd.DataFrame([{"total_pnl_yen": total_pnl}]).to_excel(
                 writer, sheet_name="summary", index=False
             )
@@ -182,7 +222,8 @@ if __name__ == "__main__":
     # • run_backtest() を呼び出し結果を Excel へ保存
     parser = argparse.ArgumentParser(description="スイングトレードのバックテストツール")
     parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
-    parser.add_argument("--as-of", required=True, help="エントリー日 YYYY-MM-DD")
+    parser.add_argument("--start", required=True, help="エントリー開始日 YYYY-MM-DD")
+    parser.add_argument("--end", help="エントリー終了日 YYYY-MM-DD")
     parser.add_argument(
         "--outfile", default="backtest_results.xlsx", help="Excel 出力ファイル"
     )
@@ -200,6 +241,12 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     conn = sqlite3.connect(args.db)
-    run_backtest(
-        conn, args.as_of, args.outfile, args.capital, args.hold_days, args.stop_loss
+    run_backtest_range(
+        conn,
+        args.start,
+        args.end,
+        capital=args.capital,
+        hold_days=args.hold_days,
+        stop_loss_pct=args.stop_loss,
+        outfile=args.outfile,
     )
