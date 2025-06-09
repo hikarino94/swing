@@ -71,7 +71,8 @@ _PRICE_COLS = [
 
 def _load_token() -> str:
     """Read the JWT token stored in ``idtoken.json``."""
-    with open("../idtoken.json", "r", encoding="utf-8") as f:
+    path = Path(__file__).resolve().parents[1] / "idtoken.json"
+    with path.open("r", encoding="utf-8") as f:
         tok = json.load(f).get("idToken")
     if not tok:
         raise RuntimeError("idToken not found in idtoken.json")
