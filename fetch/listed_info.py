@@ -124,6 +124,7 @@ def _to_db(df: pd.DataFrame, conn: sqlite3.Connection) -> None:
         DROP TABLE _tmp_listed;
         """
     )
+    conn.commit()
     logger.info("listed_info に %d 行 upsert しました", len(mapped))
 
     # 全行の delete_flag を更新（本日日付以外を 1、本日を 0 に設定）
