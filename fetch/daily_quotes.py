@@ -207,7 +207,6 @@ def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
 
     records = df[cols].itertuples(index=False, name=None)
     conn.executemany(sql, records)
-    conn.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +218,8 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
     """Fetch quotes from the API and load them into SQLite."""
     tok = _load_token()
     sess = requests.Session()
-    with sqlite3.connect(DB_PATH) as conn:
+    conn = sqlite3.connect(DB_PATH)
+    try:
         if start or end:
             s = (
                 dt.datetime.strptime(start, "%Y-%m-%d").date()
@@ -240,11 +240,20 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
             df_today = _norm(_by_date(sess, tok, today))
             _upsert(conn, df_today)
             splits = df_today.loc[
-                df_today["adj_factor"].fillna(1.0) != 1.0, "code"
+                df_today["adj_factor"].fillna(1.0) != 1.0,
+                "code",
             ].unique()
             for c in splits:
                 logger.info("株式分割検出 %s → 全履歴取得", c)
                 _upsert(conn, _norm(_by_code(sess, tok, c)))
+    except requests.HTTPError as exc:
+        conn.commit()
+        logger.error("API error: %s", exc)
+        raise
+    else:
+        conn.rollback()
+    finally:
+        conn.close()
     logger.info("完了")
 
 

@@ -184,7 +184,7 @@ def _fetch_statements_by_code(session: Session, idtoken: str, code: str) -> List
         resp = session.get(API_ENDPOINT, headers=headers, params=params, timeout=60)
         if resp.status_code != 200:
             logger.warning("コード %s のAPIエラー: %s", code, resp.text)
-            break
+            resp.raise_for_status()
         data = resp.json()
         stmts = data.get("statements", [])
         if not stmts:
@@ -211,7 +211,7 @@ def _fetch_statements_by_date(
         resp = session.get(API_ENDPOINT, headers=headers, params=params, timeout=60)
         if resp.status_code != 200:
             logger.warning("日付 %s のAPIエラー: %s", date_str, resp.text)
-            break
+            resp.raise_for_status()
         data = resp.json()
         stmts = data.get("statements", [])
         if not stmts:
@@ -295,7 +295,6 @@ def _upsert(conn: sqlite3.Connection, records: List[dict]) -> None:
         DROP TABLE _tmp_statements;
         """
     )
-    conn.commit()
     logger.info("statements テーブルに %d 行 upsert しました", len(df))
 
 
@@ -303,7 +302,8 @@ def main(mode: str, start_date: str | None, end_date: str | None) -> None:
     idtoken = _load_token()
     start = time.perf_counter()
     logger.info("モード%sで処理を開始します", mode)
-    with sqlite3.connect(DB_PATH) as conn:
+    conn = sqlite3.connect(DB_PATH)
+    try:
         if mode == "1":
             cur = conn.execute("SELECT code FROM listed_info WHERE delete_flag = 0")
             codes = [row[0] for row in cur.fetchall()]
@@ -332,6 +332,14 @@ def main(mode: str, start_date: str | None, end_date: str | None) -> None:
             logger.error(
                 "無効なモードです: %s。'1' または '2' を指定してください", mode
             )
+    except requests.HTTPError as exc:
+        conn.commit()
+        logger.error("API error: %s", exc)
+        raise
+    else:
+        conn.rollback()
+    finally:
+        conn.close()
     elapsed = time.perf_counter() - start
     logger.info("処理時間: %.2f 秒", elapsed)
 
