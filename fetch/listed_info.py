@@ -27,7 +27,7 @@ import sqlite3
 import json
 import datetime as dt
 from pathlib import Path
-from typing import List
+
 
 import pandas as pd
 import requests
@@ -159,7 +159,7 @@ def update_listed_info() -> None:
 
 
 def _cli() -> None:  # pragma: no cover
-    parser = argparse.ArgumentParser(description="Fetch listed_info into SQLite")
+    argparse.ArgumentParser(description="listed_info を取得して SQLite に保存")
     update_listed_info()
 
 

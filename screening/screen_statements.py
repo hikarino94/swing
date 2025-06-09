@@ -247,24 +247,24 @@ def save_signals(sig_df: pd.DataFrame, conn: sqlite3.Connection) -> int:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Screen statements for fundamental signals."
+        description="財務諸表をスクリーニングしてシグナルを抽出"
     )
     p.add_argument(
-        "--db", type=Path, default=Config.db_path, help="Path to SQLite DB file"
+        "--db", type=Path, default=Config.db_path, help="SQLite DB ファイルへのパス"
     )
     p.add_argument(
         "--lookback",
         type=int,
         default=Config.lookback_days,
-        help="Lookback window (days)",
+        help="過去の参照期間（日数）",
     )
     p.add_argument(
         "--recent",
         type=int,
         default=Config.recent_days,
-        help="Recent disclosure window (days)",
+        help="開示日の閾値（日数）",
     )
-    p.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
+    p.add_argument("-v", "--verbose", action="store_true", help="詳細ログを表示")
     return p.parse_args()
 
 
