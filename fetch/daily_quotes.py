@@ -225,9 +225,7 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
                 if start
                 else dt.date.today()
             )
-            e = (
-                dt.datetime.strptime(end, "%Y-%m-%d").date() if end else dt.date.today()
-            )
+            e = dt.datetime.strptime(end, "%Y-%m-%d").date() if end else dt.date.today()
             for d in _daterange(s, e):
                 df = _by_date(sess, tok, d)
                 if df.empty:

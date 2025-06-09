@@ -74,9 +74,7 @@ def _cast_bool(series: pd.Series) -> pd.Series:
 
 def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
     """Load recent statements rows from DB and return as DataFrame."""
-    start_date = (
-        date.today() - timedelta(days=cfg.lookback_days)
-    ).strftime("%Y-%m-%d")
+    start_date = (date.today() - timedelta(days=cfg.lookback_days)).strftime("%Y-%m-%d")
     sql = """
         SELECT LocalCode, DisclosedDate, DisclosedTime, TypeOfCurrentPeriod,
                NetSales, OperatingProfit, Profit, EarningsPerShare,

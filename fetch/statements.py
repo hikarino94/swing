@@ -197,7 +197,9 @@ def _fetch_statements_by_code(session: Session, idtoken: str, code: str) -> List
     return all_statements
 
 
-def _fetch_statements_by_date(session: Session, idtoken: str, date_str: str) -> List[dict]:
+def _fetch_statements_by_date(
+    session: Session, idtoken: str, date_str: str
+) -> List[dict]:
     """GET /statements?date=<YYYY-MM-DD> and return all rows."""
     headers = {"Authorization": f"Bearer {idtoken}"}
     params = {"date": date_str}
@@ -222,7 +224,9 @@ def _fetch_statements_by_date(session: Session, idtoken: str, date_str: str) -> 
     return all_statements
 
 
-def _fetch_multiple_codes(idtoken: str, codes: List[str], workers: int = 5) -> List[dict]:
+def _fetch_multiple_codes(
+    idtoken: str, codes: List[str], workers: int = 5
+) -> List[dict]:
     """Fetch statements for many codes concurrently."""
     results: List[dict] = []
     logger.info("%d 件のコードのデータ取得を開始します", len(codes))
@@ -267,7 +271,6 @@ def _upsert(conn: sqlite3.Connection, records: List[dict]) -> None:
     logger.info("statements テーブルに %d 行 upsert しました", len(df))
 
 
-
 def main(mode: str) -> None:
     idtoken = _load_token()
     start = time.perf_counter()
@@ -289,7 +292,9 @@ def main(mode: str) -> None:
                 _upsert(conn, stmts)
             logger.info("日付 %s の取得完了: %d 件", today, len(stmts))
         else:
-            logger.error("無効なモードです: %s。'1' または '2' を指定してください", mode)
+            logger.error(
+                "無効なモードです: %s。'1' または '2' を指定してください", mode
+            )
     elapsed = time.perf_counter() - start
     logger.info("処理時間: %.2f 秒", elapsed)
 

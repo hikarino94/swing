@@ -166,13 +166,11 @@ def run_indicators(conn, as_of=None):
         except Exception as e:
             print(f"Skipping {code}: {e}", file=sys.stderr)
     if records:
-        sql = (
-            """INSERT OR REPLACE INTO technical_indicators
+        sql = """INSERT OR REPLACE INTO technical_indicators
             (code, signal_date, signal_ma, signal_rsi, signal_adx, signal_bb, signal_macd,
             signals_count, signals_overheating, signals_first)
             VALUES (:code, :signal_date, :signal_ma, :signal_rsi, :signal_adx, :signal_bb,
             :signal_macd, :signals_count, :signals_overheating, :signals_first)"""
-        )
         conn.executemany(sql, records)
         conn.commit()
     print("全処理完了")
