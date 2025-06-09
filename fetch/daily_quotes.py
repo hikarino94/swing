@@ -102,7 +102,7 @@ def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
             time.sleep(RATE_SLEEP)
             return r.json()
         wait = 2**i
-        logger.warning("HTTP %s → retry in %ss", r.status_code, wait)
+        logger.warning("HTTP %s → %ss 後に再試行", r.status_code, wait)
         time.sleep(wait)
     r.raise_for_status()
 
@@ -116,7 +116,7 @@ def _fetch_all(session: Session, base_params: dict, token: str) -> pd.DataFrame:
         js = _call(session, params, token)
         rows = js.get("daily_quotes", [])
         if not rows:
-            logger.debug("Empty rows → break")
+            logger.debug("データなし → ループ終了")
             break
         frames.append(pd.DataFrame(rows))
         key = js.get("pagination_key") or js.get("page_key")
@@ -226,22 +226,22 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
             for d in _daterange(s, e):
                 df = _by_date(sess, tok, d)
                 if df.empty:
-                    logger.info("%s: no data (holiday/closed)", d)
+                    logger.info("%s: データなし（休場）", d)
                     continue
-                logger.info("%s by date", d)
+                logger.info("%s のデータ取得", d)
                 _upsert(conn, _norm(df))
         else:
             today = dt.date.today()
-            logger.info("today %s", today)
+            logger.info("本日 %s", today)
             df_today = _norm(_by_date(sess, tok, today))
             _upsert(conn, df_today)
             splits = df_today.loc[
                 df_today["adj_factor"].fillna(1.0) != 1.0, "code"
             ].unique()
             for c in splits:
-                logger.info("split detected %s → full history", c)
+                logger.info("株式分割検出 %s → 全履歴取得", c)
                 _upsert(conn, _norm(_by_code(sess, tok, c)))
-    logger.info("Done")
+    logger.info("完了")
 
 
 # ---------------------------------------------------------------------------
