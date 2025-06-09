@@ -30,7 +30,7 @@ pre-commit install
   `--start` と `--end` を併用することで期間を指定できます。
 * `screening/screen_statements.py`
   財務データをスクリーニングし、シグナルを `fundamental_signals` に保存します。
-  `--lookback` 過去参照日数、`--recent` 開示閾値日数を指定できます。
+  `--lookback` 過去参照日数、`--recent` 開示閾値日数、`--as-of` 基準日（省略時は当日）を指定できます。
 * `screening/screen_technical.py`
   `indicators` または `screen` をコマンドとして指定します。  
   `--as-of` で対象日を指定し、`--lookback` は遡る日数です。

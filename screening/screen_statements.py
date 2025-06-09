@@ -7,16 +7,18 @@
 *   Stage counts を DEBUG 出力して詰まり箇所を可視化。
 *   pandas FutureWarning（pct_change デフォルト変更）を回避。
 *   デフォルト `lookback_days` を 3 年に拡大（FY YoY 計算向け）。
+*   `--as-of` で基準日を指定可能に（省略時は当日）。
 
 Usage:
-    python screen_statements.py --lookback 3000 --recent 1500 -v
+    python screen_statements.py --lookback 3000 --recent 1500 \
+        --as-of 2025-06-07 -v
 """
 from __future__ import annotations
 
 import argparse
 import logging
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final
@@ -32,6 +34,7 @@ class Config:
     db_path: Path = Path(__file__).resolve().parents[1] / "db/stock.db"
     lookback_days: int = 365 * 3  # 3 年分ロード
     recent_days: int = 7  # 開示から何日以内を対象にするか
+    as_of: date = field(default_factory=date.today)  # 処理基準日
     window_q: int = 4  # 四半期 MA
 
 
@@ -74,7 +77,7 @@ def _cast_bool(series: pd.Series) -> pd.Series:
 
 def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
     """Load recent statements rows from DB and return as DataFrame."""
-    start_date = (date.today() - timedelta(days=cfg.lookback_days)).strftime("%Y-%m-%d")
+    start_date = (cfg.as_of - timedelta(days=cfg.lookback_days)).strftime("%Y-%m-%d")
     sql = """
         SELECT LocalCode, DisclosedDate, DisclosedTime, TypeOfCurrentPeriod,
                NetSales, OperatingProfit, Profit, EarningsPerShare,
@@ -176,7 +179,7 @@ def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
 
 def screen_signals(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     """Apply sequential filters and log stage counts."""
-    recent_cut = pd.Timestamp(date.today() - timedelta(days=cfg.recent_days))
+    recent_cut = pd.Timestamp(cfg.as_of - timedelta(days=cfg.recent_days))
 
     stage = {}
     m = df["DisclosedAt"] >= recent_cut
@@ -264,6 +267,10 @@ def parse_args() -> argparse.Namespace:
         default=Config.recent_days,
         help="開示日の閾値（日数）",
     )
+    p.add_argument(
+        "--as-of",
+        help="処理基準日 YYYY-MM-DD (省略時は当日)",
+    )
     p.add_argument("-v", "--verbose", action="store_true", help="詳細ログを表示")
     return p.parse_args()
 
@@ -276,7 +283,13 @@ def main() -> None:
         format="[%(levelname)s] %(message)s",
     )
 
-    cfg = Config(db_path=args.db, lookback_days=args.lookback, recent_days=args.recent)
+    as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
+    cfg = Config(
+        db_path=args.db,
+        lookback_days=args.lookback,
+        recent_days=args.recent,
+        as_of=as_of,
+    )
     logging.info("DB          : %s", cfg.db_path)
     logging.info("Lookback    : %s days", cfg.lookback_days)
     logging.info("Recent win  : %s days", cfg.recent_days)
