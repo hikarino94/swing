@@ -295,6 +295,7 @@ def _upsert(conn: sqlite3.Connection, records: List[dict]) -> None:
         DROP TABLE _tmp_statements;
         """
     )
+    conn.commit()
     logger.info("statements テーブルに %d 行 upsert しました", len(df))
 
 

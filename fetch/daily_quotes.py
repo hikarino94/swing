@@ -207,6 +207,7 @@ def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
 
     records = df[cols].itertuples(index=False, name=None)
     conn.executemany(sql, records)
+    conn.commit()
 
 
 # ---------------------------------------------------------------------------
