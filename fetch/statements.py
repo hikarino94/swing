@@ -178,14 +178,12 @@ def _fetch_statements_by_code(session: Session, idtoken: str, code: str) -> List
     all_statements: List[dict] = []
     page = 1
     while True:
-        logger.info("%s ページ %d を取得します", code, page)
         resp = session.get(API_ENDPOINT, headers=headers, params=params, timeout=60)
         if resp.status_code != 200:
             logger.warning("コード %s のAPIエラー: %s", code, resp.text)
             break
         data = resp.json()
         stmts = data.get("statements", [])
-        logger.info("%s ページ %d: %d 件", code, page, len(stmts))
         if not stmts:
             break
         all_statements.extend(stmts)
@@ -205,14 +203,12 @@ def _fetch_statements_by_date(session: Session, idtoken: str, date_str: str) -> 
     all_statements: List[dict] = []
     page = 1
     while True:
-        logger.info("%s のページ %d を取得します", date_str, page)
         resp = session.get(API_ENDPOINT, headers=headers, params=params, timeout=60)
         if resp.status_code != 200:
             logger.warning("日付 %s のAPIエラー: %s", date_str, resp.text)
             break
         data = resp.json()
         stmts = data.get("statements", [])
-        logger.info("%s のページ %d: %d 件", date_str, page, len(stmts))
         if not stmts:
             break
         all_statements.extend(stmts)
@@ -268,6 +264,7 @@ def _upsert(conn: sqlite3.Connection, records: List[dict]) -> None:
         """
     )
     logger.info("statements テーブルに %d 行 upsert しました", len(df))
+
 
 
 def main(mode: str) -> None:
