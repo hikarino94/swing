@@ -23,7 +23,7 @@ PRAGMA synchronous  = NORMAL;
 -- prices -------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS prices (
     code            TEXT NOT NULL,
-    date            TEXT NOT NULL,
+    date            TEXT NOT NULL,  -- YYYY-MM-DD
     open            REAL,
     high            REAL,
     low             REAL,
@@ -214,7 +214,7 @@ CREATE INDEX IF NOT EXISTS idx_fsignals_created  ON fundamental_signals(created_
 -- technical_indicators ----------------------------------------------
 CREATE TABLE IF NOT EXISTS technical_indicators (
     code TEXT       NOT NULL,
-    signal_date TEXT       NOT NULL,
+    signal_date TEXT       NOT NULL,  -- YYYY-MM-DD
     signal_ma INTEGER,
     signal_rsi INTEGER,
     signal_adx INTEGER,

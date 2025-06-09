@@ -15,7 +15,7 @@ Scenario
 Usage example
 -------------
 ```bash
-python backtest_technical.py --as-of 20240314
+python backtest_technical.py --as-of 2024-03-14
 ```
 
 Optional parameters:
@@ -58,9 +58,8 @@ def run_backtest(
         print(f"[Backtest] No signals on {as_of}")
         return
 
-    # Convert as_of to date and integer YYYYMMDD for SQL filter
-    entry_dt = dt.datetime.strptime(as_of, "%Y%m%d").date()
-    as_of_int = int(entry_dt.strftime("%Y%m%d"))
+    # Convert as_of to date for comparisons
+    entry_dt = dt.datetime.strptime(as_of, "%Y-%m-%d").date()
     exit_cut_dt = entry_dt + dt.timedelta(days=hold_days)
 
     trades = []
@@ -75,7 +74,7 @@ def run_backtest(
                 "SELECT date, adj_close AS close FROM prices "
                 "WHERE code=? AND date>=? ORDER BY date",
                 conn,
-                params=(code, as_of_int),
+                params=(code, as_of),
                 parse_dates=["date"],
             )
             prices = prices.dropna(subset=["date", "close"])
@@ -183,7 +182,7 @@ if __name__ == "__main__":
     # • run_backtest() を呼び出し結果を Excel へ保存
     parser = argparse.ArgumentParser(description="スイングトレードのバックテストツール")
     parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
-    parser.add_argument("--as-of", required=True, help="エントリー日 YYYYMMDD")
+    parser.add_argument("--as-of", required=True, help="エントリー日 YYYY-MM-DD")
     parser.add_argument(
         "--outfile", default="backtest_results.xlsx", help="Excel 出力ファイル"
     )

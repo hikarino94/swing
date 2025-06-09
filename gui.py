@@ -25,7 +25,7 @@ def build_fetch_quotes_tab(nb, output):
     nb.add(frame, text="株価取得")
     desc = (
         "Download daily quotes from J-Quants and upsert into the prices table.\n"
-        "Dates are optional; format YYYYMMDD.")
+        "Dates are optional; format YYYY-MM-DD.")
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(anchor="w", padx=5, pady=5)
     arg_frame = ttk.Frame(frame)
     arg_frame.pack(anchor="w", padx=5)
@@ -101,7 +101,7 @@ def build_screen_tech_tab(nb, output):
     ttk.Label(frame, text="command (indicators/screen):").pack(anchor="w", padx=5)
     ttk.Entry(frame, textvariable=cmd_var, width=12).pack(anchor="w", padx=5)
     asof_var = tk.StringVar()
-    ttk.Label(frame, text="as_of YYYYMMDD:").pack(anchor="w", padx=5)
+    ttk.Label(frame, text="as_of YYYY-MM-DD:").pack(anchor="w", padx=5)
     ttk.Entry(frame, textvariable=asof_var, width=12).pack(anchor="w", padx=5)
     def _run():
         cmd = f"python screening/screen_technical.py {cmd_var.get()}"
@@ -147,7 +147,7 @@ def build_backtest_tech_tab(nb, output):
     arg = ttk.Frame(frame)
     arg.pack(anchor="w", padx=5)
     as_of = tk.StringVar()
-    ttk.Label(arg, text="as_of YYYYMMDD:").grid(row=0, column=0)
+    ttk.Label(arg, text="as_of YYYY-MM-DD:").grid(row=0, column=0)
     ttk.Entry(arg, textvariable=as_of, width=12).grid(row=0, column=1)
     hold = tk.StringVar(value="60")
     stop = tk.StringVar(value="0.05")

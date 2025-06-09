@@ -119,7 +119,7 @@ def compute_indicators(df):
 # --- Run indicators ---------------------------------------------------------
 def run_indicators(conn, as_of=None):
     if not as_of:
-        as_of = datetime.today().strftime("%Y%m%d")
+        as_of = datetime.today().strftime("%Y-%m-%d")
     codes = [
         row[0] for row in conn.execute("SELECT DISTINCT code FROM prices").fetchall()
     ]
@@ -145,12 +145,12 @@ def run_indicators(conn, as_of=None):
                 print(f"{code}  → 当日分なし")
                 continue
             rec = row.iloc[0].to_dict()
-            rec["signal_date"] = rec["signal_date"].strftime("%Y%m%d")
+            rec["signal_date"] = rec["signal_date"].strftime("%Y-%m-%d")
             rec["code"] = code
             # --- signals_first の計算 ---
             # 過去30日間に signals_count>=3 の日がひとつもなければ初回フラグを立てる
             if rec["signals_count"] >= 3:
-                start_30 = (today - timedelta(days=30)).strftime("%Y%m%d")
+                start_30 = (today - timedelta(days=30)).strftime("%Y-%m-%d")
                 cnt = conn.execute(
                     "SELECT COUNT(*) FROM technical_indicators "
                     "WHERE code=? AND signal_date>=? AND signal_date<? AND signals_count>=3",
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Swing-trade technical signal tool")
     parser.add_argument("command", choices=["indicators", "screen"])
     parser.add_argument("--db", default=DB_PATH, help="SQLite DB path")
-    parser.add_argument("--as-of", help="Date (YYYYMMDD) to compute or screen")
+    parser.add_argument("--as-of", help="Date (YYYY-MM-DD) to compute or screen")
     parser.add_argument(
         "--lookback",
         type=int,
@@ -211,13 +211,13 @@ if __name__ == "__main__":
     conn = sqlite3.connect(args.db)
     if args.command == "indicators":
         if args.as_of:
-            # 引数 --as-of に YYYYMMDD 形式の日付が指定されていたら、
+            # 引数 --as-of に YYYY-MM-DD 形式の日付が指定されていたら、
             # 指定された期間ぶん遡って処理する
-            end_date = datetime.strptime(args.as_of, "%Y%m%d").date()
+            end_date = datetime.strptime(args.as_of, "%Y-%m-%d").date()
             back_days = max(args.lookback, 0)
             start_date = end_date - timedelta(days=back_days)
             for i in range(back_days + 1):
-                target = (start_date + timedelta(days=i)).strftime("%Y%m%d")
+                target = (start_date + timedelta(days=i)).strftime("%Y-%m-%d")
                 print(f"\n===== 実行日: {target} =====")
                 run_indicators(conn, target)
         else:
