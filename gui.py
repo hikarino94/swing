@@ -38,7 +38,9 @@ def build_fetch_quotes_tab(nb, output):
     nb.add(frame, text="株価取得")
     desc = (
         "J-Quants から株価を取得し prices テーブルに保存します。\n"
-        "日付は任意で YYYY-MM-DD 形式です。"
+        "日付は任意で YYYY-MM-DD 形式です。\n"
+        "日付の指定がない場合は当日日付のデータを取得します。\n"
+        "開始日のみ入力した場合は開始日から当日まで、終了日のみを入力した場合は当日のみ"
     )
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
         anchor="w", padx=5, pady=5
@@ -82,8 +84,9 @@ def build_statements_tab(nb, output):
     frame = ttk.Frame(nb)
     nb.add(frame, text="財務諸表取得")
     desc = (
-        "決算データを取得します。モード1: 銘柄ごとに一括取得。"
-        "モード2: 指定日または期間を取得。"
+        "決算データを取得します。モード1: 銘柄ごとに一括取得。\n"
+        "モード2: 指定がない場合は本日日付データ、開始日のみの場合は開始日から本日までのデータ\n"
+        "モード2: 終了日のみの場合は指定された日付のみのデータ、期間指定であれば対象期間のデータ"
     )
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
         anchor="w", padx=5, pady=5
@@ -114,7 +117,11 @@ def build_statements_tab(nb, output):
 def build_screen_fund_tab(nb, output):
     frame = ttk.Frame(nb)
     nb.add(frame, text="財務スクリーニング")
-    desc = "財務データをスクリーニングし、シグナルを fundamental_signals に保存します。"
+    desc = ("財務データをスクリーニングし、シグナルを fundamental_signals に保存します。\n"
+             "開示閾値で指定された期間の間に発表された決算をもとにscreeningします。\n" 
+             "テストのために日付を設定する場合は日付から開示閾値の間で検知を行います \n"
+             "実施する場合は開示閾値＋1095してください"
+    )
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
         anchor="w", padx=5, pady=5
     )
@@ -137,7 +144,9 @@ def build_screen_fund_tab(nb, output):
 def build_screen_tech_tab(nb, output):
     frame = ttk.Frame(nb)
     nb.add(frame, text="テクニカルスクリーニング")
-    desc = "テクニカル指標を計算するか、当日のシグナルを表示します。"
+    desc = ("テクニカル指標を計算するか、当日のシグナルを表示します。\n"
+            "対象日付を入力する場合はテストとみなし、過去参照日数分のデータを処理します。"
+            )
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
         anchor="w", padx=5, pady=5
     )
@@ -147,11 +156,16 @@ def build_screen_tech_tab(nb, output):
     asof_var = tk.StringVar()
     ttk.Label(frame, text="対象日 YYYY-MM-DD:").pack(anchor="w", padx=5)
     ttk.Entry(frame, textvariable=asof_var, width=12).pack(anchor="w", padx=5)
+    back_var = tk.StringVar(value="50")
+    ttk.Label(frame, text="過去参照日数:").pack(anchor="w", padx=5)
+    ttk.Entry(frame, textvariable=back_var, width=12).pack(anchor="w", padx=5)
 
     def _run():
         cmd = f"python screening/screen_technical.py {cmd_var.get()}"
         if asof_var.get():
             cmd += f" --as-of {asof_var.get()}"
+            if back_var.get():
+                cmd += f" --as-of {back_var.get()}"
         run_command(cmd, output)
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)

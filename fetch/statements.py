@@ -313,8 +313,12 @@ def main(mode: str, start_date: str | None, end_date: str | None) -> None:
             logger.info("一括取得完了: 合計 %d 件", len(stmts))
         elif mode == "2":
             if start_date or end_date:
-                s = start_date or end_date or dt.date.today().strftime("%Y-%m-%d")
-                e = end_date or start_date or s
+                if start_date and not end_date:
+                    s = start_date
+                    e = dt.date.today().strftime("%Y-%m-%d")
+                else:
+                    s = start_date or end_date or dt.date.today().strftime("%Y-%m-%d")
+                    e = end_date or start_date or s
                 with requests.Session() as sess:
                     stmts = _fetch_statements_by_period(sess, idtoken, s, e)
                 if stmts:
