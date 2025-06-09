@@ -4,8 +4,10 @@ statements.py – Fetch /statements (J-Quants) and upsert into SQLite `statement
 
 Usage
 -----
-    python statements.py <db_path> 1   # listed_info にあるコード単位で一括取得（過去分も含む）
-    python statements.py <db_path> 2   # 当日日付の開示分を取得（日次取得）
+    python statements.py 1                   # listed_info にあるコード単位で一括取得（過去分も含む）
+    python statements.py 2                   # 当日日付の開示分を取得（日次取得）
+    python statements.py 2 --start 2024-01-01 --end 2024-01-31
+                                          # 期間指定で取得
 
 環境
 ----
@@ -14,8 +16,8 @@ Usage
 
 機能
 ----
-- モード "1": listed_info テーブルから delete_flag=0 の銘柄コードを取得し、各コードごとに /statements API を呼び出して全過去開示情報を取得 (pagination_keyによるページネーションを考慮) → statements テーブルに Upsert
-- モード "2": 当日日付をキーに /statements?date=<YYYY-MM-DD> を呼び出し、本日の開示情報を取得 (pagination_keyを考慮) → statements テーブルに Upsert
+- モード "1": listed_info テーブルから delete_flag=0 の銘柄コードを取得し、各コードごとに /statements API を呼び出して全過去開示情報を取得 (pagination_key によるページネーションを考慮) → statements テーブルに Upsert
+- モード "2": /statements?date=<YYYY-MM-DD> を呼び出し、指定日の開示情報を取得 (pagination_key を考慮)。--start/--end を指定すると期間分ループして取得 → statements テーブルに Upsert
 
 テーブル定義（schema）は db_schema.py に記載の CREATE TABLE 文に準拠しています。
 """
@@ -224,6 +226,31 @@ def _fetch_statements_by_date(
     return all_statements
 
 
+def _daterange(s: dt.date, e: dt.date) -> List[dt.date]:
+    """Return list of dates from ``s`` to ``e`` inclusive."""
+    d, out = s, []
+    while d <= e:
+        out.append(d)
+        d += dt.timedelta(days=1)
+    return out
+
+
+def _fetch_statements_by_period(
+    session: Session, idtoken: str, start: str, end: str
+) -> List[dict]:
+    """Fetch statements for each day in the range ``start``–``end``."""
+    s = dt.datetime.strptime(start, "%Y-%m-%d").date()
+    e = dt.datetime.strptime(end, "%Y-%m-%d").date()
+    if s > e:
+        s, e = e, s
+    records: List[dict] = []
+    for d in _daterange(s, e):
+        rec = _fetch_statements_by_date(session, idtoken, d.strftime("%Y-%m-%d"))
+        if rec:
+            records.extend(rec)
+    return records
+
+
 def _fetch_multiple_codes(
     idtoken: str, codes: List[str], workers: int = 5
 ) -> List[dict]:
@@ -271,7 +298,7 @@ def _upsert(conn: sqlite3.Connection, records: List[dict]) -> None:
     logger.info("statements テーブルに %d 行 upsert しました", len(df))
 
 
-def main(mode: str) -> None:
+def main(mode: str, start_date: str | None, end_date: str | None) -> None:
     idtoken = _load_token()
     start = time.perf_counter()
     logger.info("モード%sで処理を開始します", mode)
@@ -285,12 +312,21 @@ def main(mode: str) -> None:
                 _upsert(conn, stmts)
             logger.info("一括取得完了: 合計 %d 件", len(stmts))
         elif mode == "2":
-            today = dt.date.today().strftime("%Y-%m-%d")
-            with requests.Session() as sess:
-                stmts = _fetch_statements_by_date(sess, idtoken, today)
-            if stmts:
-                _upsert(conn, stmts)
-            logger.info("日付 %s の取得完了: %d 件", today, len(stmts))
+            if start_date or end_date:
+                s = start_date or end_date or dt.date.today().strftime("%Y-%m-%d")
+                e = end_date or start_date or s
+                with requests.Session() as sess:
+                    stmts = _fetch_statements_by_period(sess, idtoken, s, e)
+                if stmts:
+                    _upsert(conn, stmts)
+                logger.info("期間 %s 〜 %s の取得完了: %d 件", s, e, len(stmts))
+            else:
+                today = dt.date.today().strftime("%Y-%m-%d")
+                with requests.Session() as sess:
+                    stmts = _fetch_statements_by_date(sess, idtoken, today)
+                if stmts:
+                    _upsert(conn, stmts)
+                logger.info("日付 %s の取得完了: %d 件", today, len(stmts))
         else:
             logger.error(
                 "無効なモードです: %s。'1' または '2' を指定してください", mode
@@ -306,7 +342,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "mode",
         choices=["1", "2"],
-        help="1: 銘柄ごとに一括取得、2: 本日分のみ取得",
+        help="1: 銘柄ごとに一括取得、2: 日付または期間で取得",
     )
+    parser.add_argument("--start", help="開始日 YYYY-MM-DD")
+    parser.add_argument("--end", help="終了日 YYYY-MM-DD")
     args = parser.parse_args()
-    main(args.mode)
+    main(args.mode, args.start, args.end)
