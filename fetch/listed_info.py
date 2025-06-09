@@ -65,7 +65,7 @@ def _fetch_listed_info(idtoken: str) -> pd.DataFrame:
         raise ValueError("/listed/info response contained no 'info' key")
 
     df = pd.DataFrame(data)
-    logger.debug("API columns: %s", df.columns.tolist())
+    logger.debug("API列: %s", df.columns.tolist())
     return df
 
 
@@ -77,7 +77,7 @@ def _fetch_listed_info(idtoken: str) -> pd.DataFrame:
 def _to_db(df: pd.DataFrame, conn: sqlite3.Connection) -> None:
     """Extract, rename, NULL-fill → INSERT OR REPLACE into listed_info, then set delete_flag."""
     if df.empty:
-        logger.warning("No rows returned from API – nothing to insert.")
+        logger.warning("APIから行が返されず、挿入するものがありません。")
         return
 
     # === 明示的に取り出す列を指定して新しい DataFrame を作成 ===
@@ -123,7 +123,7 @@ def _to_db(df: pd.DataFrame, conn: sqlite3.Connection) -> None:
         DROP TABLE _tmp_listed;
         """
     )
-    logger.info("Upserted %d rows into listed_info", len(mapped))
+    logger.info("listed_info に %d 行 upsert しました", len(mapped))
 
     # 全行の delete_flag を更新（本日日付以外を 1、本日を 0 に設定）
     today_str = dt.date.today().strftime("%Y-%m-%d")
@@ -131,7 +131,7 @@ def _to_db(df: pd.DataFrame, conn: sqlite3.Connection) -> None:
         "UPDATE listed_info SET delete_flag = CASE WHEN date = ? THEN 0 ELSE 1 END;",
         (today_str,),
     )
-    logger.info("Updated delete_flag based on date (today: %s)", today_str)
+    logger.info("日付に基づき delete_flag を更新しました（本日: %s）", today_str)
 
 
 # ---------------------------------------------------------------------------
@@ -143,13 +143,13 @@ def update_listed_info() -> None:
     db_path = Path(DB_PATH).expanduser().resolve()
     idtoken = _load_token()
 
-    logger.info("Fetching listed info snapshot …")
+    logger.info("上場銘柄情報を取得中 …")
     df = _fetch_listed_info(idtoken)
 
     with sqlite3.connect(db_path) as conn:
         _to_db(df, conn)
 
-    logger.info("listed_info update complete ✔︎")
+    logger.info("listed_info の更新完了 ✔︎")
 
 
 # ---------------------------------------------------------------------------
