@@ -19,7 +19,7 @@ CLI
 ---
 ```
 python daily_quotes.py                # today only
-python daily_quotes.py --start 20240101 --end 20240331
+python daily_quotes.py --start 2024-01-01 --end 2024-03-31
 ```
 """
 
