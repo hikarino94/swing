@@ -14,6 +14,14 @@ pre-commit install
 
 コミット時に `black` と `ruff` が自動で実行されます。
 
+## 依存ライブラリ
+
+以下のコマンドで必要なライブラリをインストールできます。
+
+```bash
+pip install -r requirements.txt
+```
+
 ## 主なスクリプトと起動引数
 
 * `fetch/daily_quotes.py`  
