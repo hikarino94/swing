@@ -10,6 +10,7 @@ def run_command(cmd, output_widget):
 
     def _worker():
         output_widget.delete(1.0, tk.END)
+        output_widget.insert(tk.END, f"$ {cmd}\n")
         try:
             proc = subprocess.Popen(
                 shlex.split(cmd),
@@ -264,6 +265,17 @@ def build_backtest_tech_tab(nb, output):
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
+def build_output_controls(root, output_widget):
+    """Create buttons to manage the output widget."""
+    frame = ttk.Frame(root)
+    ttk.Button(
+        frame,
+        text="クリア",
+        command=lambda: output_widget.delete(1.0, tk.END),
+    ).pack(side="right")
+    frame.pack(fill="x", padx=5, pady=(0, 5))
+
+
 def main():
     root = tk.Tk()
     root.title("スイングトレードGUI")
@@ -272,6 +284,7 @@ def main():
 
     output = scrolledtext.ScrolledText(root, width=80, height=20)
     output.pack(fill="both", expand=True)
+    build_output_controls(root, output)
 
     build_fetch_quotes_tab(nb, output)
     build_listed_info_tab(nb, output)
