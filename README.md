@@ -14,6 +14,27 @@ pre-commit install
 
 コミット時に `black` と `ruff` が自動で実行されます。
 
+## セットアップ
+
+Python 3.9 以上を想定しています。必要なライブラリをインストールします。
+
+```bash
+pip install pandas requests XlsxWriter
+```
+
+J‑Quants API の `idToken` を取得し、次の内容で `idtoken.json` を作成してください。
+
+```json
+{"idToken": "YOUR_TOKEN"}
+```
+
+続いて SQLite データベースを初期化します。
+
+```bash
+python db/db_schema.py
+```
+`db/stock.db` が生成されれば準備完了です。
+
 ## 主なスクリプトと起動引数
 
 * `fetch/daily_quotes.py`  
@@ -42,4 +63,12 @@ pre-commit install
   テクニカル指標を用いたスイングトレードのバックテストを行います。
   `--start` と `--end` でエントリー期間を指定し、`--hold-days` 保有日数、
   `--stop-loss` 損切り率、`--capital` 資金、`--outfile` 出力ファイル名を指定します。
-  取引明細とサマリーを含む Excel ファイルを生成します。
+
+## 利用の流れ
+
+1. `fetch` スクリプトでデータベースを更新
+2. `screening` スクリプトで売買シグナルを生成
+3. `backtest` スクリプトでシグナルを検証
+
+操作をまとめた簡易 GUI (`gui.py`) も用意しています。
+
