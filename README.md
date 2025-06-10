@@ -71,3 +71,4 @@ python db/db_schema.py
 3. `backtest` スクリプトでシグナルを検証
 
 操作をまとめた簡易 GUI (`gui.py`) も用意しています。
+

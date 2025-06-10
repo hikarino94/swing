@@ -165,6 +165,57 @@ def run_backtest(
     return df
 
 
+def summarize(trades: pd.DataFrame) -> pd.DataFrame:
+    """Generate summary statistics for technical backtest results."""
+
+    total_profit = trades["pnl_yen"].sum()
+    win_rate = (trades["pnl_yen"] > 0).mean()
+    mean_ret_pct = trades["pnl_pct"].mean()
+    sharpe = trades["pnl_pct"].mean() / trades["pnl_pct"].std(ddof=0)
+
+    summary = pd.DataFrame(
+        {
+            "metric": ["trades", "total_profit", "win_rate", "avg_ret_pct", "sharpe"],
+            "value": [len(trades), total_profit, win_rate, mean_ret_pct, sharpe],
+        }
+    )
+    return summary
+
+
+def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str) -> None:
+    """Save trades and summary to an Excel file."""
+
+    with pd.ExcelWriter(path, engine="xlsxwriter") as writer:
+        trades.to_excel(writer, sheet_name="trades", index=False)
+        summary.to_excel(writer, sheet_name="summary", index=False)
+
+        workbook = writer.book
+        sheet = writer.sheets["trades"]
+
+        for i, col in enumerate(trades.columns):
+            width = max(10, int(trades[col].astype(str).str.len().max() * 1.1))
+            sheet.set_column(i, i, width)
+
+        chart = workbook.add_chart({"type": "column"})
+        n = len(trades)
+        chart.add_series(
+            {
+                "name": "pnl_yen",
+                "categories": ["trades", 1, 0, n, 0],
+                "values": [
+                    "trades",
+                    1,
+                    trades.columns.get_loc("pnl_yen"),
+                    n,
+                    trades.columns.get_loc("pnl_yen"),
+                ],
+            }
+        )
+        chart.set_title({"name": "Profit per Trade (JPY)"})
+        chart.set_y_axis({"num_format": "#,##0"})
+        sheet.insert_chart("L2", chart)
+
+
 def run_backtest_range(
     conn,
     start: str,
@@ -203,12 +254,12 @@ def run_backtest_range(
     print(result)
     print(f"\nTotal P&L: {total_pnl}")
 
+    summary = summarize(result)
+    print("\n=== Summary ===")
+    print(summary)
+
     if outfile:
-        with pd.ExcelWriter(outfile, engine="xlsxwriter") as writer:
-            result.to_excel(writer, sheet_name="trades", index=False)
-            pd.DataFrame([{"total_pnl_yen": total_pnl}]).to_excel(
-                writer, sheet_name="summary", index=False
-            )
+        to_excel(result, summary, outfile)
         print(f"Excel exported → {outfile}")
 
 
