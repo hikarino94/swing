@@ -16,11 +16,15 @@ Usage examples:
 import argparse
 import sqlite3
 import pandas as pd
-import sys
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 
 DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
+
+LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
+logging.basicConfig(format=LOG_FMT, level=logging.INFO)
+logger = logging.getLogger("screen_technical")
 
 # --- Compute flags ----------------------------------------------------------
 
@@ -124,7 +128,7 @@ def run_indicators(conn, as_of=None):
         row[0] for row in conn.execute("SELECT DISTINCT code FROM prices").fetchall()
     ]
     total = len(codes)
-    print(f"開始: {total} 銘柄を処理します (as_of={as_of})")
+    logger.info("開始: %d 銘柄を処理します (as_of=%s)", total, as_of)
     records = []
     for idx, code in enumerate(codes, start=1):
         # print(f"[{idx}/{total}] 銘柄 {code} のシグナル算出中...", flush=True)
@@ -137,12 +141,12 @@ def run_indicators(conn, as_of=None):
             )
             flags = compute_indicators(df)
             if flags.empty:
-                print(f" {code}  → スキップ (データ不足)")
+                logger.info("%s  → スキップ (データ不足)", code)
                 continue
             today = pd.to_datetime(as_of)
             row = flags[flags["signal_date"] == today]
             if row.empty:
-                print(f"{code}  → 当日分なし")
+                logger.info("%s  → 当日分なし", code)
                 continue
             rec = row.iloc[0].to_dict()
             rec["signal_date"] = rec["signal_date"].strftime("%Y-%m-%d")
@@ -160,11 +164,14 @@ def run_indicators(conn, as_of=None):
             else:
                 rec["signals_first"] = 0
             records.append(rec)
-            print(
-                f"  → 完了 (signal_date={rec['signal_date']},signals_count={rec['signals_count']}, overheating={rec['signals_overheating']})"
+            logger.info(
+                "  → 完了 (signal_date=%s,signals_count=%s, overheating=%s)",
+                rec["signal_date"],
+                rec["signals_count"],
+                rec["signals_overheating"],
             )
         except Exception as e:
-            print(f"Skipping {code}: {e}", file=sys.stderr)
+            logger.exception("Skipping %s: %s", code, e)
     if records:
         sql = """INSERT OR REPLACE INTO technical_indicators
             (code, signal_date, signal_ma, signal_rsi, signal_adx, signal_bb, signal_macd,
@@ -173,7 +180,7 @@ def run_indicators(conn, as_of=None):
             :signal_macd, :signals_count, :signals_overheating, :signals_first)"""
         conn.executemany(sql, records)
         conn.commit()
-    print("全処理完了")
+    logger.info("全処理完了")
 
 
 # --- Screen signals --------------------------------------------------------
@@ -187,7 +194,7 @@ def screen_signals(conn, as_of=None):
         conn,
         params=(as_of,),
     )
-    print(df)
+    logger.info("\n%s", df)
 
 
 # --- Main -------------------------------------------------------------------
@@ -218,7 +225,7 @@ if __name__ == "__main__":
             start_date = end_date - timedelta(days=back_days)
             for i in range(back_days + 1):
                 target = (start_date + timedelta(days=i)).strftime("%Y-%m-%d")
-                print(f"\n===== 実行日: {target} =====")
+                logger.info("===== 実行日: %s =====", target)
                 run_indicators(conn, target)
         else:
             # 日付指定なしなら従来通り最新日だけ処理

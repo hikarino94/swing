@@ -16,8 +16,11 @@ $ python backtest_statements.py \
 """
 
 from __future__ import annotations
-import argparse, logging, math, sqlite3, sys
-from datetime import datetime
+
+import argparse
+import logging
+import sqlite3
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -25,6 +28,9 @@ import pandas as pd
 TD_FMT = "%Y-%m-%d"
 DEFAULT_CAPITAL = 1_000_000  # JPY
 DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
+
+LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
+logger = logging.getLogger("backtest_statements")
 
 # ---------------------------------------------------------------------------
 # DB helpers
@@ -237,18 +243,18 @@ def main():
     args = parse_args()
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
-        format="[%(levelname)s] %(message)s",
+        format=LOG_FMT,
     )
 
     with sqlite3.connect(args.db) as conn:
         prices = read_prices(conn)
         signals = read_signals(conn, args.start, args.end)
 
-    logging.info("signals : %d rows", len(signals))
-    logging.info("prices  : %d rows", len(prices))
+    logger.info("signals : %d rows", len(signals))
+    logger.info("prices  : %d rows", len(prices))
 
     if signals.empty:
-        logging.warning("No signals to back‑test.")
+        logger.warning("No signals to back‑test.")
         sys.exit()
 
     trades = run_backtest(
@@ -256,10 +262,10 @@ def main():
     )
     summary = summarize(trades)
 
-    logging.info("Saving Excel → %s", args.xlsx)
+    logger.info("Saving Excel → %s", args.xlsx)
     to_excel(trades, summary, args.xlsx)
 
-    print(summary.to_string(index=False))
+    logger.info("\n%s", summary.to_string(index=False))
 
 
 if __name__ == "__main__":
