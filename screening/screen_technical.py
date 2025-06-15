@@ -124,6 +124,12 @@ def compute_indicators(df):
 def run_indicators(conn, as_of=None):
     if not as_of:
         as_of = datetime.today().strftime("%Y-%m-%d")
+    cnt = conn.execute("SELECT COUNT(*) FROM prices WHERE date=?", (as_of,)).fetchone()[
+        0
+    ]
+    if cnt == 0:
+        logger.info("%s の価格データがないためスキップ", as_of)
+        return
     codes = [
         row[0] for row in conn.execute("SELECT DISTINCT code FROM prices").fetchall()
     ]
