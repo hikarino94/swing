@@ -10,40 +10,53 @@ import requests
 
 API_AUTH = "https://api.jquants.com/v1/token/auth_user"
 API_REFRESH = "https://api.jquants.com/v1/token/auth_refresh"
+DEFAULT_ACCOUNT = "account.json"
 
 
-def _get_refresh_token(mail: str, password: str) -> str:
-    """Return refreshToken by authenticating with email and password."""
+def _auth_user(mail: str, password: str) -> str:
+    """Return ``refreshToken`` by authenticating with mail and password."""
     resp = requests.post(
         API_AUTH,
         json={"mailaddress": mail, "password": password},
         timeout=30,
     )
     resp.raise_for_status()
-    js = resp.json()
-    if "refreshToken" not in js:
+    data = resp.json()
+    if "refreshToken" not in data:
         raise RuntimeError("refreshToken not found in response")
-    return js["refreshToken"]
+    return data["refreshToken"]
+
+
+def _load_account(path: str) -> tuple[str, str]:
+    """Return (mail, password) tuple from ``path`` if it exists."""
+    p = Path(path)
+    if not p.is_file():
+        p = Path(__file__).resolve().parent / path
+    if p.is_file():
+        with p.open("r", encoding="utf-8") as f:
+            js = json.load(f)
+        return js.get("mail", ""), js.get("password", "")
+    return "", ""
 
 
 def _get_id_token(refresh_token: str) -> str:
-    """Return idToken using a refresh token."""
+    """Return ``idToken`` using ``refresh_token``."""
     resp = requests.post(
         API_REFRESH,
         json={"refreshToken": refresh_token},
         timeout=30,
     )
     resp.raise_for_status()
-    js = resp.json()
-    if "idToken" not in js:
+    data = resp.json()
+    if "idToken" not in data:
         raise RuntimeError("idToken not found in response")
-    return js["idToken"]
+    return data["idToken"]
 
 
 def update(mail: str, password: str, outfile: str) -> str:
-    """Update idtoken.json and return the token."""
-    ref = _get_refresh_token(mail, password)
-    token = _get_id_token(ref)
+    """Obtain a new ``idToken`` and write it to ``outfile``."""
+    refresh = _auth_user(mail, password)
+    token = _get_id_token(refresh)
     path = Path(outfile)
     with path.open("w", encoding="utf-8") as f:
         json.dump({"idToken": token}, f)
@@ -52,11 +65,20 @@ def update(mail: str, password: str, outfile: str) -> str:
 
 def _cli() -> None:
     ap = argparse.ArgumentParser(description="update idtoken.json")
-    ap.add_argument("--mail", default="example@example.com", help="registered email")
-    ap.add_argument("--password", default="password", help="login password")
+    ap.add_argument("--mail", help="registered email")
+    ap.add_argument("--password", help="login password")
+    ap.add_argument("--account", default=DEFAULT_ACCOUNT, help="credential file")
     ap.add_argument("--out", default="idtoken.json", help="output file")
     a = ap.parse_args()
-    update(a.mail, a.password, a.out)
+
+    mail, pwd = a.mail, a.password
+    if not mail or not pwd:
+        m, p = _load_account(a.account)
+        mail = mail or m
+        pwd = pwd or p
+    if not mail or not pwd:
+        ap.error("mail and password are required")
+    update(mail, pwd, a.out)
 
 
 if __name__ == "__main__":

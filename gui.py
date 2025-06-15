@@ -3,6 +3,8 @@ from tkinter import ttk, scrolledtext, messagebox
 import subprocess
 import shlex
 import threading
+import json
+from pathlib import Path
 
 
 def run_command(cmd, output_widget):
@@ -268,21 +270,33 @@ def build_backtest_tech_tab(nb, output):
 def build_update_token_tab(nb, output):
     frame = ttk.Frame(nb)
     nb.add(frame, text="IDトークン更新")
-    desc = "メールアドレスとパスワードから refresh token を取得し idtoken.json を更新します。"
+    desc = "メールアドレスとパスワードから idtoken.json を更新します。"
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
         anchor="w", padx=5, pady=5
     )
     arg = ttk.Frame(frame)
     arg.pack(anchor="w", padx=5)
-    mail = tk.StringVar(value="example@example.com")
-    pwd = tk.StringVar(value="password")
+    cred = {}
+    path = Path(__file__).resolve().parent / "account.json"
+    if path.is_file():
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                cred = json.load(f)
+        except Exception:
+            cred = {}
+    mail = tk.StringVar(value=cred.get("mail", ""))
+    pwd = tk.StringVar(value=cred.get("password", ""))
     ttk.Label(arg, text="メールアドレス:").grid(row=0, column=0, sticky="e")
     ttk.Entry(arg, textvariable=mail, width=25).grid(row=0, column=1)
     ttk.Label(arg, text="パスワード:").grid(row=1, column=0, sticky="e")
     ttk.Entry(arg, textvariable=pwd, width=25, show="*").grid(row=1, column=1)
 
     def _run():
-        cmd = f"python update_idtoken.py --mail {mail.get()} --password {pwd.get()}"
+        cmd = "python update_idtoken.py"
+        if mail.get():
+            cmd += f" --mail {mail.get()}"
+        if pwd.get():
+            cmd += f" --password {pwd.get()}"
         run_command(cmd, output)
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)

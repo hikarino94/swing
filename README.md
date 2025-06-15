@@ -28,6 +28,15 @@ J‑Quants API の `idToken` を取得し、次の内容で `idtoken.json` を�
 {"idToken": "YOUR_TOKEN"}
 ```
 
+メールアドレスとパスワードを保存する `account.json` を用意しておくと、
+`update_idtoken.py` から自動的に参照されます。
+
+```json
+{"mail": "YOUR_MAIL", "password": "YOUR_PASSWORD"}
+```
+
+このファイルは `.gitignore` に含まれ、リポジトリには登録されません。
+
 続いて SQLite データベースを初期化します。
 
 ```bash
@@ -64,8 +73,8 @@ python db/db_schema.py
   `--start` と `--end` でエントリー期間を指定し、`--hold-days` 保有日数、
   `--stop-loss` 損切り率、`--capital` 資金、`--outfile` 出力ファイル名を指定します。
 * `update_idtoken.py`
-  メールアドレスとパスワードから refresh token を取得し、
-  `idtoken.json` を更新します。`--mail` と `--password` を指定できます。
+  J‑Quants にログインして `idtoken.json` を更新します。
+  `--mail` と `--password` を省略すると `account.json` が参照されます。
 
 ## 利用の流れ
 
