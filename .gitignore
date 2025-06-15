@@ -1,2 +1,6 @@
 account.json
 idtoken.json
+stock.db
+stock.db-wal
+stock.db-shm
+bk1_stock.db
