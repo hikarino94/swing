@@ -11,8 +11,12 @@ This file intentionally contains **only ASCII characters** to avoid the
 """
 
 import sqlite3
-import sys
+import logging
 from pathlib import Path
+
+LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
+logging.basicConfig(format=LOG_FMT, level=logging.INFO)
+logger = logging.getLogger("db_schema")
 
 DB_PATH = "./stock.db"
 
@@ -241,7 +245,7 @@ def init_schema(db_path: Path) -> None:
 
 def main() -> None:  # pragma: no cover
     init_schema(DB_PATH)
-    print("Schema created or verified at", DB_PATH)
+    logger.info("Schema created or verified at %s", DB_PATH)
 
 
 if __name__ == "__main__":

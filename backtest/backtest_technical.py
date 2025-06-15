@@ -27,13 +27,17 @@ import argparse
 import sqlite3
 import pandas as pd
 import datetime as dt
-import sys
+import logging
 from pathlib import Path
 
 CAPITAL_DEFAULT = 1_000_000
 HOLD_DAYS_DEFAULT = 60
 STOP_LOSS_PCT_DEFAULT = 0.05
 DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
+
+LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
+logging.basicConfig(format=LOG_FMT, level=logging.INFO)
+logger = logging.getLogger("backtest_technical")
 
 # ---------------------------------------------------------------------------
 # Back-test core
@@ -54,7 +58,7 @@ def run_backtest(
         params=(as_of,),
     )
     if sig_df.empty:
-        print(f"[Backtest] No signals on {as_of}")
+        logger.info("No signals on %s", as_of)
         return pd.DataFrame()
 
     # Convert as_of to date for comparisons
@@ -63,10 +67,10 @@ def run_backtest(
 
     trades = []
     total = len(sig_df)
-    print(f"[Backtest] Start: {total} symbols on {as_of}")
+    logger.info("Start: %d symbols on %s", total, as_of)
 
     for idx, code in enumerate(sig_df["code"], start=1):
-        print(f"[{idx}/{total}] {code}...", end=" ", flush=True)
+        logger.info("[%d/%d] %s...", idx, total, code)
         try:
             # Load adjusted close prices from as_of onward
             prices = pd.read_sql(
@@ -78,23 +82,23 @@ def run_backtest(
             )
             prices = prices.dropna(subset=["date", "close"])
             if prices.empty:
-                print("skip (no data)")
+                logger.info("skip (no data)")
                 continue
 
             # Entry price is at as_of date
             # Filter exact date row
             first_row = prices[prices["date"].dt.date == entry_dt]
             if first_row.empty:
-                print("skip (no entry date price)")
+                logger.info("skip (no entry date price)")
                 continue
             entry_price = first_row.iloc[0]["close"]
             if pd.isna(entry_price) or entry_price <= 0:
-                print("skip (invalid entry)")
+                logger.info("skip (invalid entry)")
                 continue
 
             shares = int(capital // entry_price)
             if shares <= 0:
-                print("skip (insufficient capital)")
+                logger.info("skip (insufficient capital)")
                 continue
 
             stop_price = entry_price * (1 - stop_loss_pct)
@@ -117,7 +121,7 @@ def run_backtest(
                 last = future.iloc[-1]
                 exit_date, exit_price = last["date"].date(), last["close"]
             if exit_date is None:
-                print("skip (no exit data)")
+                logger.info("skip (no exit data)")
                 continue
 
             pnl_pct = (exit_price - entry_price) / entry_price * 100
@@ -147,20 +151,19 @@ def run_backtest(
                     "pnl_yen": round(pnl_yen, 0),
                 }
             )
-            print(f"done (P&L={round(pnl_yen,0)})")
+            logger.info("done (P&L=%s)", round(pnl_yen, 0))
         except Exception as e:
-            print(f"[Backtest] Skip {code}: {e}", file=sys.stderr)
+            logger.exception("Skip %s: %s", code, e)
             continue
 
     if not trades:
-        print("[Backtest] No trades executed.")
+        logger.info("No trades executed.")
         return pd.DataFrame()
 
     df = pd.DataFrame(trades)
     total_pnl = df["pnl_yen"].sum()
-    print("\n=== Trades ===")
-    print(df)
-    print(f"\nTotal P&L: {total_pnl}")
+    logger.info("=== Trades ===\n%s", df)
+    logger.info("Total P&L: %s", total_pnl)
 
     return df
 
@@ -233,7 +236,7 @@ def run_backtest_range(
     all_trades = []
     for i in range((end_dt - start_dt).days + 1):
         as_of = (start_dt + dt.timedelta(days=i)).strftime("%Y-%m-%d")
-        print(f"\n===== Entry date: {as_of} =====")
+        logger.info("===== Entry date: %s =====", as_of)
         df = run_backtest(
             conn,
             as_of,
@@ -245,22 +248,20 @@ def run_backtest_range(
             all_trades.append(df)
 
     if not all_trades:
-        print("[Backtest] No trades in the specified period.")
+        logger.info("No trades in the specified period.")
         return
 
     result = pd.concat(all_trades, ignore_index=True)
     total_pnl = result["pnl_yen"].sum()
-    print("\n=== All Trades ===")
-    print(result)
-    print(f"\nTotal P&L: {total_pnl}")
+    logger.info("=== All Trades ===\n%s", result)
+    logger.info("Total P&L: %s", total_pnl)
 
     summary = summarize(result)
-    print("\n=== Summary ===")
-    print(summary)
+    logger.info("=== Summary ===\n%s", summary)
 
     if outfile:
         to_excel(result, summary, outfile)
-        print(f"Excel exported → {outfile}")
+        logger.info("Excel exported → %s", outfile)
 
 
 # ---------------------------------------------------------------------------
