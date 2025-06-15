@@ -186,6 +186,8 @@ def _fetch_statements_by_code(session: Session, idtoken: str, code: str) -> List
             logger.warning("コード %s のAPIエラー: %s", code, resp.text)
             resp.raise_for_status()
         data = resp.json()
+        if "message" in data:
+            logger.info("API message: %s", data["message"])
         stmts = data.get("statements", [])
         if not stmts:
             break
@@ -213,6 +215,8 @@ def _fetch_statements_by_date(
             logger.warning("日付 %s のAPIエラー: %s", date_str, resp.text)
             resp.raise_for_status()
         data = resp.json()
+        if "message" in data:
+            logger.info("API message: %s", data["message"])
         stmts = data.get("statements", [])
         if not stmts:
             break
