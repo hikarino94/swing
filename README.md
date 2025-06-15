@@ -62,8 +62,9 @@ python db/db_schema.py
   財務データをスクリーニングし、シグナルを `fundamental_signals` に保存します。
   `--lookback` 過去参照日数、`--recent` 開示閾値日数、`--as-of` 基準日（省略時は当日）を指定できます。
 * `screening/screen_technical.py`
-  `indicators` または `screen` をコマンドとして指定します。  
+  `indicators` または `screen` をコマンドとして指定します。
   `--as-of` で対象日を指定し、`--lookback` は遡る日数です。
+  当日の `prices` データが存在しない場合は処理をスキップします。
 * `backtest/backtest_statements.py`
   財務シグナルを用いたバックテストを実行します。  
   `--hold` 保有日数、`--entry-offset` エントリー日のオフセット、`--capital` 資金、  
