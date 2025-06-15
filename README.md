@@ -84,3 +84,16 @@ python db/db_schema.py
 
 操作をまとめた簡易 GUI (`gui.py`) も用意しています。
 
+## 定期実行
+
+`scheduler.py` を起動しておくと株価や決算情報の取得を自動化できます。
+利用には `schedule` ライブラリが必要です。
+
+```bash
+pip install schedule
+python scheduler.py
+```
+
+デフォルトでは毎日 20:00 に日足株価、20:30 に決算情報を取得し、
+月曜 6:00 に上場銘柄情報を更新します。
+
