@@ -341,7 +341,7 @@ def main(mode: str, start_date: str | None, end_date: str | None) -> None:
         logger.error("API error: %s", exc)
         raise
     else:
-        conn.rollback()
+        conn.commit()
     finally:
         conn.close()
     elapsed = time.perf_counter() - start

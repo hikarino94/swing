@@ -251,7 +251,7 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
         logger.error("API error: %s", exc)
         raise
     else:
-        conn.rollback()
+        conn.commit()
     finally:
         conn.close()
     logger.info("完了")
