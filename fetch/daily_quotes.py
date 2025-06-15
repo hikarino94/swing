@@ -100,8 +100,11 @@ def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
     for i in range(retries):
         r: Response = session.get(API_URL, headers=headers, params=params, timeout=60)
         if r.status_code < 400:
+            js = r.json()
+            if "message" in js:
+                logger.info("API message: %s", js["message"])
             time.sleep(RATE_SLEEP)
-            return r.json()
+            return js
         wait = 2**i
         logger.warning("HTTP %s → %ss 後に再試行", r.status_code, wait)
         time.sleep(wait)

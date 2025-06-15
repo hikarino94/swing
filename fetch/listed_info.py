@@ -61,7 +61,10 @@ def _fetch_listed_info(idtoken: str) -> pd.DataFrame:
     if resp.status_code != 200:
         raise RuntimeError(f"API error {resp.status_code}: {resp.text}")
 
-    data = resp.json().get("info", [])
+    js = resp.json()
+    if "message" in js:
+        logger.info("API message: %s", js["message"])
+    data = js.get("info", [])
     if not data:
         raise ValueError("/listed/info response contained no 'info' key")
 
