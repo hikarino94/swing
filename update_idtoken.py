@@ -43,7 +43,7 @@ def _get_id_token(refresh_token: str) -> str:
     """Return ``idToken`` using ``refresh_token``."""
     resp = requests.post(
         API_REFRESH,
-        json={"refreshToken": refresh_token},
+        params={"refreshtoken": refresh_token},
         timeout=30,
     )
     resp.raise_for_status()
