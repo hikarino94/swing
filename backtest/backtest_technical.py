@@ -23,6 +23,9 @@ Optional parameters:
   --hold-days   保有日数 (default=60)
   --stop-loss   損切り閾値 (fraction, default=0.05)
 """
+
+from __future__ import annotations
+
 import argparse
 import sqlite3
 import pandas as pd
