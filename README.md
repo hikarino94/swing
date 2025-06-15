@@ -63,6 +63,9 @@ python db/db_schema.py
   テクニカル指標を用いたスイングトレードのバックテストを行います。
   `--start` と `--end` でエントリー期間を指定し、`--hold-days` 保有日数、
   `--stop-loss` 損切り率、`--capital` 資金、`--outfile` 出力ファイル名を指定します。
+* `update_idtoken.py`
+  メールアドレスとパスワードから refresh token を取得し、
+  `idtoken.json` を更新します。`--mail` と `--password` を指定できます。
 
 ## 利用の流れ
 
