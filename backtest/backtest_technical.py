@@ -53,7 +53,11 @@ def run_backtest(
 ) -> pd.DataFrame:
     # Entry signals
     sig_df = pd.read_sql(
-        "SELECT code FROM technical_indicators WHERE signal_date=? AND signals_count>=3 AND signals_overheating !=1",
+        "SELECT code FROM technical_indicators "
+        "WHERE signal_date=? "
+        "AND signals_count>=3 "
+        "AND signals_first=1 "
+        "AND signals_overheating=0",
         conn,
         params=(as_of,),
     )
