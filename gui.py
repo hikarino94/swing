@@ -6,6 +6,8 @@ import threading
 import json
 from pathlib import Path
 
+from screening import thresholds
+
 
 def run_command(cmd, output_widget, on_finish=None):
     """Execute ``cmd`` and stream output to ``output_widget``.
@@ -344,6 +346,44 @@ def build_update_token_tab(nb, output):
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
+def build_thresholds_tab(nb):
+    """Display and edit screening threshold values."""
+
+    frame = ttk.Frame(nb)
+    nb.add(frame, text="閾値設定")
+
+    path = Path(thresholds.__file__).with_suffix(".json")
+    vals = thresholds.load_thresholds(path)
+    entries = {}
+
+    for idx, (key, val) in enumerate(vals.items()):
+        ttk.Label(frame, text=key).grid(row=idx, column=0, sticky="e")
+        var = tk.StringVar(value=str(val))
+        ttk.Entry(frame, textvariable=var, width=10).grid(row=idx, column=1)
+        entries[key] = var
+
+    def _save():
+        try:
+            data = {k: float(v.get()) for k, v in entries.items()}
+        except ValueError:
+            messagebox.showerror("エラー", "数値を入力してください")
+            return
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        messagebox.showinfo("保存", f"{path} を更新しました")
+
+    def _reload():
+        vals = thresholds.load_thresholds(path)
+        for k, v in vals.items():
+            if k in entries:
+                entries[k].set(str(v))
+
+    ttk.Button(frame, text="保存", command=_save).grid(row=len(vals), column=0, pady=5)
+    ttk.Button(frame, text="再読込", command=_reload).grid(
+        row=len(vals), column=1, pady=5
+    )
+
+
 def build_db_summary_tab(nb, output):
     frame = ttk.Frame(nb)
     nb.add(frame, text="DBサマリー")
@@ -388,6 +428,7 @@ def main():
     build_backtest_stmt_tab(nb, output)
     build_backtest_tech_tab(nb, output)
     build_update_token_tab(nb, output)
+    build_thresholds_tab(nb)
     build_db_summary_tab(nb, output)
 
     root.mainloop()

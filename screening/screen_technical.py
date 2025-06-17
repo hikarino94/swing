@@ -27,6 +27,7 @@ from thresholds import (
     OVERHEAT_FACTOR,
     RSI_THRESHOLD,
     SIGNAL_COUNT_MIN,
+    log_thresholds,
 )
 
 DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
@@ -34,6 +35,7 @@ DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("screen_technical")
+log_thresholds(logger)
 
 # --- Compute flags ----------------------------------------------------------
 
@@ -170,9 +172,9 @@ def run_indicators(conn, as_of=None):
             # 過去FIRST_LOOKBACK_DAYS日間に signals_count>=SIGNAL_COUNT_MIN の日が
             # ひとつもなければ初回フラグを立てる
             if rec["signals_count"] >= SIGNAL_COUNT_MIN:
-                start_30 = (
-                    today - timedelta(days=FIRST_LOOKBACK_DAYS)
-                ).strftime("%Y-%m-%d")
+                start_30 = (today - timedelta(days=FIRST_LOOKBACK_DAYS)).strftime(
+                    "%Y-%m-%d"
+                )
                 cnt = conn.execute(
                     "SELECT COUNT(*) FROM technical_indicators "
                     "WHERE code=? AND signal_date>=? AND signal_date<? AND signals_count>=?",
