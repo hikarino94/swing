@@ -234,6 +234,7 @@ def run_backtest_range(
     hold_days: int = HOLD_DAYS_DEFAULT,
     stop_loss_pct: float = STOP_LOSS_PCT_DEFAULT,
     outfile: str | None = None,
+    jsonfile: str | None = None,
 ) -> None:
     """Run backtest for each entry date between start and end."""
 
@@ -270,6 +271,10 @@ def run_backtest_range(
         to_excel(result, summary, outfile)
         logger.info("Excel exported → %s", outfile)
 
+    if jsonfile:
+        result.to_json(jsonfile, orient="records", force_ascii=False)
+        logger.info("JSON exported → %s", jsonfile)
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -286,6 +291,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--outfile", default="backtest_results.xlsx", help="Excel 出力ファイル"
     )
+    parser.add_argument("--json", help="結果を保存するJSONファイル")
     parser.add_argument(
         "--capital",
         type=int,
@@ -308,4 +314,5 @@ if __name__ == "__main__":
         hold_days=args.hold_days,
         stop_loss_pct=args.stop_loss,
         outfile=args.outfile,
+        jsonfile=args.json,
     )
