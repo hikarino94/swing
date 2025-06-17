@@ -200,22 +200,36 @@ def show_results_window(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
         show_results(trades, summary)
         return
 
-    fig, axes = plt.subplots(2, 1, figsize=(8, 6))
+    fig, axes = plt.subplots(3, 1, figsize=(8, 8))
+
+    # Summary table
     axes[0].axis("off")
     axes[0].table(
         cellText=summary.values,
         colLabels=summary.columns,
         loc="center",
     )
+
+    # Trade list with profit
+    axes[1].axis("off")
+    if not trades.empty:
+        tbl = trades[["code", "profit_jpy"]]
+        axes[1].table(cellText=tbl.values, colLabels=tbl.columns, loc="center")
+        axes[1].set_title("Trades")
+    else:
+        axes[1].text(0.5, 0.5, "No trades", ha="center", va="center")
+
+    # Profit bar chart
     profits = trades["profit_jpy"].tolist() if not trades.empty else []
-    axes[1].bar(
+    axes[2].bar(
         range(1, len(profits) + 1),
         profits,
         color=["green" if p >= 0 else "red" for p in profits],
     )
-    axes[1].set_title("Profit per Trade (JPY)")
-    axes[1].set_xlabel("Trade #")
-    axes[1].set_ylabel("Profit (JPY)")
+    axes[2].set_title("Profit per Trade (JPY)")
+    axes[2].set_xlabel("Trade #")
+    axes[2].set_ylabel("Profit (JPY)")
+
     plt.tight_layout()
     plt.show()
 
