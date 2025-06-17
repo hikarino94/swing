@@ -307,9 +307,9 @@ def parse_args(argv=None):
         help="結果を標準出力にテキスト表示",
     )
     p.add_argument(
-        "--no-show",
+        "--show",
         action="store_true",
-        help="結果表示を抑制",
+        help="結果を表示",
     )
     p.add_argument("-v", "--verbose", action="store_true", help="詳細ログを表示")
     return p.parse_args(argv)
@@ -346,7 +346,7 @@ def main():
         logger.info("JSON exported -> %s", args.json)
 
     logger.info("\n%s", summary.to_string(index=False))
-    if not args.no_show:
+    if args.show:
         if args.ascii:
             show_results(trades, summary)
         else:
