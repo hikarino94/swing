@@ -300,7 +300,7 @@ def run_backtest_range(
     stop_loss_pct: float = STOP_LOSS_PCT_DEFAULT,
     outfile: str | None = None,
     jsonfile: str | None = None,
-    show: bool = True,
+    show: bool = False,
     ascii: bool = False,
 ) -> None:
     """Run backtest for each entry date between start and end."""
@@ -383,9 +383,9 @@ if __name__ == "__main__":
         help="結果を標準出力にテキスト表示",
     )
     parser.add_argument(
-        "--no-show",
+        "--show",
         action="store_true",
-        help="結果表示を抑制",
+        help="結果を表示",
     )
     args = parser.parse_args()
     conn = sqlite3.connect(args.db)
@@ -398,6 +398,6 @@ if __name__ == "__main__":
         stop_loss_pct=args.stop_loss,
         outfile=args.outfile,
         jsonfile=args.json,
-        show=not args.no_show,
+        show=args.show,
         ascii=args.ascii,
     )
