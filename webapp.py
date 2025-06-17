@@ -7,6 +7,7 @@ import shlex
 import subprocess
 import json
 import tempfile
+from pathlib import Path
 from functools import wraps
 from flask import (
     Flask,
@@ -18,9 +19,23 @@ from flask import (
 )
 from werkzeug.security import check_password_hash
 
-from update_idtoken import _load_account, DEFAULT_ACCOUNT
+from update_idtoken import DEFAULT_ACCOUNT
 
 LOGIN_ACCOUNT = os.environ.get("LOGIN_ACCOUNT", "login.json")
+
+
+def _load_login_account(path: str) -> tuple[str, str, str]:
+    """Return ``(login_id, password, password_hash)`` from ``path`` if it exists."""
+    p = Path(path)
+    if not p.is_file():
+        p = Path(__file__).resolve().parent / path
+    if p.is_file():
+        with p.open("r", encoding="utf-8") as f:
+            js = json.load(f)
+        login_id = js.get("id") or js.get("mail", "")
+        return login_id, js.get("password", ""), js.get("password_hash", "")
+    return "", "", ""
+
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "secret")
@@ -135,7 +150,7 @@ LOGIN_HTML = """
 <h1>Login</h1>
 {% if error %}<p style="color:red;">{{ error }}</p>{% endif %}
 <form method="post">
-メール <input name="mail">
+ID <input name="id">
 パスワード <input type="password" name="password">
 <input type="submit" value="ログイン">
 </form>
@@ -248,9 +263,7 @@ def index():
             off = request.form.get("entry_offset") or "1"
             cap = request.form.get("capital") or "1000000"
             xlsx = request.form.get("xlsx") or "trades.xlsx"
-            cmd += (
-                f" --hold {hold} --entry-offset {off} --capital {cap} --xlsx {xlsx} --json {json_path}"
-            )
+            cmd += f" --hold {hold} --entry-offset {off} --capital {cap} --xlsx {xlsx} --json {json_path}"
             if request.form.get("start"):
                 cmd += f" --start {request.form['start']}"
             if request.form.get("end"):
@@ -277,9 +290,7 @@ def index():
             stop = request.form.get("stop_loss") or "5"
             cap = request.form.get("capital") or "1000000"
             out = request.form.get("outfile") or "backtest_results.xlsx"
-            cmd += (
-                f" --hold-days {hold} --stop-loss {stop} --capital {cap} --outfile {out} --json {json_path}"
-            )
+            cmd += f" --hold-days {hold} --stop-loss {stop} --capital {cap} --outfile {out} --json {json_path}"
             output = run_command(cmd)
             try:
                 with open(json_path, "r", encoding="utf-8") as f:
@@ -301,15 +312,15 @@ def index():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    a_mail, a_pwd, a_hash = _load_account(LOGIN_ACCOUNT)
-    if not a_mail and not a_pwd and not a_hash:
-        a_mail, a_pwd, a_hash = _load_account(DEFAULT_ACCOUNT)
+    a_id, a_pwd, a_hash = _load_login_account(LOGIN_ACCOUNT)
+    if not a_id and not a_pwd and not a_hash:
+        a_id, a_pwd, a_hash = _load_login_account(DEFAULT_ACCOUNT)
     error = ""
     if request.method == "POST":
-        mail = request.form.get("mail", "")
+        user_id = request.form.get("id", "")
         password = request.form.get("password", "")
         ok = False
-        if mail == a_mail:
+        if user_id == a_id:
             if a_hash:
                 ok = check_password_hash(a_hash, password)
             else:

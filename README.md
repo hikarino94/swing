@@ -32,13 +32,13 @@ J‑Quants の認証に使用するメールアドレスとパスワードを保
 `account.json` を用意しておくと、`update_idtoken.py` から自動的に参照されます。
 
 Web アプリ用の認証情報を分けたい場合は `login.json` を用意してください。
-こちらには Web アプリにログインする際のメールアドレスとパスワード（または
+こちらには Web アプリにログインする際の **ID** とパスワード（または
 `password_hash`）を保存します。`login.json` がない場合は `account.json`
-が使われます。
+が使われますが、この場合はメールアドレスが ID として扱われます。
 `LOGIN_ACCOUNT` 環境変数でこのファイルの場所を変更できます。
 
 ```json
-{"mail": "YOUR_MAIL", "password": "YOUR_PASSWORD", "password_hash": "<hash>"}
+{"id": "YOUR_ID", "password": "YOUR_PASSWORD", "password_hash": "<hash>"}
 ```
 `password_hash` は次のように生成できます。
 
@@ -121,8 +121,9 @@ FLASK_SECRET_KEY=<生成した鍵> python webapp.py
 ```
 
 初回アクセス時はログイン画面が表示されます。Web アプリ用の
-`login.json` に記載したメールアドレスとパスワードでログインしてください。
-`login.json` が存在しない場合は `account.json` を参照します。
+`login.json` に記載した **ID** とパスワードでログインしてください。
+`login.json` が存在しない場合は `account.json` を参照しますが、
+この場合はメールアドレスが ID として扱われます。
 どちらのファイルも `password_hash` を追加してハッシュ化したパスワードを
 保存しておくと安全です（`update_idtoken.py` 実行時は `account.json` の
 平文 `password` が参照されます）。
