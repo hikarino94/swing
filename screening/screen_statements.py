@@ -25,6 +25,14 @@ from typing import Final
 
 import pandas as pd
 
+# Threshold constants shared across screening modules
+from thresholds import (
+    CF_QUALITY_MIN,
+    EPS_YOY_MIN,
+    ETA_DELTA_MIN,
+    TREASURY_DELTA_MAX,
+)
+
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -186,16 +194,16 @@ def screen_signals(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     stage["recent"] = m.sum()
 
     eps_yoy = df["eps_yoy_fy"].fillna(df["eps_yoy_q"]).fillna(0)
-    m &= eps_yoy > 0.30
+    m &= eps_yoy > EPS_YOY_MIN
     stage["eps"] = m.sum()
 
-    m &= df["cf_quality"].fillna(0) > 0.8
+    m &= df["cf_quality"].fillna(0) > CF_QUALITY_MIN
     stage["cf"] = m.sum()
 
-    m &= df["eta_delta"].fillna(0) > 0
+    m &= df["eta_delta"].fillna(0) > ETA_DELTA_MIN
     stage["eta"] = m.sum()
 
-    m &= df["treasury_delta"].fillna(0) <= 0
+    m &= df["treasury_delta"].fillna(0) <= TREASURY_DELTA_MAX
     stage["treasury"] = m.sum()
 
     for col in BOOL_COLS:
