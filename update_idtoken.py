@@ -27,16 +27,16 @@ def _auth_user(mail: str, password: str) -> str:
     return data["refreshToken"]
 
 
-def _load_account(path: str) -> tuple[str, str]:
-    """Return (mail, password) tuple from ``path`` if it exists."""
+def _load_account(path: str) -> tuple[str, str, str]:
+    """Return ``(mail, password, password_hash)`` from ``path`` if it exists."""
     p = Path(path)
     if not p.is_file():
         p = Path(__file__).resolve().parent / path
     if p.is_file():
         with p.open("r", encoding="utf-8") as f:
             js = json.load(f)
-        return js.get("mail", ""), js.get("password", "")
-    return "", ""
+        return js.get("mail", ""), js.get("password", ""), js.get("password_hash", "")
+    return "", "", ""
 
 
 def _get_id_token(refresh_token: str) -> str:
@@ -73,7 +73,7 @@ def _cli() -> None:
 
     mail, pwd = a.mail, a.password
     if not mail or not pwd:
-        m, p = _load_account(a.account)
+        m, p, _ = _load_account(a.account)
         mail = mail or m
         pwd = pwd or p
     if not mail or not pwd:

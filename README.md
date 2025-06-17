@@ -28,11 +28,25 @@ J‑Quants API の `idToken` を取得し、次の内容で `idtoken.json` を�
 {"idToken": "YOUR_TOKEN"}
 ```
 
-メールアドレスとパスワードを保存する `account.json` を用意しておくと、
-`update_idtoken.py` から自動的に参照されます。
+J‑Quants の認証に使用するメールアドレスとパスワードを保存する
+`account.json` を用意しておくと、`update_idtoken.py` から自動的に参照されます。
+
+Web アプリ用の認証情報を分けたい場合は `login.json` を用意してください。
+こちらには Web アプリにログインする際のメールアドレスとパスワード（または
+`password_hash`）を保存します。`login.json` がない場合は `account.json`
+が使われます。
+`LOGIN_ACCOUNT` 環境変数でこのファイルの場所を変更できます。
 
 ```json
-{"mail": "YOUR_MAIL", "password": "YOUR_PASSWORD"}
+{"mail": "YOUR_MAIL", "password": "YOUR_PASSWORD", "password_hash": "<hash>"}
+```
+`password_hash` は次のように生成できます。
+
+```bash
+python - <<'EOF'
+from werkzeug.security import generate_password_hash
+print(generate_password_hash('YOUR_PASSWORD'))
+EOF
 ```
 
 このファイルは `.gitignore` に含まれ、リポジトリには登録されません。
@@ -83,7 +97,35 @@ python db/db_schema.py
 2. `screening` スクリプトで売買シグナルを生成
 3. `backtest` スクリプトでシグナルを検証
 
-操作をまとめた簡易 GUI (`gui.py`) も用意しています。
+操作をまとめた簡易 GUI (`gui.py`) に加えて、
+ブラウザから利用できる簡易 Web アプリ (`webapp.py`) も用意しました。
+すべての主要スクリプトを画面から実行でき、
+バックテストを含む結果はページ下部に表示されます。
+以下のように Flask をインストールして起動します。
+
+```bash
+pip install flask
+# `FLASK_SECRET_KEY` には Flask セッションを保護するための秘密鍵を
+# 指定します。未設定でも起動しますが、既定値 "secret" が使われるため
+# 任意の安全な文字列を環境変数で与えることを推奨します。
+# 鍵は次のように生成できます。
+python - <<'EOF'
+import secrets
+print(secrets.token_hex(16))
+EOF
+FLASK_SECRET_KEY=<生成した鍵> python webapp.py
+```
+
+初回アクセス時はログイン画面が表示されます。Web アプリ用の
+`login.json` に記載したメールアドレスとパスワードでログインしてください。
+`login.json` が存在しない場合は `account.json` を参照します。
+どちらのファイルも `password_hash` を追加してハッシュ化したパスワードを
+保存しておくと安全です（`update_idtoken.py` 実行時は `account.json` の
+平文 `password` が参照されます）。
+`LOGIN_ACCOUNT` 環境変数で認証情報ファイルを変更できます。
+
+`FLASK_HOST`, `FLASK_PORT`, `FLASK_DEBUG` を環境変数で指定すると、
+起動するホストやポート、デバッグモードを変更できます。
 
 ## 定期実行
 
