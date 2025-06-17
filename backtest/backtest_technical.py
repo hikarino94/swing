@@ -192,6 +192,58 @@ def summarize(trades: pd.DataFrame) -> pd.DataFrame:
     return summary
 
 
+def _ascii_bar_chart(values: list[float], width: int = 40) -> str:
+    """Return simple ASCII bar chart for a sequence of values."""
+    if not values:
+        return ""
+    max_v = max(abs(v) for v in values) or 1
+    lines = []
+    for i, v in enumerate(values, 1):
+        bar = "#" * int(abs(v) / max_v * width)
+        sign = "" if v >= 0 else "-"
+        lines.append(f"{i:>3} {sign}{bar} ({v:.0f})")
+    return "\n".join(lines)
+
+
+def show_results(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
+    """Display trades and summary on stdout."""
+    print("=== Summary ===")
+    print(summary.to_string(index=False))
+    if not trades.empty:
+        print("\n=== Profit per Trade ===")
+        chart = _ascii_bar_chart(trades["pnl_yen"].tolist())
+        print(chart)
+
+
+def show_results_window(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
+    """Display results in a new matplotlib window."""
+    try:
+        import matplotlib.pyplot as plt
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"matplotlib is required: {exc}")
+        show_results(trades, summary)
+        return
+
+    fig, axes = plt.subplots(2, 1, figsize=(8, 6))
+    axes[0].axis("off")
+    axes[0].table(
+        cellText=summary.values,
+        colLabels=summary.columns,
+        loc="center",
+    )
+    profits = trades["pnl_yen"].tolist() if not trades.empty else []
+    axes[1].bar(
+        range(1, len(profits) + 1),
+        profits,
+        color=["green" if p >= 0 else "red" for p in profits],
+    )
+    axes[1].set_title("Profit per Trade (JPY)")
+    axes[1].set_xlabel("Trade #")
+    axes[1].set_ylabel("Profit (JPY)")
+    plt.tight_layout()
+    plt.show()
+
+
 def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str) -> None:
     """Save trades and summary to an Excel file."""
 
@@ -235,6 +287,8 @@ def run_backtest_range(
     stop_loss_pct: float = STOP_LOSS_PCT_DEFAULT,
     outfile: str | None = None,
     jsonfile: str | None = None,
+    show: bool = True,
+    ascii: bool = False,
 ) -> None:
     """Run backtest for each entry date between start and end."""
 
@@ -275,6 +329,12 @@ def run_backtest_range(
         result.to_json(jsonfile, orient="records", force_ascii=False)
         logger.info("JSON exported → %s", jsonfile)
 
+    if show:
+        if ascii:
+            show_results(result, summary)
+        else:
+            show_results_window(result, summary)
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -304,6 +364,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "--stop-loss", type=float, default=STOP_LOSS_PCT_DEFAULT, help="損切り率"
     )
+    parser.add_argument(
+        "--ascii",
+        action="store_true",
+        help="結果を標準出力にテキスト表示",
+    )
+    parser.add_argument(
+        "--no-show",
+        action="store_true",
+        help="結果表示を抑制",
+    )
     args = parser.parse_args()
     conn = sqlite3.connect(args.db)
     run_backtest_range(
@@ -315,4 +385,6 @@ if __name__ == "__main__":
         stop_loss_pct=args.stop_loss,
         outfile=args.outfile,
         jsonfile=args.json,
+        show=not args.no_show,
+        ascii=args.ascii,
     )
