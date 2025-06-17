@@ -31,6 +31,7 @@ from thresholds import (
     EPS_YOY_MIN,
     ETA_DELTA_MIN,
     TREASURY_DELTA_MAX,
+    log_thresholds,
 )
 
 
@@ -290,6 +291,7 @@ def main() -> None:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="[%(levelname)s] %(message)s",
     )
+    log_thresholds()
 
     as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
     cfg = Config(
