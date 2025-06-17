@@ -1,1 +1,5 @@
-{"mail": "example@example.com", "password": "password"}
+{
+    "mail": "example@example.com",
+    "password": "password",
+    "password_hash": "pbkdf2:sha256:260000$example$hash",
+}

@@ -7,12 +7,17 @@ import json
 from pathlib import Path
 
 
-def run_command(cmd, output_widget):
-    """Execute *cmd* in a background thread and stream output to *output_widget*."""
+def run_command(cmd, output_widget, on_finish=None):
+    """Execute ``cmd`` and stream output to ``output_widget``.
+
+    If ``on_finish`` is provided it will be called with the collected output
+    once the command finishes.
+    """
 
     def _worker():
         output_widget.delete(1.0, tk.END)
         output_widget.insert(tk.END, f"$ {cmd}\n")
+        collected = []
         try:
             proc = subprocess.Popen(
                 shlex.split(cmd),
@@ -22,16 +27,21 @@ def run_command(cmd, output_widget):
             )
             assert proc.stdout is not None  # for type checkers
             for line in proc.stdout:
+                collected.append(line)
                 output_widget.insert(tk.END, line)
                 output_widget.see(tk.END)
             proc.wait()
             if proc.returncode:
-                output_widget.insert(
-                    tk.END,
-                    f"\nコマンドが終了コード {proc.returncode} で終了しました",
-                )
+                msg = f"\nコマンドが終了コード {proc.returncode} で終了しました"
+                collected.append(msg)
+                output_widget.insert(tk.END, msg)
         except Exception as exc:  # pylint: disable=broad-except
-            output_widget.insert(tk.END, f"\nエラー: {exc}")
+            msg = f"\nエラー: {exc}"
+            collected.append(msg)
+            output_widget.insert(tk.END, msg)
+        finally:
+            if on_finish:
+                on_finish("".join(collected))
 
     threading.Thread(target=_worker, daemon=True).start()
 
@@ -63,7 +73,15 @@ def build_fetch_quotes_tab(nb, output):
             cmd += f" --start {start_var.get()}"
         if end_var.get():
             cmd += f" --end {end_var.get()}"
-        run_command(cmd, output)
+
+        def _finish(out):
+            def _show():
+                msg = "\n".join(out.strip().splitlines()[-10:])
+                messagebox.showinfo("バックテスト結果", msg)
+
+            output.after(0, _show)
+
+        run_command(cmd, output, on_finish=_finish)
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
@@ -112,7 +130,15 @@ def build_statements_tab(nb, output):
             cmd += f" --start {start_var.get()}"
         if end_var.get():
             cmd += f" --end {end_var.get()}"
-        run_command(cmd, output)
+
+        def _finish(out):
+            def _show():
+                msg = "\n".join(out.strip().splitlines()[-10:])
+                messagebox.showinfo("バックテスト結果", msg)
+
+            output.after(0, _show)
+
+        run_command(cmd, output, on_finish=_finish)
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
@@ -218,7 +244,15 @@ def build_backtest_stmt_tab(nb, output):
             cmd += f" --start {start_var.get()}"
         if end_var.get():
             cmd += f" --end {end_var.get()}"
-        run_command(cmd, output)
+
+        def _finish(out):
+            def _show():
+                msg = "\n".join(out.strip().splitlines()[-10:])
+                messagebox.showinfo("バックテスト結果", msg)
+
+            output.after(0, _show)
+
+        run_command(cmd, output, on_finish=_finish)
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
@@ -262,7 +296,15 @@ def build_backtest_tech_tab(nb, output):
         )
         if end_var.get():
             cmd += f" --end {end_var.get()}"
-        run_command(cmd, output)
+
+        def _finish(out):
+            def _show():
+                msg = "\n".join(out.strip().splitlines()[-10:])
+                messagebox.showinfo("バックテスト結果", msg)
+
+            output.after(0, _show)
+
+        run_command(cmd, output, on_finish=_finish)
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
