@@ -20,6 +20,15 @@ import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# Threshold constants shared across screening modules
+from thresholds import (
+    ADX_THRESHOLD,
+    FIRST_LOOKBACK_DAYS,
+    OVERHEAT_FACTOR,
+    RSI_THRESHOLD,
+    SIGNAL_COUNT_MIN,
+)
+
 DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
@@ -89,7 +98,7 @@ def compute_indicators(df):
     macd_signal = macd.ewm(span=9, adjust=False).mean()
 
     # --- Overheating check ---
-    overheat = (df["adj_close"] > sma10 * 1.1).astype(
+    overheat = (df["adj_close"] > sma10 * OVERHEAT_FACTOR).astype(
         int
     )  # 10% above 10MA is considered overheated
 
@@ -102,8 +111,8 @@ def compute_indicators(df):
                 & (slope20 > 0)
                 & (slope50 > 0)
             ).astype(int),
-            "signal_rsi": (rsi14 >= 50).astype(int),
-            "signal_adx": (adx14 >= 20).astype(int),
+            "signal_rsi": (rsi14 >= RSI_THRESHOLD).astype(int),
+            "signal_adx": (adx14 >= ADX_THRESHOLD).astype(int),
             "signal_bb": (
                 (df["adj_close"] >= bb_up1) | (df["adj_close"] <= bb_low1)
             ).astype(int),
@@ -158,13 +167,16 @@ def run_indicators(conn, as_of=None):
             rec["signal_date"] = rec["signal_date"].strftime("%Y-%m-%d")
             rec["code"] = code
             # --- signals_first の計算 ---
-            # 過去30日間に signals_count>=3 の日がひとつもなければ初回フラグを立てる
-            if rec["signals_count"] >= 3:
-                start_30 = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+            # 過去FIRST_LOOKBACK_DAYS日間に signals_count>=SIGNAL_COUNT_MIN の日が
+            # ひとつもなければ初回フラグを立てる
+            if rec["signals_count"] >= SIGNAL_COUNT_MIN:
+                start_30 = (
+                    today - timedelta(days=FIRST_LOOKBACK_DAYS)
+                ).strftime("%Y-%m-%d")
                 cnt = conn.execute(
                     "SELECT COUNT(*) FROM technical_indicators "
-                    "WHERE code=? AND signal_date>=? AND signal_date<? AND signals_count>=3",
-                    (code, start_30, rec["signal_date"]),
+                    "WHERE code=? AND signal_date>=? AND signal_date<? AND signals_count>=?",
+                    (code, start_30, rec["signal_date"], SIGNAL_COUNT_MIN),
                 ).fetchone()[0]
                 rec["signals_first"] = 1 if cnt == 0 else 0
             else:
@@ -196,9 +208,9 @@ def screen_signals(conn, as_of=None):
             "SELECT MAX(signal_date) FROM technical_indicators"
         ).fetchone()[0]
     df = pd.read_sql(
-        "SELECT * FROM technical_indicators WHERE signal_date=? AND signals_count>=3",
+        "SELECT * FROM technical_indicators WHERE signal_date=? AND signals_count>=?",
         conn,
-        params=(as_of,),
+        params=(as_of, SIGNAL_COUNT_MIN),
     )
     logger.info("\n%s", df)
 
