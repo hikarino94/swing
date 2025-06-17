@@ -224,7 +224,7 @@ def show_results_window(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
         show_results(trades, summary)
         return
 
-    fig, axes = plt.subplots(3, 1, figsize=(8, 8))
+    fig, axes = plt.subplots(3, 1, figsize=(8, 8), constrained_layout=True)
 
     # Summary table
     axes[0].axis("off")
@@ -254,7 +254,6 @@ def show_results_window(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
     axes[2].set_xlabel("Trade #")
     axes[2].set_ylabel("Profit (JPY)")
 
-    plt.tight_layout()
     plt.show()
 
 
