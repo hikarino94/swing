@@ -83,12 +83,18 @@ python db/db_schema.py
   財務シグナルを用いたバックテストを実行します。
   `--hold` 保有日数、`--entry-offset` エントリー日のオフセット、`--capital` 資金、
   `--start` と `--end` で対象期間、`--xlsx` 出力ファイル名に加えて
-  `--json` で結果を JSON として保存できます。
+  `--json` で結果を JSON として保存できます。デフォルトでは
+  サマリー表と損益バーグラフが新しいウィンドウに表示されます。
+  標準出力へテキスト表示したい場合は `--ascii`、表示を抑制したい
+  場合は `--no-show` を指定してください。
 * `backtest/backtest_technical.py`
   テクニカル指標を用いたスイングトレードのバックテストを行います。
   `--start` と `--end` でエントリー期間を指定し、`--hold-days` 保有日数、
   `--stop-loss` 損切り率、`--capital` 資金、`--outfile` 出力ファイル名のほか
-  `--json` オプションで結果を JSON へ保存できます。
+  `--json` オプションで結果を JSON へ保存できます。デフォルトでは
+  サマリー表と損益バーグラフが新しいウィンドウに表示されます。
+  標準出力で確認したい場合は `--ascii`、表示を抑制する場合は
+  `--no-show` を利用してください。
 * `update_idtoken.py`
   J‑Quants にログインして `idtoken.json` を更新します。
   `--mail` と `--password` を省略すると `account.json` が参照されます。

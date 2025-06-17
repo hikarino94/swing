@@ -168,6 +168,58 @@ def summarize(trades: pd.DataFrame) -> pd.DataFrame:
     return summary
 
 
+def _ascii_bar_chart(values: list[float], width: int = 40) -> str:
+    """Return simple ASCII bar chart for a sequence of values."""
+    if not values:
+        return ""
+    max_v = max(abs(v) for v in values) or 1
+    lines = []
+    for i, v in enumerate(values, 1):
+        bar = "#" * int(abs(v) / max_v * width)
+        sign = "" if v >= 0 else "-"
+        lines.append(f"{i:>3} {sign}{bar} ({v:.0f})")
+    return "\n".join(lines)
+
+
+def show_results(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
+    """Display trades and summary on stdout."""
+    print("=== Summary ===")
+    print(summary.to_string(index=False))
+    if not trades.empty:
+        print("\n=== Profit per Trade ===")
+        chart = _ascii_bar_chart(trades["profit_jpy"].tolist())
+        print(chart)
+
+
+def show_results_window(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
+    """Display results in a new matplotlib window."""
+    try:
+        import matplotlib.pyplot as plt
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"matplotlib is required: {exc}")
+        show_results(trades, summary)
+        return
+
+    fig, axes = plt.subplots(2, 1, figsize=(8, 6))
+    axes[0].axis("off")
+    axes[0].table(
+        cellText=summary.values,
+        colLabels=summary.columns,
+        loc="center",
+    )
+    profits = trades["profit_jpy"].tolist() if not trades.empty else []
+    axes[1].bar(
+        range(1, len(profits) + 1),
+        profits,
+        color=["green" if p >= 0 else "red" for p in profits],
+    )
+    axes[1].set_title("Profit per Trade (JPY)")
+    axes[1].set_xlabel("Trade #")
+    axes[1].set_ylabel("Profit (JPY)")
+    plt.tight_layout()
+    plt.show()
+
+
 # ---------------------------------------------------------------------------
 # Excel output
 # ---------------------------------------------------------------------------
@@ -236,6 +288,16 @@ def parse_args(argv=None):
     p.add_argument("--end", type=str, default=None, help="終了日 YYYY-MM-DD")
     p.add_argument("--xlsx", type=str, default="trades.xlsx", help="Excel 出力ファイル")
     p.add_argument("--json", type=str, help="結果を保存するJSONファイル")
+    p.add_argument(
+        "--ascii",
+        action="store_true",
+        help="結果を標準出力にテキスト表示",
+    )
+    p.add_argument(
+        "--no-show",
+        action="store_true",
+        help="結果表示を抑制",
+    )
     p.add_argument("-v", "--verbose", action="store_true", help="詳細ログを表示")
     return p.parse_args(argv)
 
@@ -271,6 +333,11 @@ def main():
         logger.info("JSON exported -> %s", args.json)
 
     logger.info("\n%s", summary.to_string(index=False))
+    if not args.no_show:
+        if args.ascii:
+            show_results(trades, summary)
+        else:
+            show_results_window(trades, summary)
 
 
 if __name__ == "__main__":
