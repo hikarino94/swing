@@ -96,6 +96,9 @@ python db/db_schema.py
 * `update_idtoken.py`
   J‑Quants にログインして `idtoken.json` を更新します。
   `--mail` と `--password` を省略すると `account.json` が参照されます。
+* `db/db_summary.py`
+  データベースの各テーブル件数と日付範囲を表示します。引数はありません。
+  GUI の「DBサマリー」タブからも確認できます。
 
 ## 利用の流れ
 

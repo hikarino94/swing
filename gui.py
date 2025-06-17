@@ -344,6 +344,21 @@ def build_update_token_tab(nb, output):
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
+def build_db_summary_tab(nb, output):
+    frame = ttk.Frame(nb)
+    nb.add(frame, text="DBサマリー")
+    desc = "データベースの件数と日付範囲を表示します。"
+    ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
+        anchor="w", padx=5, pady=5
+    )
+
+    def _run():
+        cmd = "python db/db_summary.py"
+        run_command(cmd, output)
+
+    ttk.Button(frame, text="実行", command=_run).pack(pady=5)
+
+
 def build_output_controls(root, output_widget):
     """Create buttons to manage the output widget."""
     frame = ttk.Frame(root)
@@ -373,6 +388,7 @@ def main():
     build_backtest_stmt_tab(nb, output)
     build_backtest_tech_tab(nb, output)
     build_update_token_tab(nb, output)
+    build_db_summary_tab(nb, output)
 
     root.mainloop()
 
