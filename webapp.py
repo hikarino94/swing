@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+import json
+import tempfile
 from functools import wraps
 from flask import (
     Flask,
@@ -117,6 +119,14 @@ HTML = """
 <h2>Output</h2>
 <pre>{{ output }}</pre>
 {% endif %}
+{% if chart %}
+<h2>Result Chart</h2>
+{{ chart|safe }}
+{% endif %}
+{% if table %}
+<h2>Trades</h2>
+{{ table|safe }}
+{% endif %}
 """
 
 LOGIN_HTML = """
@@ -138,6 +148,45 @@ def run_command(cmd: str) -> str:
     return f"$ {cmd}\n" + proc.stdout + proc.stderr
 
 
+def make_bar_chart(trades):
+    """Return simple HTML bar chart for trade profits."""
+    if not trades:
+        return ""
+    vals = [t.get("pnl_yen") or t.get("profit_jpy") or 0 for t in trades]
+    max_v = max(abs(v) for v in vals) or 1
+    bars = []
+    for v in vals:
+        width = int(abs(v) / max_v * 100)
+        color = "green" if v >= 0 else "red"
+        bars.append(
+            f'<div style="background:{color};height:1em;width:{width}%;"></div>'
+        )
+    return "<div style='max-width:200px'>" + "".join(bars) + "</div>"
+
+
+def make_trade_table(trades):
+    """Return HTML table showing traded tickers and profits."""
+    if not trades:
+        return ""
+    keys = [
+        "code",
+        "name",
+        "entry_date",
+        "exit_date",
+        "pnl_yen",
+        "profit_jpy",
+    ]
+    cols = [k for k in keys if any(k in t for t in trades)]
+    rows = ["<table border='1'>"]
+    rows.append("<tr>" + "".join(f"<th>{c}</th>" for c in cols) + "</tr>")
+    for t in trades:
+        rows.append(
+            "<tr>" + "".join(f"<td>{t.get(c, '')}</td>" for c in cols) + "</tr>"
+        )
+    rows.append("</table>")
+    return "\n".join(rows)
+
+
 def login_required(func):
     """Decorator to require login."""
 
@@ -154,6 +203,8 @@ def login_required(func):
 @login_required
 def index():
     output = ""
+    chart = ""
+    table = ""
     if request.method == "POST":
         action = request.form.get("action")
         if action == "fetch_quotes":
@@ -192,18 +243,30 @@ def index():
             output = run_command(cmd)
         elif action == "backtest_statements":
             cmd = "python backtest/backtest_statements.py"
+            json_path = tempfile.mktemp(suffix=".json")
             hold = request.form.get("hold") or "40"
             off = request.form.get("entry_offset") or "1"
             cap = request.form.get("capital") or "1000000"
             xlsx = request.form.get("xlsx") or "trades.xlsx"
-            cmd += f" --hold {hold} --entry-offset {off} --capital {cap} --xlsx {xlsx}"
+            cmd += (
+                f" --hold {hold} --entry-offset {off} --capital {cap} --xlsx {xlsx} --json {json_path}"
+            )
             if request.form.get("start"):
                 cmd += f" --start {request.form['start']}"
             if request.form.get("end"):
                 cmd += f" --end {request.form['end']}"
             output = run_command(cmd)
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    trades = json.load(f)
+                chart = make_bar_chart(trades)
+                table = make_trade_table(trades)
+            except Exception:
+                chart = ""
+                table = ""
         elif action == "backtest_technical":
             cmd = "python backtest/backtest_technical.py"
+            json_path = tempfile.mktemp(suffix=".json")
             start = request.form.get("start")
             if start:
                 cmd += f" --start {start}"
@@ -214,8 +277,18 @@ def index():
             stop = request.form.get("stop_loss") or "5"
             cap = request.form.get("capital") or "1000000"
             out = request.form.get("outfile") or "backtest_results.xlsx"
-            cmd += f" --hold-days {hold} --stop-loss {stop} --capital {cap} --outfile {out}"
+            cmd += (
+                f" --hold-days {hold} --stop-loss {stop} --capital {cap} --outfile {out} --json {json_path}"
+            )
             output = run_command(cmd)
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    trades = json.load(f)
+                chart = make_bar_chart(trades)
+                table = make_trade_table(trades)
+            except Exception:
+                chart = ""
+                table = ""
         elif action == "update_token":
             cmd = "python update_idtoken.py"
             if request.form.get("mail"):
@@ -223,7 +296,7 @@ def index():
             if request.form.get("password"):
                 cmd += f" --password {request.form['password']}"
             output = run_command(cmd)
-    return render_template_string(HTML, output=output)
+    return render_template_string(HTML, output=output, chart=chart, table=table)
 
 
 @app.route("/login", methods=["GET", "POST"])

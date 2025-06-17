@@ -80,13 +80,15 @@ python db/db_schema.py
   `--as-of` で対象日を指定し、`--lookback` は遡る日数です。
   当日の `prices` データが存在しない場合は処理をスキップします。
 * `backtest/backtest_statements.py`
-  財務シグナルを用いたバックテストを実行します。  
-  `--hold` 保有日数、`--entry-offset` エントリー日のオフセット、`--capital` 資金、  
-  `--start` と `--end` で対象期間、`--xlsx` 出力ファイル名を指定します。
+  財務シグナルを用いたバックテストを実行します。
+  `--hold` 保有日数、`--entry-offset` エントリー日のオフセット、`--capital` 資金、
+  `--start` と `--end` で対象期間、`--xlsx` 出力ファイル名に加えて
+  `--json` で結果を JSON として保存できます。
 * `backtest/backtest_technical.py`
   テクニカル指標を用いたスイングトレードのバックテストを行います。
   `--start` と `--end` でエントリー期間を指定し、`--hold-days` 保有日数、
-  `--stop-loss` 損切り率、`--capital` 資金、`--outfile` 出力ファイル名を指定します。
+  `--stop-loss` 損切り率、`--capital` 資金、`--outfile` 出力ファイル名のほか
+  `--json` オプションで結果を JSON へ保存できます。
 * `update_idtoken.py`
   J‑Quants にログインして `idtoken.json` を更新します。
   `--mail` と `--password` を省略すると `account.json` が参照されます。
@@ -101,6 +103,8 @@ python db/db_schema.py
 ブラウザから利用できる簡易 Web アプリ (`webapp.py`) も用意しました。
 すべての主要スクリプトを画面から実行でき、
 バックテストを含む結果はページ下部に表示されます。
+バックテスト実行時には JSON に保存した結果から簡易チャートと
+取引銘柄の一覧表も表示されます。
 以下のように Flask をインストールして起動します。
 
 ```bash

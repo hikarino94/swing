@@ -235,6 +235,7 @@ def parse_args(argv=None):
     p.add_argument("--start", type=str, default=None, help="開始日 YYYY-MM-DD")
     p.add_argument("--end", type=str, default=None, help="終了日 YYYY-MM-DD")
     p.add_argument("--xlsx", type=str, default="trades.xlsx", help="Excel 出力ファイル")
+    p.add_argument("--json", type=str, help="結果を保存するJSONファイル")
     p.add_argument("-v", "--verbose", action="store_true", help="詳細ログを表示")
     return p.parse_args(argv)
 
@@ -264,6 +265,10 @@ def main():
 
     logger.info("Saving Excel → %s", args.xlsx)
     to_excel(trades, summary, args.xlsx)
+
+    if args.json:
+        trades.to_json(args.json, orient="records", force_ascii=False)
+        logger.info("JSON exported -> %s", args.json)
 
     logger.info("\n%s", summary.to_string(index=False))
 
