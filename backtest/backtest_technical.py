@@ -31,6 +31,8 @@ import sqlite3
 import pandas as pd
 import datetime as dt
 import logging
+import json
+from pathlib import Path
 from pathlib import Path
 
 CAPITAL_DEFAULT = 1_000_000
@@ -338,9 +340,14 @@ def run_backtest_range(
         to_excel(result, summary, outfile)
         logger.info("Excel exported → %s", outfile)
 
-    if jsonfile:
-        result.to_json(jsonfile, orient="records", force_ascii=False)
-        logger.info("JSON exported → %s", jsonfile)
+    
+if jsonfile:
+    out = {
+        "summary": summary.to_dict(orient="records"),
+        "trades": result.to_dict(orient="records"),
+    }
+    Path(jsonfile).write_text(json.dumps(out, ensure_ascii=False, indent=2))
+    logger.info("JSON exported → %s", jsonfile)
 
     if show:
         if ascii:
