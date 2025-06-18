@@ -18,7 +18,6 @@ $ python backtest_statements.py \
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sqlite3
 import sys
@@ -342,14 +341,9 @@ def main():
     logger.info("Saving Excel → %s", args.xlsx)
     to_excel(trades, summary, args.xlsx)
 
-    
-if args.json:
-    out = {
-        "summary": summary.to_dict(orient="records"),
-        "trades": trades.to_dict(orient="records"),
-    }
-    Path(args.json).write_text(json.dumps(out, ensure_ascii=False, indent=2))
-    logger.info("JSON exported -> %s", args.json)
+    if args.json:
+        trades.to_json(args.json, orient="records", force_ascii=False)
+        logger.info("JSON exported -> %s", args.json)
 
     logger.info("\n%s", summary.to_string(index=False))
     if args.show:

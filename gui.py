@@ -238,40 +238,23 @@ def build_backtest_stmt_tab(nb, output):
     ttk.Entry(arg, textvariable=xlsx, width=15).grid(row=2, column=3)
 
     def _run():
-        json_file = Path(xlsx.get()).with_suffix(".json")
         cmd = (
             f"python backtest/backtest_statements.py --hold {hold.get()} "
-            f"--entry-offset {offset.get()} --capital {cap.get()} "
-            f"--xlsx {xlsx.get()} --json {json_file}"
+            f"--entry-offset {offset.get()} --capital {cap.get()} --xlsx {xlsx.get()}"
         )
         if start_var.get():
             cmd += f" --start {start_var.get()}"
         if end_var.get():
             cmd += f" --end {end_var.get()}"
-def _finish(out):
+
+        def _finish(out):
             def _show():
-                try:
-                    with open(json_file, encoding="utf-8") as f:
-                        res = json.load(f)
-                    msg = "=== Summary ===\n"
-                    for row in res.get("summary", []):
-                        msg += "  ".join(f"{k}:{v}" for k, v in row.items()) + "\n"
-                    trades = res.get("trades", [])[:20]
-                    if trades:
-                        msg += "\n=== Trades (Top 20) ===\n"
-                        header = trades[0].keys()
-                        msg += " | ".join(header) + "\n"
-                        msg += "-" * 80 + "\n"
-                        for t in trades:
-                            msg += " | ".join(str(t[h]) for h in header) + "\n"
-                except Exception:
-                    msg = "\n".join(out.strip().splitlines()[-10:])
+                msg = "\n".join(out.strip().splitlines()[-10:])
                 messagebox.showinfo("バックテスト結果", msg)
 
             output.after(0, _show)
 
         run_command(cmd, output, on_finish=_finish)
-
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
@@ -308,38 +291,22 @@ def build_backtest_tech_tab(nb, output):
         if not start_var.get():
             messagebox.showerror("エラー", "開始日を入力してください")
             return
-        json_file = Path(out.get()).with_suffix(".json")
         cmd = (
             f"python backtest/backtest_technical.py --start {start_var.get()} "
             f"--hold-days {hold.get()} --stop-loss {stop.get()} "
-            f"--capital {cap.get()} --outfile {out.get()} --json {json_file}"
+            f"--capital {cap.get()} --outfile {out.get()}"
         )
         if end_var.get():
             cmd += f" --end {end_var.get()}"
-def _finish(out):
+
+        def _finish(out):
             def _show():
-                try:
-                    with open(json_file, encoding="utf-8") as f:
-                        res = json.load(f)
-                    msg = "=== Summary ===\n"
-                    for row in res.get("summary", []):
-                        msg += "  ".join(f"{k}:{v}" for k, v in row.items()) + "\n"
-                    trades = res.get("trades", [])[:20]
-                    if trades:
-                        msg += "\n=== Trades (Top 20) ===\n"
-                        header = trades[0].keys()
-                        msg += " | ".join(header) + "\n"
-                        msg += "-" * 80 + "\n"
-                        for t in trades:
-                            msg += " | ".join(str(t[h]) for h in header) + "\n"
-                except Exception:
-                    msg = "\n".join(out.strip().splitlines()[-10:])
+                msg = "\n".join(out.strip().splitlines()[-10:])
                 messagebox.showinfo("バックテスト結果", msg)
 
             output.after(0, _show)
 
         run_command(cmd, output, on_finish=_finish)
-
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
