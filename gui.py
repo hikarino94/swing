@@ -67,7 +67,8 @@ def build_fetch_quotes_tab(nb, output):
         "J-Quants から株価を取得し prices テーブルに保存します。\n"
         "日付は任意で YYYY-MM-DD 形式です。\n"
         "日付の指定がない場合は当日日付のデータを取得します。\n"
-        "開始日のみ入力した場合は開始日から当日まで、終了日のみを入力した場合は当日のみ"
+        "開始日のみ入力した場合は開始日から当日まで、終了日のみを入力した場合は当日のみ取得します。\n"
+        "取得期間は最大10年です。2025/06/19→2015-06-19"
     )
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
         anchor="w", padx=5, pady=5

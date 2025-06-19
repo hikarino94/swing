@@ -142,7 +142,7 @@ def run_indicators(conn, as_of=None):
         logger.info("%s の価格データがないためスキップ", as_of)
         return
     codes = [
-        row[0] for row in conn.execute("SELECT DISTINCT code FROM prices").fetchall()
+        row[0] for row in conn.execute("SELECT DISTINCT A.code FROM prices A join listed_info B on A.code = B.code where B.market_code!= '0109';").fetchall()
     ]
     total = len(codes)
     logger.info("開始: %d 銘柄を処理します (as_of=%s)", total, as_of)

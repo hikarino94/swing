@@ -88,16 +88,26 @@ def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
     """Load recent statements rows from DB and return as DataFrame."""
     start_date = (cfg.as_of - timedelta(days=cfg.lookback_days)).strftime("%Y-%m-%d")
     sql = """
-        SELECT LocalCode, DisclosedDate, DisclosedTime, TypeOfCurrentPeriod,
-               NetSales, OperatingProfit, Profit, EarningsPerShare,
-               ForecastEarningsPerShare,
-               CashFlowsFromOperatingActivities, EquityToAssetRatio,
-               NumberOfTreasuryStockAtTheEndOfFiscalYear,
-               MaterialChangesInSubsidiaries,
-               ChangesOtherThanOnesBasedOnRevisionsOfAccountingStandard,
-               ChangesInAccountingEstimates
-          FROM statements
-         WHERE DisclosedDate >= ?;
+        SELECT A.LocalCode,
+            A.DisclosedDate, 
+            A.DisclosedTime, 
+            A.TypeOfCurrentPeriod,
+            A.NetSales, 
+            A.OperatingProfit, 
+            A.Profit, 
+            A.EarningsPerShare,
+            A.ForecastEarningsPerShare,
+            A.CashFlowsFromOperatingActivities,
+            A.EquityToAssetRatio,
+            A.NumberOfTreasuryStockAtTheEndOfFiscalYear,
+            A.MaterialChangesInSubsidiaries,
+            A.ChangesOtherThanOnesBasedOnRevisionsOfAccountingStandard,
+            A.ChangesInAccountingEstimates
+        FROM statements A
+        join listed_info B
+        on A.LocalCode = B.code
+        where  B.market_code != "0109"         
+        and A.DisclosedDate >= ?;
     """
     df = pd.read_sql(sql, conn, params=(start_date,))
 
