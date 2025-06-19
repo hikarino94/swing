@@ -415,6 +415,53 @@ def build_db_summary_tab(nb, output):
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
+def build_analyze_json_tab(nb, output):
+    """Run backtest JSON analyzer from the GUI."""
+
+    frame = ttk.Frame(nb)
+    nb.add(frame, text="JSON分析")
+
+    desc = "バックテスト結果 JSON を読み込み統計を表示します。"
+    ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
+        anchor="w", padx=5, pady=5
+    )
+
+    lb = tk.Listbox(frame, selectmode="extended", height=10)
+    lb.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+    sb = ttk.Scrollbar(frame, orient="vertical", command=lb.yview)
+    sb.pack(side="left", fill="y")
+    lb.configure(yscrollcommand=sb.set)
+
+    def refresh():
+        lb.delete(0, tk.END)
+        for p in sorted(Path(".").glob("*.json")):
+            lb.insert(tk.END, p.name)
+
+    show_var = tk.BooleanVar()
+    ttk.Checkbutton(frame, text="トレード一覧も表示", variable=show_var).pack(
+        anchor="w", padx=5
+    )
+
+    def _run():
+        sel = lb.curselection()
+        if not sel:
+            messagebox.showerror("エラー", "ファイルを選択してください")
+            return
+        files = [lb.get(i) for i in sel]
+        cmd = "python backtest/analyze_backtest_json.py " + " ".join(files)
+        if show_var.get():
+            cmd += " --show-trades"
+        run_command(cmd, output)
+
+    btn_frame = ttk.Frame(frame)
+    btn_frame.pack(anchor="e", padx=5, pady=5)
+    ttk.Button(btn_frame, text="更新", command=refresh).pack(
+        side="left", padx=(0, 5)
+    )
+    ttk.Button(btn_frame, text="実行", command=_run).pack(side="left")
+    refresh()
+
+
 def build_results_tab(nb):
     """List Excel files and open them."""
 
@@ -488,6 +535,7 @@ def main():
     build_update_token_tab(nb, output)
     build_thresholds_tab(nb)
     build_db_summary_tab(nb, output)
+    build_analyze_json_tab(nb, output)
     build_results_tab(nb)
 
     root.mainloop()
