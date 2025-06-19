@@ -16,10 +16,11 @@ pre-commit install
 
 ## セットアップ
 
-Python 3.9 以上を想定しています。必要なライブラリをインストールします。
+Python 3.9 以上を想定しています。必要なライブラリは
+`requirements.txt` にまとめています。
 
 ```bash
-pip install pandas requests XlsxWriter
+pip install -r requirements.txt
 ```
 
 J‑Quants API の `idToken` を取得し、次の内容で `idtoken.json` を作成してください。
@@ -116,10 +117,9 @@ python db/db_schema.py
 ## 定期実行
 
 `scheduler.py` を起動しておくと株価や決算情報の取得を自動化できます。
-利用には `schedule` ライブラリが必要です。
+必要なライブラリは `requirements.txt` からインストールできます。
 
 ```bash
-pip install schedule
 python scheduler.py
 ```
 
