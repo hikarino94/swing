@@ -65,6 +65,25 @@ def summarize(trades: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def format_summary(summary: pd.DataFrame) -> pd.DataFrame:
+    """Return human friendly formatted summary table."""
+    if summary.empty:
+        return summary
+
+    def fmt(metric: str, value: float) -> str:
+        if metric == "total_profit":
+            return f"{value:,.0f} JPY"
+        if metric in {"win_rate", "avg_ret_pct"}:
+            return f"{value * (100 if metric == 'win_rate' else 1):.2f}%"
+        if metric == "sharpe":
+            return f"{value:.2f}"
+        return f"{int(value)}"
+
+    formatted = summary.copy()
+    formatted["value"] = [fmt(m, v) for m, v in zip(summary["metric"], summary["value"])]
+    return formatted
+
+
 def _ascii_bar_chart(values: List[float], width: int = 40) -> str:
     if not values:
         return ""
@@ -93,8 +112,10 @@ def main(argv: List[str] | None = None) -> None:
         return
 
     summary = summarize(trades)
+    summary = format_summary(summary)
     print("=== Summary ===")
-    print(summary.to_string(index=False))
+    for metric, value in zip(summary["metric"], summary["value"]):
+        print(f"{metric:>12}: {value}")
 
     if args.show_trades:
         print("\n=== Trades ===")
