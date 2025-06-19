@@ -92,7 +92,7 @@ def _ascii_bar_chart(values: List[float], width: int = 40) -> str:
     for i, v in enumerate(values, 1):
         bar = "#" * int(abs(v) / max_v * width)
         sign = "" if v >= 0 else "-"
-        lines.append(f"{i:>3} {sign}{bar} ({v:.0f})")
+        lines.append(f"{i:>3} {sign}{bar} ({v:+.0f})")
     return "\n".join(lines)
 
 
