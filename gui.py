@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 import subprocess
+import os
+import sys
 import shlex
 import threading
 import json
@@ -399,6 +401,48 @@ def build_db_summary_tab(nb, output):
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
+def build_results_tab(nb):
+    """List Excel files and open them."""
+
+    frame = ttk.Frame(nb)
+    nb.add(frame, text="結果閲覧")
+
+    lb = tk.Listbox(frame, height=15)
+    lb.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+    sb = ttk.Scrollbar(frame, orient="vertical", command=lb.yview)
+    sb.pack(side="left", fill="y")
+    lb.configure(yscrollcommand=sb.set)
+
+    def refresh():
+        lb.delete(0, tk.END)
+        for p in sorted(Path(".").glob("*.xlsx")):
+            lb.insert(tk.END, p.name)
+
+    def open_selected(_event=None):
+        sel = lb.curselection()
+        if not sel:
+            return
+        path = Path(lb.get(sel[0]))
+        try:
+            if sys.platform.startswith("darwin"):
+                subprocess.Popen(["open", path])
+            elif os.name == "nt":
+                os.startfile(path)  # type: ignore[attr-defined]
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception as exc:  # pylint: disable=broad-except
+            messagebox.showerror("エラー", str(exc))
+
+    ttk.Button(frame, text="更新", command=refresh).pack(
+        anchor="e", padx=5, pady=(5, 2)
+    )
+    ttk.Button(frame, text="開く", command=open_selected).pack(
+        anchor="e", padx=5, pady=(0, 5)
+    )
+    lb.bind("<Double-1>", open_selected)
+    refresh()
+
+
 def build_output_controls(root, output_widget):
     """Create buttons to manage the output widget."""
     frame = ttk.Frame(root)
@@ -430,6 +474,7 @@ def main():
     build_update_token_tab(nb, output)
     build_thresholds_tab(nb)
     build_db_summary_tab(nb, output)
+    build_results_tab(nb)
 
     root.mainloop()
 

@@ -32,6 +32,7 @@ import pandas as pd
 import datetime as dt
 import logging
 from pathlib import Path
+from typing import Tuple
 
 CAPITAL_DEFAULT = 1_000_000
 HOLD_DAYS_DEFAULT = 60
@@ -41,6 +42,18 @@ DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("backtest_technical")
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _result_paths(prefix: str) -> Tuple[str, str]:
+    """Return Excel and JSON file paths with a timestamp."""
+
+    ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{prefix}_{ts}.xlsx", f"{prefix}_{ts}.json"
+
 
 # ---------------------------------------------------------------------------
 # Back-test core
@@ -215,48 +228,6 @@ def show_results(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
         print(chart)
 
 
-def show_results_window(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
-    """Display results in a new matplotlib window."""
-    try:
-        import matplotlib.pyplot as plt
-    except Exception as exc:  # pylint: disable=broad-except
-        print(f"matplotlib is required: {exc}")
-        show_results(trades, summary)
-        return
-
-    fig, axes = plt.subplots(3, 1, figsize=(8, 8), constrained_layout=True)
-
-    # Summary table
-    axes[0].axis("off")
-    axes[0].table(
-        cellText=summary.values,
-        colLabels=summary.columns,
-        loc="center",
-    )
-
-    # Trade list with profit
-    axes[1].axis("off")
-    if not trades.empty:
-        tbl = trades[["code", "pnl_yen"]]
-        axes[1].table(cellText=tbl.values, colLabels=tbl.columns, loc="center")
-        axes[1].set_title("Trades")
-    else:
-        axes[1].text(0.5, 0.5, "No trades", ha="center", va="center")
-
-    # Profit bar chart
-    profits = trades["pnl_yen"].tolist() if not trades.empty else []
-    axes[2].bar(
-        range(1, len(profits) + 1),
-        profits,
-        color=["green" if p >= 0 else "red" for p in profits],
-    )
-    axes[2].set_title("Profit per Trade (JPY)")
-    axes[2].set_xlabel("Trade #")
-    axes[2].set_ylabel("Profit (JPY)")
-
-    plt.show()
-
-
 def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str) -> None:
     """Save trades and summary to an Excel file."""
 
@@ -264,31 +235,11 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str) -> None:
         trades.to_excel(writer, sheet_name="trades", index=False)
         summary.to_excel(writer, sheet_name="summary", index=False)
 
-        workbook = writer.book
         sheet = writer.sheets["trades"]
 
         for i, col in enumerate(trades.columns):
             width = max(10, int(trades[col].astype(str).str.len().max() * 1.1))
             sheet.set_column(i, i, width)
-
-        chart = workbook.add_chart({"type": "column"})
-        n = len(trades)
-        chart.add_series(
-            {
-                "name": "pnl_yen",
-                "categories": ["trades", 1, 0, n, 0],
-                "values": [
-                    "trades",
-                    1,
-                    trades.columns.get_loc("pnl_yen"),
-                    n,
-                    trades.columns.get_loc("pnl_yen"),
-                ],
-            }
-        )
-        chart.set_title({"name": "Profit per Trade (JPY)"})
-        chart.set_y_axis({"num_format": "#,##0"})
-        sheet.insert_chart("L2", chart)
 
 
 def run_backtest_range(
@@ -301,7 +252,6 @@ def run_backtest_range(
     outfile: str | None = None,
     jsonfile: str | None = None,
     show: bool = False,
-    ascii: bool = False,
 ) -> None:
     """Run backtest for each entry date between start and end."""
 
@@ -343,10 +293,7 @@ def run_backtest_range(
         logger.info("JSON exported → %s", jsonfile)
 
     if show:
-        if ascii:
-            show_results(result, summary)
-        else:
-            show_results_window(result, summary)
+        show_results(result, summary)
 
 
 # ---------------------------------------------------------------------------
@@ -359,12 +306,19 @@ if __name__ == "__main__":
     # • run_backtest() を呼び出し結果を Excel へ保存
     parser = argparse.ArgumentParser(description="スイングトレードのバックテストツール")
     parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
+    default_xlsx, default_json = _result_paths("technical")
     parser.add_argument("--start", required=True, help="エントリー開始日 YYYY-MM-DD")
     parser.add_argument("--end", help="エントリー終了日 YYYY-MM-DD")
     parser.add_argument(
-        "--outfile", default="backtest_results.xlsx", help="Excel 出力ファイル"
+        "--outfile",
+        default=default_xlsx,
+        help="Excel 出力ファイル",
     )
-    parser.add_argument("--json", help="結果を保存するJSONファイル")
+    parser.add_argument(
+        "--json",
+        default=default_json,
+        help="結果を保存するJSONファイル",
+    )
     parser.add_argument(
         "--capital",
         type=int,
@@ -378,14 +332,9 @@ if __name__ == "__main__":
         "--stop-loss", type=float, default=STOP_LOSS_PCT_DEFAULT, help="損切り率"
     )
     parser.add_argument(
-        "--ascii",
-        action="store_true",
-        help="結果を標準出力にテキスト表示",
-    )
-    parser.add_argument(
         "--show",
         action="store_true",
-        help="結果を表示",
+        help="結果を標準出力に表示",
     )
     args = parser.parse_args()
     conn = sqlite3.connect(args.db)
@@ -399,5 +348,4 @@ if __name__ == "__main__":
         outfile=args.outfile,
         jsonfile=args.json,
         show=args.show,
-        ascii=args.ascii,
     )

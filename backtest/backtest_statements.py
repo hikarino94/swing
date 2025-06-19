@@ -21,6 +21,7 @@ import argparse
 import logging
 import sqlite3
 import sys
+import datetime as dt
 from pathlib import Path
 
 import pandas as pd
@@ -31,6 +32,14 @@ DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logger = logging.getLogger("backtest_statements")
+
+
+def _result_paths(prefix: str) -> tuple[str, str]:
+    """Return Excel and JSON file paths with a timestamp."""
+
+    ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{prefix}_{ts}.xlsx", f"{prefix}_{ts}.json"
+
 
 # ---------------------------------------------------------------------------
 # DB helpers
@@ -191,48 +200,6 @@ def show_results(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
         print(chart)
 
 
-def show_results_window(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
-    """Display results in a new matplotlib window."""
-    try:
-        import matplotlib.pyplot as plt
-    except Exception as exc:  # pylint: disable=broad-except
-        print(f"matplotlib is required: {exc}")
-        show_results(trades, summary)
-        return
-
-    fig, axes = plt.subplots(3, 1, figsize=(8, 8), constrained_layout=True)
-
-    # Summary table
-    axes[0].axis("off")
-    axes[0].table(
-        cellText=summary.values,
-        colLabels=summary.columns,
-        loc="center",
-    )
-
-    # Trade list with profit
-    axes[1].axis("off")
-    if not trades.empty:
-        tbl = trades[["code", "profit_jpy"]]
-        axes[1].table(cellText=tbl.values, colLabels=tbl.columns, loc="center")
-        axes[1].set_title("Trades")
-    else:
-        axes[1].text(0.5, 0.5, "No trades", ha="center", va="center")
-
-    # Profit bar chart
-    profits = trades["profit_jpy"].tolist() if not trades.empty else []
-    axes[2].bar(
-        range(1, len(profits) + 1),
-        profits,
-        color=["green" if p >= 0 else "red" for p in profits],
-    )
-    axes[2].set_title("Profit per Trade (JPY)")
-    axes[2].set_xlabel("Trade #")
-    axes[2].set_ylabel("Profit (JPY)")
-
-    plt.show()
-
-
 # ---------------------------------------------------------------------------
 # Excel output
 # ---------------------------------------------------------------------------
@@ -250,33 +217,12 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
         trades.to_excel(writer, sheet_name="trades", index=False)
         summary.to_excel(writer, sheet_name="summary", index=False)
 
-        workbook = writer.book
         sheet = writer.sheets["trades"]
 
         # 自動列幅調整
         for i, col in enumerate(trades.columns):
             width = max(10, int(trades[col].astype(str).str.len().max() * 1.1))
             sheet.set_column(i, i, width)
-
-        # Profit bar chart
-        chart = workbook.add_chart({"type": "column"})
-        n = len(trades)
-        chart.add_series(
-            {
-                "name": "profit_jpy",
-                "categories": ["trades", 1, 0, n, 0],  # code 列
-                "values": [
-                    "trades",
-                    1,
-                    trades.columns.get_loc("profit_jpy"),
-                    n,
-                    trades.columns.get_loc("profit_jpy"),
-                ],
-            }
-        )
-        chart.set_title({"name": "Profit per Trade (JPY)"})
-        chart.set_y_axis({"num_format": "#,##0"})
-        sheet.insert_chart("L2", chart)
 
 
 # ---------------------------------------------------------------------------
@@ -299,17 +245,15 @@ def parse_args(argv=None):
     )
     p.add_argument("--start", type=str, default=None, help="開始日 YYYY-MM-DD")
     p.add_argument("--end", type=str, default=None, help="終了日 YYYY-MM-DD")
-    p.add_argument("--xlsx", type=str, default="trades.xlsx", help="Excel 出力ファイル")
-    p.add_argument("--json", type=str, help="結果を保存するJSONファイル")
+    default_xlsx, default_json = _result_paths("fundamental")
+    p.add_argument("--xlsx", type=str, default=default_xlsx, help="Excel 出力ファイル")
     p.add_argument(
-        "--ascii",
-        action="store_true",
-        help="結果を標準出力にテキスト表示",
+        "--json", type=str, default=default_json, help="結果を保存するJSONファイル"
     )
     p.add_argument(
         "--show",
         action="store_true",
-        help="結果を表示",
+        help="結果を標準出力に表示",
     )
     p.add_argument("-v", "--verbose", action="store_true", help="詳細ログを表示")
     return p.parse_args(argv)
@@ -341,16 +285,12 @@ def main():
     logger.info("Saving Excel → %s", args.xlsx)
     to_excel(trades, summary, args.xlsx)
 
-    if args.json:
-        trades.to_json(args.json, orient="records", force_ascii=False)
-        logger.info("JSON exported -> %s", args.json)
+    trades.to_json(args.json, orient="records", force_ascii=False)
+    logger.info("JSON exported -> %s", args.json)
 
     logger.info("\n%s", summary.to_string(index=False))
     if args.show:
-        if args.ascii:
-            show_results(trades, summary)
-        else:
-            show_results_window(trades, summary)
+        show_results(trades, summary)
 
 
 if __name__ == "__main__":
