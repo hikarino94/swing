@@ -22,6 +22,7 @@ Optional parameters:
   --capital     投入資金 (JPY, default=1,000,000)
   --hold-days   保有日数 (default=60)
   --stop-loss   損切り閾値 (fraction, default=0.05)
+  --min-price   エントリー株価の下限 (JPY, default=300)
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ from typing import Tuple
 CAPITAL_DEFAULT = 1_000_000
 HOLD_DAYS_DEFAULT = 60
 STOP_LOSS_PCT_DEFAULT = 0.05
+MIN_PRICE_DEFAULT = 300
 DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
@@ -66,6 +68,7 @@ def run_backtest(
     capital: int = CAPITAL_DEFAULT,
     hold_days: int = HOLD_DAYS_DEFAULT,
     stop_loss_pct: float = STOP_LOSS_PCT_DEFAULT,
+    min_price: float = MIN_PRICE_DEFAULT,
 ) -> pd.DataFrame:
     # Entry signals
     sig_df = pd.read_sql(
@@ -114,6 +117,9 @@ def run_backtest(
             entry_price = first_row.iloc[0]["close"]
             if pd.isna(entry_price) or entry_price <= 0:
                 logger.info("skip (invalid entry)")
+                continue
+            if entry_price < min_price:
+                logger.info("skip (price < %s)", min_price)
                 continue
 
             shares = int(capital // entry_price)
@@ -249,6 +255,7 @@ def run_backtest_range(
     capital: int = CAPITAL_DEFAULT,
     hold_days: int = HOLD_DAYS_DEFAULT,
     stop_loss_pct: float = STOP_LOSS_PCT_DEFAULT,
+    min_price: float = MIN_PRICE_DEFAULT,
     outfile: str | None = None,
     jsonfile: str | None = None,
     show: bool = False,
@@ -268,6 +275,7 @@ def run_backtest_range(
             capital=capital,
             hold_days=hold_days,
             stop_loss_pct=stop_loss_pct,
+            min_price=min_price,
         )
         if not df.empty:
             all_trades.append(df)
@@ -332,6 +340,12 @@ if __name__ == "__main__":
         "--stop-loss", type=float, default=STOP_LOSS_PCT_DEFAULT, help="損切り率"
     )
     parser.add_argument(
+        "--min-price",
+        type=float,
+        default=MIN_PRICE_DEFAULT,
+        help="エントリー株価の下限 (JPY)",
+    )
+    parser.add_argument(
         "--show",
         action="store_true",
         help="結果を標準出力に表示",
@@ -345,6 +359,7 @@ if __name__ == "__main__":
         capital=args.capital,
         hold_days=args.hold_days,
         stop_loss_pct=args.stop_loss,
+        min_price=args.min_price,
         outfile=args.outfile,
         jsonfile=args.json,
         show=args.show,
