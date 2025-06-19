@@ -96,6 +96,28 @@ def _ascii_bar_chart(values: List[float], width: int = 40) -> str:
     return "\n".join(lines)
 
 
+
+def _ascii_table(df: pd.DataFrame) -> str:
+    """Return a simple ASCII table with borders between cells."""
+    cols = list(df.columns)
+    widths = [max(len(str(v)) for v in [c] + df[c].astype(str).tolist()) for c in cols]
+
+    def border() -> str:
+        return "+" + "+".join("-" * (w + 2) for w in widths) + "+"
+
+    lines = [border()]
+    header = "|" + "|".join(f" {c.ljust(w)} " for c, w in zip(cols, widths)) + "|"
+    lines.append(header)
+    lines.append(border())
+    for _, row in df.iterrows():
+        line = "|" + "|".join(
+            f" {str(row[c]).rjust(w)} " for c, w in zip(cols, widths)
+        ) + "|"
+        lines.append(line)
+        lines.append(border())
+    return "\n".join(lines)
+
+
 def main(argv: List[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description="Backtest JSON analyzer")
     ap.add_argument("files", nargs="+", help="JSON files to analyze")
@@ -119,7 +141,7 @@ def main(argv: List[str] | None = None) -> None:
 
     if args.show_trades:
         print("\n=== Trades ===")
-        print(trades.to_string(index=False))
+        print(_ascii_table(trades.reset_index(drop=True)))
         profit_col = _find_col(trades, PROFIT_COLUMNS)
         print("\n=== Profit per Trade ===")
         chart = _ascii_bar_chart(trades[profit_col].tolist())
