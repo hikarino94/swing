@@ -97,7 +97,31 @@ python db/db_schema.py
   バックテスト結果として保存した JSON ファイルを読み込み、損益や
   勝率などの指標を集計するツールです。複数ファイルを指定して
   まとめて分析することもできます。GUI の「JSON分析」タブからも
-  実行できます。
+  実行できます。以下は簡単な実行例です。
+
+  ```bash
+  $ python backtest/analyze_backtest_json.py sample.json --show-trades
+
+  === Summary ===
+        trades: 2
+  total_profit: 500 JPY
+      win_rate: 50.00%
+   avg_ret_pct: 0.02%
+        sharpe: 0.43
+
+  === Trades ===
+  +------+------------+---------+
+  | code | profit_jpy | ret_pct |
+  +------+------------+---------+
+  | 1234 |       1000 |    0.05 |
+  +------+------------+---------+
+  | 5678 |       -500 |   -0.02 |
+  +------+------------+---------+
+
+  === Profit per Trade ===
+    1 ######################################## (1000)
+    2 -#################### (-500)
+  ```
 * `update_idtoken.py`
   J‑Quants にログインして `idtoken.json` を更新します。
   `--mail` と `--password` を省略すると `account.json` が参照されます。
