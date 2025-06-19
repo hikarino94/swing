@@ -515,6 +515,52 @@ def build_output_controls(root, output_widget):
     ).pack(side="right")
     frame.pack(fill="x", padx=5, pady=(0, 5))
 
+###############################################################################
+# 新規: ML スクリーニングタブ
+###############################################################################
+
+def build_screen_ml_tab(nb: ttk.Notebook, output: tk.Text):
+    """Add tab to run ML screening (screen_ml.py)."""
+
+    frame = ttk.Frame(nb)
+    nb.add(frame, text="MLスクリーニング")
+
+    desc = (
+        "機械学習モデルで1か月先の株価上昇確率を推定し、\n"
+        "上位銘柄を抽出します。必要に応じて再学習 (--retrain) も実施可能。"
+    )
+    ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
+        anchor="w", padx=5, pady=5
+    )
+
+    arg = ttk.Frame(frame)
+    arg.pack(anchor="w", padx=5)
+
+    # ── 引数入力フィールド ─────────────────────────────────────────
+    ttk.Label(arg, text="上位件数:").grid(row=0, column=0, sticky="e")
+    top_var = tk.StringVar(value="30")
+    ttk.Entry(arg, textvariable=top_var, width=6).grid(row=0, column=1)
+
+    ttk.Label(arg, text="学習参照日数:").grid(row=0, column=2, sticky="e")
+    lookback_var = tk.StringVar(value="1095")
+    ttk.Entry(arg, textvariable=lookback_var, width=8).grid(row=0, column=3)
+
+    retrain_var = tk.BooleanVar()
+    ttk.Checkbutton(arg, text="強制再学習", variable=retrain_var).grid(
+        row=0, column=4, padx=(10, 0)
+    )
+
+    # ── コマンド実行 ──────────────────────────────────────────────
+    def _run():
+        cmd = (
+            "python screening/screen_ml.py screen "
+            f"--top {top_var.get()} --lookback {lookback_var.get()}"
+        )
+        if retrain_var.get():
+            cmd += " --retrain"
+        run_command(cmd, output)
+
+    ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 def main():
     root = tk.Tk()
@@ -531,6 +577,7 @@ def main():
     build_statements_tab(nb, output)
     build_screen_fund_tab(nb, output)
     build_screen_tech_tab(nb, output)
+    build_screen_ml_tab(nb, output)   
     build_backtest_stmt_tab(nb, output)
     build_backtest_tech_tab(nb, output)
     build_update_token_tab(nb, output)
