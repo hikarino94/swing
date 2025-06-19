@@ -92,6 +92,11 @@ python db/db_schema.py
   タイムスタンプ付きの Excel と JSON に保存されます。`--outfile` と
   `--json` で保存先を変更できます。`--show` を指定するとサマリーが
   標準出力に表示されます。
+* `backtest/analyze_backtest_json.py`
+  バックテスト結果として保存した JSON ファイルを読み込み、損益や
+  勝率などの指標を集計するツールです。複数ファイルを指定して
+  まとめて分析することもできます。GUI の「JSON分析」タブからも
+  実行できます。
 * `update_idtoken.py`
   J‑Quants にログインして `idtoken.json` を更新します。
   `--mail` と `--password` を省略すると `account.json` が参照されます。
