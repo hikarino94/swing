@@ -60,6 +60,7 @@ def update(mail: str, password: str, outfile: str) -> str:
     path = Path(outfile)
     with path.open("w", encoding="utf-8") as f:
         json.dump({"idToken": token}, f)
+        print("トークンを更新しました。")
     return token
 
 
