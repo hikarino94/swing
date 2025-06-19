@@ -28,6 +28,7 @@ import pandas as pd
 
 TD_FMT = "%Y-%m-%d"
 DEFAULT_CAPITAL = 1_000_000  # JPY
+MIN_PRICE_DEFAULT = 300
 DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
@@ -109,7 +110,13 @@ def add_n_trading_days(s: pd.Series, n: int, calendar: pd.DatetimeIndex) -> pd.S
 
 
 def run_backtest(
-    prices: pd.DataFrame, signals: pd.DataFrame, *, hold: int, offset: int, capital: int
+    prices: pd.DataFrame,
+    signals: pd.DataFrame,
+    *,
+    hold: int,
+    offset: int,
+    capital: int,
+    min_price: float = MIN_PRICE_DEFAULT,
 ) -> pd.DataFrame:
     """シグナルに基づくバックテストを実施する。
 
@@ -130,6 +137,11 @@ def run_backtest(
 
     entry_px = prices.reindex(entry_idx)["adj_close"].values
     exit_px = prices.reindex(exit_idx)["adj_close"].values
+
+    mask = entry_px >= min_price
+    entry_px = entry_px[mask]
+    exit_px = exit_px[mask]
+    signals = signals[mask].reset_index(drop=True)
 
     shares = (capital // entry_px).astype(int)
     invest = shares * entry_px
@@ -243,6 +255,12 @@ def parse_args(argv=None):
         default=DEFAULT_CAPITAL,
         help="1 トレードあたりの資金 (JPY)",
     )
+    p.add_argument(
+        "--min-price",
+        type=float,
+        default=MIN_PRICE_DEFAULT,
+        help="エントリー株価の下限 (JPY)",
+    )
     p.add_argument("--start", type=str, default=None, help="開始日 YYYY-MM-DD")
     p.add_argument("--end", type=str, default=None, help="終了日 YYYY-MM-DD")
     default_xlsx, default_json = _result_paths("fundamental")
@@ -278,7 +296,12 @@ def main():
         sys.exit()
 
     trades = run_backtest(
-        prices, signals, hold=args.hold, offset=args.entry_offset, capital=args.capital
+        prices,
+        signals,
+        hold=args.hold,
+        offset=args.entry_offset,
+        capital=args.capital,
+        min_price=args.min_price,
     )
     summary = summarize(trades)
 

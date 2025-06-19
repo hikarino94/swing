@@ -82,13 +82,13 @@ python db/db_schema.py
 * `backtest/backtest_statements.py`
   財務シグナルを用いたバックテストを実行します。
   `--hold` 保有日数、`--entry-offset` エントリー日のオフセット、`--capital` 資金、
-  `--start` と `--end` で対象期間を指定します。結果は毎回タイムスタンプ付きの
+  `--min-price` 最低株価、`--start` と `--end` で対象期間を指定します。結果は毎回タイムスタンプ付きの
   Excel と JSON に保存され、`--xlsx` と `--json` でファイル名を変更できます。
   `--show` を付けるとサマリーを標準出力に表示します。
 * `backtest/backtest_technical.py`
   テクニカル指標を用いたスイングトレードのバックテストを行います。
   `--start` と `--end` でエントリー期間を指定し、`--hold-days` 保有日数、
-  `--stop-loss` 損切り率、`--capital` 資金を与えます。結果は実行ごとに
+  `--stop-loss` 損切り率、`--min-price` 最低株価、`--capital` 資金を与えます。結果は実行ごとに
   タイムスタンプ付きの Excel と JSON に保存されます。`--outfile` と
   `--json` で保存先を変更できます。`--show` を指定するとサマリーが
   標準出力に表示されます。
