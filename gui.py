@@ -6,9 +6,19 @@ import sys
 import shlex
 import threading
 import json
+import datetime as dt
 from pathlib import Path
 
 from screening import thresholds
+
+
+def timestamped_path(path: str, ext: str = ".xlsx") -> str:
+    """Return *path* with current timestamp appended before the extension."""
+
+    p = Path(path)
+    ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    suffix = p.suffix if p.suffix else ext
+    return p.with_name(f"{p.stem}_{ts}{suffix}").as_posix()
 
 
 def run_command(cmd, output_widget, on_finish=None):
@@ -240,9 +250,11 @@ def build_backtest_stmt_tab(nb, output):
     ttk.Entry(arg, textvariable=xlsx, width=15).grid(row=2, column=3)
 
     def _run():
+        path = timestamped_path(xlsx.get())
+        xlsx.set(path)
         cmd = (
             f"python backtest/backtest_statements.py --hold {hold.get()} "
-            f"--entry-offset {offset.get()} --capital {cap.get()} --xlsx {xlsx.get()}"
+            f"--entry-offset {offset.get()} --capital {cap.get()} --xlsx {path}"
         )
         if start_var.get():
             cmd += f" --start {start_var.get()}"
@@ -293,10 +305,12 @@ def build_backtest_tech_tab(nb, output):
         if not start_var.get():
             messagebox.showerror("エラー", "開始日を入力してください")
             return
+        path = timestamped_path(out.get())
+        out.set(path)
         cmd = (
             f"python backtest/backtest_technical.py --start {start_var.get()} "
             f"--hold-days {hold.get()} --stop-loss {stop.get()} "
-            f"--capital {cap.get()} --outfile {out.get()}"
+            f"--capital {cap.get()} --outfile {path}"
         )
         if end_var.get():
             cmd += f" --end {end_var.get()}"
