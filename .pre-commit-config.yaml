@@ -3,7 +3,11 @@ repos:
     rev: 23.7.0
     hooks:
       - id: black
+        always_stash: false
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.4
+    rev: v0.0.241
     hooks:
       - id: ruff
+        args: [--fix]
+        always_stash: false
