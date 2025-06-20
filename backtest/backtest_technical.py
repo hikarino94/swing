@@ -8,9 +8,10 @@ Standalone back-test utility for the technical swing-trade framework using adjus
 Scenario
 --------
 • Entry: 指定期間内の各日について technical_indicators テーブルで signals_count ≥ 3 の銘柄を購入。
+• Short entry: signals_short_count≥4 かつ signals_short_first=1 かつ oversold=0 の銘柄を空売り。
 • Position size: 100 万円 (デフォルト) に近い整数株。
 • Exit: 保有日数が 60 日（≒2 ヶ月）経過、または調整後終値が −5 % に達した最初の日。
-• Output: 取引履歴 & サマリを Excel に保存。
+• Output: 取引履歴 (買い/空売りの区別付き) & サマリを Excel に保存。
 
 Usage example
 -------------
@@ -18,11 +19,15 @@ Usage example
 python backtest_technical.py --start 2024-03-01 --end 2024-03-14
 ```
 
+Both long and short trades are backtested together. Each record in the output
+indicates whether it was a long or short position.
+
 Optional parameters:
   --capital     投入資金 (JPY, default=1,000,000)
   --hold-days   保有日数 (default=60)
   --stop-loss   損切り閾値 (fraction, default=0.05)
   --min-price   エントリー株価の下限 (JPY, default=300)
+  --show        結果を標準出力に表示
 """
 
 from __future__ import annotations
@@ -39,6 +44,7 @@ CAPITAL_DEFAULT = 1_000_000
 HOLD_DAYS_DEFAULT = 60
 STOP_LOSS_PCT_DEFAULT = 0.05
 MIN_PRICE_DEFAULT = 300
+SHORT_SIGNAL_COUNT_MIN = 4
 DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
@@ -76,7 +82,8 @@ def run_backtest(
         "WHERE signal_date=? "
         "AND signals_count>=3 "
         "AND signals_first=1 "
-        "AND signals_overheating=0",
+        "AND signals_overheating=0 "
+        "AND signals_oversold=0",
         conn,
         params=(as_of,),
     )
@@ -173,6 +180,7 @@ def run_backtest(
                     "entry_price": entry_price,
                     "exit_price": exit_price,
                     "shares": shares,
+                    "side": "long",
                     "pnl_pct": round(pnl_pct, 2),
                     "pnl_yen": round(pnl_yen, 0),
                 }
@@ -190,6 +198,132 @@ def run_backtest(
     total_pnl = df["pnl_yen"].sum()
     logger.info("=== Trades ===\n%s", df)
     logger.info("Total P&L: %s", total_pnl)
+
+    return df
+
+
+def run_backtest_short(
+    conn,
+    as_of: str,
+    capital: int = CAPITAL_DEFAULT,
+    hold_days: int = HOLD_DAYS_DEFAULT,
+    stop_loss_pct: float = STOP_LOSS_PCT_DEFAULT,
+    min_price: float = MIN_PRICE_DEFAULT,
+) -> pd.DataFrame:
+    """Run short-selling backtest for a single entry date."""
+    sig_df = pd.read_sql(
+        "SELECT code FROM technical_indicators "
+        "WHERE signal_date=? "
+        "AND signals_short_count>=? "
+        "AND signals_short_first=1 "
+        "AND signals_oversold=0",
+        conn,
+        params=(as_of, SHORT_SIGNAL_COUNT_MIN),
+    )
+    if sig_df.empty:
+        logger.info("No short signals on %s", as_of)
+        return pd.DataFrame()
+
+    entry_dt = dt.datetime.strptime(as_of, "%Y-%m-%d").date()
+    exit_cut_dt = entry_dt + dt.timedelta(days=hold_days)
+
+    trades = []
+    total = len(sig_df)
+    logger.info("Start short: %d symbols on %s", total, as_of)
+
+    for idx, code in enumerate(sig_df["code"], start=1):
+        logger.info("[%d/%d] %s...", idx, total, code)
+        try:
+            prices = pd.read_sql(
+                "SELECT date, adj_close AS close FROM prices "
+                "WHERE code=? AND date>=? ORDER BY date",
+                conn,
+                params=(code, as_of),
+                parse_dates=["date"],
+            )
+            prices = prices.dropna(subset=["date", "close"])
+            if prices.empty:
+                logger.info("skip (no data)")
+                continue
+
+            first_row = prices[prices["date"].dt.date == entry_dt]
+            if first_row.empty:
+                logger.info("skip (no entry date price)")
+                continue
+            entry_price = first_row.iloc[0]["close"]
+            if pd.isna(entry_price) or entry_price <= 0:
+                logger.info("skip (invalid entry)")
+                continue
+            if entry_price < min_price:
+                logger.info("skip (price < %s)", min_price)
+                continue
+
+            shares = int(capital // entry_price)
+            if shares <= 0:
+                logger.info("skip (insufficient capital)")
+                continue
+
+            stop_price = entry_price * (1 + stop_loss_pct)
+            exit_date = None
+            exit_price = None
+
+            future = prices[prices["date"].dt.date > entry_dt]
+            for _, row in future.iterrows():
+                d = row["date"].date()
+                p = row["close"]
+                if pd.isna(p):
+                    continue
+                if p >= stop_price or d >= exit_cut_dt:
+                    exit_date, exit_price = d, p
+                    break
+
+            if exit_date is None and not future.empty:
+                last = future.iloc[-1]
+                exit_date, exit_price = last["date"].date(), last["close"]
+            if exit_date is None:
+                logger.info("skip (no exit data)")
+                continue
+
+            pnl_pct = (entry_price - exit_price) / entry_price * 100
+            pnl_yen = (entry_price - exit_price) * shares
+            holding_days = (exit_date - entry_dt).days
+
+            try:
+                r = conn.execute(
+                    "SELECT company_name FROM listed_info WHERE code=?", (code,)
+                ).fetchone()
+                name = r[0] if r else ""
+            except sqlite3.OperationalError:
+                name = ""
+
+            trades.append(
+                {
+                    "code": code,
+                    "name": name,
+                    "entry_date": entry_dt,
+                    "exit_date": exit_date,
+                    "holding_days": holding_days,
+                    "entry_price": entry_price,
+                    "exit_price": exit_price,
+                    "shares": shares,
+                    "side": "short",
+                    "pnl_pct": round(pnl_pct, 2),
+                    "pnl_yen": round(pnl_yen, 0),
+                }
+            )
+            logger.info("done (P&L=%s)", round(pnl_yen, 0))
+        except Exception as e:  # pragma: no cover - safety
+            logger.exception("Skip %s: %s", code, e)
+            continue
+
+    if not trades:
+        logger.info("No short trades executed.")
+        return pd.DataFrame()
+
+    df = pd.DataFrame(trades)
+    total_pnl = df["pnl_yen"].sum()
+    logger.info("=== Short Trades ===\n%s", df)
+    logger.info("Total Short P&L: %s", total_pnl)
 
     return df
 
@@ -269,7 +403,7 @@ def run_backtest_range(
     for i in range((end_dt - start_dt).days + 1):
         as_of = (start_dt + dt.timedelta(days=i)).strftime("%Y-%m-%d")
         logger.info("===== Entry date: %s =====", as_of)
-        df = run_backtest(
+        df_long = run_backtest(
             conn,
             as_of,
             capital=capital,
@@ -277,8 +411,19 @@ def run_backtest_range(
             stop_loss_pct=stop_loss_pct,
             min_price=min_price,
         )
-        if not df.empty:
-            all_trades.append(df)
+        if not df_long.empty:
+            all_trades.append(df_long)
+
+        df_short = run_backtest_short(
+            conn,
+            as_of,
+            capital=capital,
+            hold_days=hold_days,
+            stop_loss_pct=stop_loss_pct,
+            min_price=min_price,
+        )
+        if not df_short.empty:
+            all_trades.append(df_short)
 
     if not all_trades:
         logger.info("No trades in the specified period.")
@@ -333,7 +478,9 @@ if __name__ == "__main__":
         default=CAPITAL_DEFAULT,
         help="1 トレードあたりの資金 (JPY)",
     )
-    parser.add_argument("--hold-days", type=int, default=HOLD_DAYS_DEFAULT, help="保有日数")
+    parser.add_argument(
+        "--hold-days", type=int, default=HOLD_DAYS_DEFAULT, help="保有日数"
+    )
     parser.add_argument(
         "--stop-loss", type=float, default=STOP_LOSS_PCT_DEFAULT, help="損切り率"
     )

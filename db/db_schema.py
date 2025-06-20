@@ -231,6 +231,8 @@ CREATE TABLE IF NOT EXISTS technical_indicators (
     signals_count INTEGER,
     signals_short_count INTEGER,
     signals_overheating INTEGER,
+    signals_oversold INTEGER,
+    signals_short_first INTEGER,
     signals_first INTEGER,
 
     PRIMARY KEY (code, signal_date)

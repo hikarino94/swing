@@ -25,8 +25,10 @@ from thresholds import (
     ADX_THRESHOLD,
     FIRST_LOOKBACK_DAYS,
     OVERHEAT_FACTOR,
+    OVERSOLD_FACTOR,
     RSI_THRESHOLD,
     SIGNAL_COUNT_MIN,
+    SHORT_SIGNAL_COUNT_MIN,
     log_thresholds,
 )
 
@@ -56,6 +58,7 @@ def compute_indicators(df):
     if len(df) < 50:
         return pd.DataFrame()
     # --- Moving averages ---
+    sma5 = df["adj_close"].rolling(5).mean()
     sma10 = df["adj_close"].rolling(10).mean()
     sma20 = df["adj_close"].rolling(20).mean()
     sma50 = df["adj_close"].rolling(50).mean()
@@ -105,10 +108,9 @@ def compute_indicators(df):
     # --- Bollinger lower band (20-day, 1σ) for short ---
     bb_low1 = ma20 - std20
 
-    # --- Overheating check ---
-    overheat = (df["adj_close"] > sma10 * OVERHEAT_FACTOR).astype(
-        int
-    )  # 10% above 10MA is considered overheated
+    # --- Overheating & oversold checks ---
+    overheat = (df["adj_close"] > sma10 * OVERHEAT_FACTOR).astype(int)
+    oversold = (df["adj_close"] < sma5 * OVERSOLD_FACTOR).astype(int)
 
     flags = pd.DataFrame(
         {
@@ -135,6 +137,8 @@ def compute_indicators(df):
             "signal_macd_short": (macd < macd_signal).astype(int),
             # signals_overheating: flag when close is >10% above its 10MA
             "signals_overheating": overheat,
+            # signals_oversold: flag when close is <5% below its 5MA
+            "signals_oversold": oversold,
         },
         index=df.index,
     )
@@ -223,11 +227,29 @@ def run_indicators(conn, as_of=None):
     )
     hist_codes = set(hist["code"]) if not hist.empty else set()
 
+    hist_short = pd.read_sql(
+        "SELECT DISTINCT code FROM technical_indicators "
+        "WHERE signal_date>=? AND signal_date<? AND signals_short_count>=?",
+        conn,
+        params=(start_30, as_of, SHORT_SIGNAL_COUNT_MIN),
+    )
+    hist_short_codes = set(hist_short["code"]) if not hist_short.empty else set()
+
     today_flags = today_flags.copy()
+    # Filter out oversold symbols and those with recent short signals
+    today_flags = today_flags[
+        (today_flags["signals_oversold"] == 0)
+        & (~today_flags["code"].isin(hist_short_codes))
+    ]
     today_flags["signals_first"] = 0
+    today_flags["signals_short_first"] = 0
     mask = today_flags["signals_count"] >= SIGNAL_COUNT_MIN
     today_flags.loc[mask, "signals_first"] = (
         ~today_flags.loc[mask, "code"].isin(hist_codes)
+    ).astype(int)
+    mask_short = today_flags["signals_short_count"] >= SHORT_SIGNAL_COUNT_MIN
+    today_flags.loc[mask_short, "signals_short_first"] = (
+        ~today_flags.loc[mask_short, "code"].isin(hist_short_codes)
     ).astype(int)
 
     today_flags["signal_date"] = today_flags["signal_date"].dt.strftime("%Y-%m-%d")
@@ -235,10 +257,12 @@ def run_indicators(conn, as_of=None):
 
     for rec in records:
         logger.info(
-            "  → 完了 (signal_date=%s,signals_count=%s, overheating=%s)",
+            "  → 完了 (signal_date=%s,signals_count=%s,short_count=%s, overheating=%s, oversold=%s)",
             rec["signal_date"],
             rec["signals_count"],
+            rec["signals_short_count"],
             rec["signals_overheating"],
+            rec["signals_oversold"],
         )
     if records:
         sql = """INSERT OR REPLACE INTO technical_indicators
@@ -247,14 +271,14 @@ def run_indicators(conn, as_of=None):
             signal_ma_short, signal_rsi_short,
             signal_bb_short, signal_macd_short,
             signals_count, signals_short_count,
-            signals_overheating, signals_first)
+            signals_overheating, signals_oversold, signals_short_first, signals_first)
             VALUES (:code, :signal_date, :signal_ma, :signal_rsi,
             :signal_adx, :signal_bb,
             :signal_macd,
             :signal_ma_short, :signal_rsi_short,
             :signal_bb_short, :signal_macd_short,
             :signals_count, :signals_short_count,
-            :signals_overheating, :signals_first)"""
+            :signals_overheating, :signals_oversold, :signals_short_first, :signals_first)"""
         conn.executemany(sql, records)
         conn.commit()
     logger.info("全処理完了")
