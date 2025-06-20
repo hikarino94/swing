@@ -333,9 +333,7 @@ if __name__ == "__main__":
         default=CAPITAL_DEFAULT,
         help="1 トレードあたりの資金 (JPY)",
     )
-    parser.add_argument(
-        "--hold-days", type=int, default=HOLD_DAYS_DEFAULT, help="保有日数"
-    )
+    parser.add_argument("--hold-days", type=int, default=HOLD_DAYS_DEFAULT, help="保有日数")
     parser.add_argument(
         "--stop-loss", type=float, default=STOP_LOSS_PCT_DEFAULT, help="損切り率"
     )

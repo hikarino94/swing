@@ -32,7 +32,9 @@ from sklearn.preprocessing import StandardScaler
 # pandas future-proof settings & logger
 # -----------------------------------------------------------------------------
 pd.set_option("future.no_silent_downcasting", True)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
@@ -40,9 +42,9 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 PRICE_TABLE = "prices"
 STMT_TABLE = "statements"
-LOOKBACK_DAYS = 1095           # デフォルト過去 3 年
-FUTURE_WINDOW = 30             # 30 営業日後を予測
-THRESH_PCT = 0.05              # +5% 以上なら陽線ラベル
+LOOKBACK_DAYS = 1095  # デフォルト過去 3 年
+FUTURE_WINDOW = 30  # 30 営業日後を予測
+THRESH_PCT = 0.05  # +5% 以上なら陽線ラベル
 MODEL_FNAME = "ml_screen_model.pkl"
 
 NUMERIC_STMT_COLS = [
@@ -71,6 +73,7 @@ PRICE_FEATURES = [
 # DB helpers
 # -----------------------------------------------------------------------------
 
+
 def _connect(db_path: Path) -> sqlite3.Connection:
     con = sqlite3.connect(db_path.as_posix())
     con.row_factory = sqlite3.Row
@@ -92,9 +95,11 @@ def _fetch_stmt(con: sqlite3.Connection) -> pd.DataFrame:
     df = pd.read_sql(query, con, parse_dates=["DisclosedDate"])
     return df.rename(columns={"LocalCode": "code"})
 
+
 # -----------------------------------------------------------------------------
 # Feature engineering
 # -----------------------------------------------------------------------------
+
 
 def _make_price_features(df_price: pd.DataFrame) -> pd.DataFrame:
     """Add momentum / volatility / turnover features."""
@@ -106,8 +111,12 @@ def _make_price_features(df_price: pd.DataFrame) -> pd.DataFrame:
         g["ret_5"] = g["adj_close"].pct_change(5, fill_method=None)
         g["ret_10"] = g["adj_close"].pct_change(10, fill_method=None)
         g["ret_20"] = g["adj_close"].pct_change(20, fill_method=None)
-        g["volatility_20"] = g["adj_close"].pct_change(fill_method=None).rolling(20).std()
-        g["turnover_norm"] = (g["adj_volume"] / g["adj_volume"].rolling(20).mean()).fillna(0)
+        g["volatility_20"] = (
+            g["adj_close"].pct_change(fill_method=None).rolling(20).std()
+        )
+        g["turnover_norm"] = (
+            g["adj_volume"] / g["adj_volume"].rolling(20).mean()
+        ).fillna(0)
         g["code"] = code
         frames.append(g.reset_index())
     return pd.concat(frames, ignore_index=True)
@@ -135,7 +144,9 @@ def _merge_features(price_feat: pd.DataFrame, stmt: pd.DataFrame) -> pd.DataFram
 
     # ----- convert object cols → numeric, 欠損を 0 で補完 -----
     obj_cols = merged.select_dtypes(include="object").columns.difference(["code"])
-    merged[obj_cols] = merged[obj_cols].apply(lambda c: pd.to_numeric(c, errors="coerce"))
+    merged[obj_cols] = merged[obj_cols].apply(
+        lambda c: pd.to_numeric(c, errors="coerce")
+    )
     merged = merged.fillna(0)
     return merged
 
@@ -162,31 +173,39 @@ def _build_dataset(con: sqlite3.Connection, lookback: int) -> pd.DataFrame:
     req_cols = PRICE_FEATURES + NUMERIC_STMT_COLS + ["label"]
     return merged.dropna(subset=req_cols)
 
+
 # -----------------------------------------------------------------------------
 # Model training / inference
 # -----------------------------------------------------------------------------
 
+
 def _train_model(df: pd.DataFrame):
     X = df[PRICE_FEATURES + NUMERIC_STMT_COLS].astype(float)
     y = df["label"].astype(int)
-    pipe = Pipeline([
-        ("scaler", StandardScaler()),
-        ("gb", GradientBoostingClassifier()),
-    ])
+    pipe = Pipeline(
+        [
+            ("scaler", StandardScaler()),
+            ("gb", GradientBoostingClassifier()),
+        ]
+    )
     pipe.fit(X, y)
     auc = roc_auc_score(y, pipe.predict_proba(X)[:, 1])
     logger.info("Training done — in-sample AUC: %.3f", auc)
     return pipe
 
+
 # -----------------------------------------------------------------------------
 # CLI entry
 # -----------------------------------------------------------------------------
+
 
 def cli():
     p = argparse.ArgumentParser(description="ML-based swing-trade screener")
     p.add_argument("cmd", choices=["train", "screen"], help="Command")
     p.add_argument("--db", default="./db/stock.db", help="SQLite DB path")
-    p.add_argument("--lookback", type=int, default=LOOKBACK_DAYS, help="History days for training")
+    p.add_argument(
+        "--lookback", type=int, default=LOOKBACK_DAYS, help="History days for training"
+    )
     p.add_argument("--top", type=int, default=30, help="Rows to output when screening")
     p.add_argument("--retrain", action="store_true", help="Force retrain before screen")
     args = p.parse_args()

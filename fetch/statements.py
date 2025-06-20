@@ -337,9 +337,7 @@ def main(mode: str, start_date: str | None, end_date: str | None) -> None:
                     _upsert(conn, stmts)
                 logger.info("日付 %s の取得完了: %d 件", today, len(stmts))
         else:
-            logger.error(
-                "無効なモードです: %s。'1' または '2' を指定してください", mode
-            )
+            logger.error("無効なモードです: %s。'1' または '2' を指定してください", mode)
     except requests.HTTPError as exc:
         conn.commit()
         logger.error("API error: %s", exc)

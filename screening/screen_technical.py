@@ -95,7 +95,6 @@ def compute_indicators(df):
     ma20 = sma20
     std20 = df["adj_close"].rolling(20).std()
     bb_up1 = ma20 + std20
-    bb_low1 = ma20 - std20
 
     # --- MACD ---
     ema12 = df["adj_close"].ewm(span=12, adjust=False).mean()
@@ -119,9 +118,7 @@ def compute_indicators(df):
             ).astype(int),
             "signal_rsi": (rsi14 >= RSI_THRESHOLD).astype(int),
             "signal_adx": (adx14 >= ADX_THRESHOLD).astype(int),
-            "signal_bb": (
-                (df["adj_close"] >= bb_up1) | (df["adj_close"] <= bb_low1)
-            ).astype(int),
+            "signal_bb": ((df["adj_close"] >= bb_up1)).astype(int),
             "signal_macd": (macd > macd_signal).astype(int),
             # signals_overheating: flag when close is >10% above its 10MA
             "signals_overheating": overheat,
@@ -232,9 +229,7 @@ if __name__ == "__main__":
     # • 引数を解析してコマンドを判定
     # • SQLite DB に接続
     # • indicators: run_indicators() / screen: screen_signals()
-    parser = argparse.ArgumentParser(
-        description="スイングトレード向けテクニカルシグナルツール"
-    )
+    parser = argparse.ArgumentParser(description="スイングトレード向けテクニカルシグナルツール")
     parser.add_argument("command", choices=["indicators", "screen"])
     parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
     parser.add_argument("--as-of", help="計算またはスクリーニング対象日 YYYY-MM-DD")

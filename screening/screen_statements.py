@@ -268,12 +268,8 @@ def save_signals(sig_df: pd.DataFrame, conn: sqlite3.Connection) -> int:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(
-        description="財務諸表をスクリーニングしてシグナルを抽出"
-    )
-    p.add_argument(
-        "--db", type=Path, default=Config.db_path, help="SQLite DB ファイルへのパス"
-    )
+    p = argparse.ArgumentParser(description="財務諸表をスクリーニングしてシグナルを抽出")
+    p.add_argument("--db", type=Path, default=Config.db_path, help="SQLite DB ファイルへのパス")
     p.add_argument(
         "--lookback",
         type=int,

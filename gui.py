@@ -194,10 +194,7 @@ def build_screen_fund_tab(nb, output):
 def build_screen_tech_tab(nb, output):
     frame = ttk.Frame(nb)
     nb.add(frame, text="テクニカルスクリーニング")
-    desc = (
-        "テクニカル指標を計算するか、当日のシグナルを表示します。\n"
-        "対象日付を入力する場合はテストとみなし、過去参照日数分のデータを処理します。"
-    )
+    desc = "テクニカル指標を計算するか、当日のシグナルを表示します。\n" "対象日付を入力する場合はテストとみなし、過去参照日数分のデータを処理します。"
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
         anchor="w", padx=5, pady=5
     )
@@ -396,9 +393,7 @@ def build_thresholds_tab(nb):
                 entries[k].set(str(v))
 
     ttk.Button(frame, text="保存", command=_save).grid(row=len(vals), column=0, pady=5)
-    ttk.Button(frame, text="再読込", command=_reload).grid(
-        row=len(vals), column=1, pady=5
-    )
+    ttk.Button(frame, text="再読込", command=_reload).grid(row=len(vals), column=1, pady=5)
 
 
 def build_db_summary_tab(nb, output):
@@ -439,9 +434,7 @@ def build_analyze_json_tab(nb, output):
             lb.insert(tk.END, p.name)
 
     show_var = tk.BooleanVar()
-    ttk.Checkbutton(frame, text="トレード一覧も表示", variable=show_var).pack(
-        anchor="w", padx=5
-    )
+    ttk.Checkbutton(frame, text="トレード一覧も表示", variable=show_var).pack(anchor="w", padx=5)
 
     def _run():
         sel = lb.curselection()
@@ -467,10 +460,7 @@ def build_signals_tab(nb, output):
     frame = ttk.Frame(nb)
     nb.add(frame, text="シグナル確認")
 
-    desc = (
-        "DB に保存されたシグナルを表示します。開始日と終了日を指定しない"
-        "場合は当日分を抽出します。"
-    )
+    desc = "DB に保存されたシグナルを表示します。開始日と終了日を指定しない" "場合は当日分を抽出します。"
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
         anchor="w", padx=5, pady=5
     )
@@ -539,9 +529,7 @@ def build_results_tab(nb):
         except Exception as exc:  # pylint: disable=broad-except
             messagebox.showerror("エラー", str(exc))
 
-    ttk.Button(frame, text="更新", command=refresh).pack(
-        anchor="e", padx=5, pady=(5, 2)
-    )
+    ttk.Button(frame, text="更新", command=refresh).pack(anchor="e", padx=5, pady=(5, 2))
     ttk.Button(frame, text="開く", command=open_selected).pack(
         anchor="e", padx=5, pady=(0, 5)
     )
@@ -571,10 +559,7 @@ def build_screen_ml_tab(nb: ttk.Notebook, output: tk.Text):
     frame = ttk.Frame(nb)
     nb.add(frame, text="MLスクリーニング")
 
-    desc = (
-        "機械学習モデルで1か月先の株価上昇確率を推定し、\n"
-        "上位銘柄を抽出します。必要に応じて再学習 (--retrain) も実施可能。"
-    )
+    desc = "機械学習モデルで1か月先の株価上昇確率を推定し、\n" "上位銘柄を抽出します。必要に応じて再学習 (--retrain) も実施可能。"
     ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
         anchor="w", padx=5, pady=5
     )

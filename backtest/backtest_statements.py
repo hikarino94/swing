@@ -246,9 +246,7 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument("--db", default=DB_PATH, help="SQLite DB ファイル")
     p.add_argument("--hold", type=int, default=40, help="保有期間（日数）")
-    p.add_argument(
-        "--entry-offset", type=int, default=1, help="エントリー日のオフセット"
-    )
+    p.add_argument("--entry-offset", type=int, default=1, help="エントリー日のオフセット")
     p.add_argument(
         "--capital",
         type=int,
@@ -265,9 +263,7 @@ def parse_args(argv=None):
     p.add_argument("--end", type=str, default=None, help="終了日 YYYY-MM-DD")
     default_xlsx, default_json = _result_paths("fundamental")
     p.add_argument("--xlsx", type=str, default=default_xlsx, help="Excel 出力ファイル")
-    p.add_argument(
-        "--json", type=str, default=default_json, help="結果を保存するJSONファイル"
-    )
+    p.add_argument("--json", type=str, default=default_json, help="結果を保存するJSONファイル")
     p.add_argument(
         "--show",
         action="store_true",
