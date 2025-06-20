@@ -128,6 +128,12 @@ python db/db_schema.py
 * `db/db_summary.py`
   データベースの各テーブル件数と日付範囲を表示します。引数はありません。
   GUI の「DBサマリー」タブからも確認できます。
+* `db/list_signals.py`
+  `fundamental_signals` または `technical_indicators` テーブルから
+  スクリーニング結果を表示します。引数 `fund`/`tech` で種別を選択し、
+  `--start` `--end` で期間を指定できます。開始日と終了日をどちらも
+  指定しない場合は当日の日付が自動的に使われます。テクニカルの場合は
+  バックテストと同じ条件（`signals_count>=3` など）が自動で適用されます。
 
 ## 利用の流れ
 

@@ -456,11 +456,55 @@ def build_analyze_json_tab(nb, output):
 
     btn_frame = ttk.Frame(frame)
     btn_frame.pack(anchor="e", padx=5, pady=5)
-    ttk.Button(btn_frame, text="更新", command=refresh).pack(
-        side="left", padx=(0, 5)
-    )
+    ttk.Button(btn_frame, text="更新", command=refresh).pack(side="left", padx=(0, 5))
     ttk.Button(btn_frame, text="実行", command=_run).pack(side="left")
     refresh()
+
+
+def build_signals_tab(nb, output):
+    """Display screening signals stored in the DB."""
+
+    frame = ttk.Frame(nb)
+    nb.add(frame, text="シグナル確認")
+
+    desc = (
+        "DB に保存されたシグナルを表示します。開始日と終了日を指定しない"
+        "場合は当日分を抽出します。"
+    )
+    ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
+        anchor="w", padx=5, pady=5
+    )
+
+    arg = ttk.Frame(frame)
+    arg.pack(anchor="w", padx=5)
+
+    ttk.Label(arg, text="種類 (fund/tech):").grid(row=0, column=0)
+    kind_var = tk.StringVar(value="fund")
+    ttk.Entry(arg, textvariable=kind_var, width=8).grid(row=0, column=1)
+
+    ttk.Label(arg, text="開始日:").grid(row=1, column=0)
+    start_var = tk.StringVar()
+    ttk.Entry(arg, textvariable=start_var, width=12).grid(row=1, column=1)
+
+    ttk.Label(arg, text="終了日:").grid(row=2, column=0)
+    end_var = tk.StringVar()
+    ttk.Entry(arg, textvariable=end_var, width=12).grid(row=2, column=1)
+
+    ttk.Label(arg, text="表示件数:").grid(row=3, column=0)
+    limit_var = tk.StringVar(value="20")
+    ttk.Entry(arg, textvariable=limit_var, width=6).grid(row=3, column=1)
+
+    def _run():
+        cmd = (
+            f"python db/list_signals.py {kind_var.get()} " f"--limit {limit_var.get()}"
+        )
+        if start_var.get():
+            cmd += f" --start {start_var.get()}"
+        if end_var.get():
+            cmd += f" --end {end_var.get()}"
+        run_command(cmd, output)
+
+    ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
 def build_results_tab(nb):
@@ -515,9 +559,11 @@ def build_output_controls(root, output_widget):
     ).pack(side="right")
     frame.pack(fill="x", padx=5, pady=(0, 5))
 
+
 ###############################################################################
 # 新規: ML スクリーニングタブ
 ###############################################################################
+
 
 def build_screen_ml_tab(nb: ttk.Notebook, output: tk.Text):
     """Add tab to run ML screening (screen_ml.py)."""
@@ -562,6 +608,7 @@ def build_screen_ml_tab(nb: ttk.Notebook, output: tk.Text):
 
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
+
 def main():
     root = tk.Tk()
     root.title("スイングトレードGUI")
@@ -577,12 +624,13 @@ def main():
     build_statements_tab(nb, output)
     build_screen_fund_tab(nb, output)
     build_screen_tech_tab(nb, output)
-    build_screen_ml_tab(nb, output)   
+    build_screen_ml_tab(nb, output)
     build_backtest_stmt_tab(nb, output)
     build_backtest_tech_tab(nb, output)
     build_update_token_tab(nb, output)
     build_thresholds_tab(nb)
     build_db_summary_tab(nb, output)
+    build_signals_tab(nb, output)
     build_analyze_json_tab(nb, output)
     build_results_tab(nb)
 
