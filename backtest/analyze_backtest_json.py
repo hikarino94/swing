@@ -80,7 +80,9 @@ def format_summary(summary: pd.DataFrame) -> pd.DataFrame:
         return f"{int(value)}"
 
     formatted = summary.copy()
-    formatted["value"] = [fmt(m, v) for m, v in zip(summary["metric"], summary["value"])]
+    formatted["value"] = [
+        fmt(m, v) for m, v in zip(summary["metric"], summary["value"])
+    ]
     return formatted
 
 
@@ -96,23 +98,38 @@ def _ascii_bar_chart(values: List[float], width: int = 40) -> str:
     return "\n".join(lines)
 
 
+def _ascii_table(df: pd.DataFrame, heavy: bool = False) -> str:
+    """Return a simple ASCII table.
 
-def _ascii_table(df: pd.DataFrame) -> str:
-    """Return a simple ASCII table with borders between cells."""
+    If ``heavy`` is ``True`` box drawing characters with heavier lines are used
+    for better visibility.
+    """
+
     cols = list(df.columns)
     widths = [max(len(str(v)) for v in [c] + df[c].astype(str).tolist()) for c in cols]
 
+    if heavy:
+        h = "═"
+        v = "║"
+        c = "╬"
+    else:
+        h = "-"
+        v = "|"
+        c = "+"
+
     def border() -> str:
-        return "+" + "+".join("-" * (w + 2) for w in widths) + "+"
+        return c + c.join(h * (w + 2) for w in widths) + c
 
     lines = [border()]
-    header = "|" + "|".join(f" {c.ljust(w)} " for c, w in zip(cols, widths)) + "|"
+    header = v + v.join(f" {cname.ljust(w)} " for cname, w in zip(cols, widths)) + v
     lines.append(header)
     lines.append(border())
     for _, row in df.iterrows():
-        line = "|" + "|".join(
-            f" {str(row[c]).rjust(w)} " for c, w in zip(cols, widths)
-        ) + "|"
+        line = (
+            v
+            + v.join(f" {str(row[cname]).rjust(w)} " for cname, w in zip(cols, widths))
+            + v
+        )
         lines.append(line)
         lines.append(border())
     return "\n".join(lines)
@@ -141,7 +158,8 @@ def main(argv: List[str] | None = None) -> None:
 
     if args.show_trades:
         print("\n=== Trades ===")
-        print(_ascii_table(trades.reset_index(drop=True)))
+        # Use thicker borders for better readability
+        print(_ascii_table(trades.reset_index(drop=True), heavy=True))
         profit_col = _find_col(trades, PROFIT_COLUMNS)
         print("\n=== Profit per Trade ===")
         chart = _ascii_bar_chart(trades[profit_col].tolist())
