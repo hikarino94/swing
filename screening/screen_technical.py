@@ -102,6 +102,9 @@ def compute_indicators(df):
     macd = ema12 - ema26
     macd_signal = macd.ewm(span=9, adjust=False).mean()
 
+    # --- Bollinger lower band (20-day, 1σ) for short ---
+    bb_low1 = ma20 - std20
+
     # --- Overheating check ---
     overheat = (df["adj_close"] > sma10 * OVERHEAT_FACTOR).astype(
         int
@@ -120,6 +123,16 @@ def compute_indicators(df):
             "signal_adx": (adx14 >= ADX_THRESHOLD).astype(int),
             "signal_bb": ((df["adj_close"] >= bb_up1)).astype(int),
             "signal_macd": (macd > macd_signal).astype(int),
+            "signal_ma_short": (
+                (sma50 > sma20)
+                & (sma20 > sma10)
+                & (slope10 < 0)
+                & (slope20 < 0)
+                & (slope50 < 0)
+            ).astype(int),
+            "signal_rsi_short": (rsi14 <= RSI_THRESHOLD).astype(int),
+            "signal_bb_short": ((df["adj_close"] <= bb_low1)).astype(int),
+            "signal_macd_short": (macd < macd_signal).astype(int),
             # signals_overheating: flag when close is >10% above its 10MA
             "signals_overheating": overheat,
         },
@@ -134,6 +147,16 @@ def compute_indicators(df):
     }
     flags["signals_count"] = (
         flags[list(WEIGHTS)].mul(pd.Series(WEIGHTS)).sum(axis=1).astype(int)
+    )
+    SHORT_WEIGHTS = {
+        "signal_ma_short": 2,
+        "signal_bb_short": 2,
+        "signal_rsi_short": 1,
+        "signal_macd_short": 1,
+        "signal_adx": 1,
+    }
+    flags["signals_short_count"] = (
+        flags[list(SHORT_WEIGHTS)].mul(pd.Series(SHORT_WEIGHTS)).sum(axis=1).astype(int)
     )
     flags = flags.reset_index().rename(columns={"date": "signal_date"})
     return flags
@@ -221,10 +244,17 @@ def run_indicators(conn, as_of=None):
         sql = """INSERT OR REPLACE INTO technical_indicators
             (code, signal_date, signal_ma, signal_rsi,
             signal_adx, signal_bb, signal_macd,
-            signals_count, signals_overheating, signals_first)
+            signal_ma_short, signal_rsi_short,
+            signal_bb_short, signal_macd_short,
+            signals_count, signals_short_count,
+            signals_overheating, signals_first)
             VALUES (:code, :signal_date, :signal_ma, :signal_rsi,
             :signal_adx, :signal_bb,
-            :signal_macd, :signals_count, :signals_overheating, :signals_first)"""
+            :signal_macd,
+            :signal_ma_short, :signal_rsi_short,
+            :signal_bb_short, :signal_macd_short,
+            :signals_count, :signals_short_count,
+            :signals_overheating, :signals_first)"""
         conn.executemany(sql, records)
         conn.commit()
     logger.info("全処理完了")
@@ -237,9 +267,10 @@ def screen_signals(conn, as_of=None):
             "SELECT MAX(signal_date) FROM technical_indicators"
         ).fetchone()[0]
     df = pd.read_sql(
-        "SELECT * FROM technical_indicators WHERE signal_date=? AND signals_count>=?",
+        "SELECT * FROM technical_indicators "
+        "WHERE signal_date=? AND (signals_count>=? OR signals_short_count>=?)",
         conn,
-        params=(as_of, SIGNAL_COUNT_MIN),
+        params=(as_of, SIGNAL_COUNT_MIN, SIGNAL_COUNT_MIN),
     )
     logger.info("\n%s", df)
 
@@ -249,7 +280,9 @@ if __name__ == "__main__":
     # • 引数を解析してコマンドを判定
     # • SQLite DB に接続
     # • indicators: run_indicators() / screen: screen_signals()
-    parser = argparse.ArgumentParser(description="スイングトレード向けテクニカルシグナルツール")
+    parser = argparse.ArgumentParser(
+        description="スイングトレード向けテクニカルシグナルツール"
+    )
     parser.add_argument("command", choices=["indicators", "screen"])
     parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
     parser.add_argument("--as-of", help="計算またはスクリーニング対象日 YYYY-MM-DD")
