@@ -136,69 +136,78 @@ def compute_indicators(df):
 def run_indicators(conn, as_of=None):
     if not as_of:
         as_of = datetime.today().strftime("%Y-%m-%d")
-    cnt = conn.execute("SELECT COUNT(*) FROM prices WHERE date=?", (as_of,)).fetchone()[
-        0
-    ]
+    cnt = conn.execute("SELECT COUNT(*) FROM prices WHERE date=?", (as_of,)).fetchone()[0]
     if cnt == 0:
         logger.info("%s の価格データがないためスキップ", as_of)
         return
-    codes = [
-        row[0]
-        for row in conn.execute(
-            "SELECT DISTINCT A.code FROM prices A join listed_info B on A.code = B.code where B.market_code!= '0109';"
-        ).fetchall()
-    ]
-    total = len(codes)
-    logger.info("開始: %d 銘柄を処理します (as_of=%s)", total, as_of)
-    records = []
     start = (
         datetime.strptime(as_of, "%Y-%m-%d") - timedelta(days=PRICE_LOOKBACK_DAYS)
     ).strftime("%Y-%m-%d")
-    for idx, code in enumerate(codes, start=1):
-        # print(f"[{idx}/{total}] 銘柄 {code} のシグナル算出中...", flush=True)
-        try:
-            df = pd.read_sql(
-                "SELECT date, adj_open, adj_high, adj_low, adj_close FROM prices "
-                "WHERE code=? AND date>=? AND date<=? ORDER BY date",
-                conn,
-                params=(code, start, as_of),
-            )
-            flags = compute_indicators(df)
-            if flags.empty:
-                logger.info("%s  → スキップ (データ不足)", code)
-                continue
-            today = pd.to_datetime(as_of)
-            row = flags[flags["signal_date"] == today]
-            if row.empty:
-                logger.info("%s  → 当日分なし", code)
-                continue
-            rec = row.iloc[0].to_dict()
-            rec["signal_date"] = rec["signal_date"].strftime("%Y-%m-%d")
-            rec["code"] = code
-            # --- signals_first の計算 ---
-            # 過去FIRST_LOOKBACK_DAYS日間に signals_count>=SIGNAL_COUNT_MIN の日が
-            # ひとつもなければ初回フラグを立てる
-            if rec["signals_count"] >= SIGNAL_COUNT_MIN:
-                start_30 = (today - timedelta(days=FIRST_LOOKBACK_DAYS)).strftime(
-                    "%Y-%m-%d"
-                )
-                cnt = conn.execute(
-                    "SELECT COUNT(*) FROM technical_indicators "
-                    "WHERE code=? AND signal_date>=? AND signal_date<? AND signals_count>=?",
-                    (code, start_30, rec["signal_date"], SIGNAL_COUNT_MIN),
-                ).fetchone()[0]
-                rec["signals_first"] = 1 if cnt == 0 else 0
-            else:
-                rec["signals_first"] = 0
-            records.append(rec)
-            logger.info(
-                "  → 完了 (signal_date=%s,signals_count=%s, overheating=%s)",
-                rec["signal_date"],
-                rec["signals_count"],
-                rec["signals_overheating"],
-            )
-        except Exception as e:
-            logger.exception("Skipping %s: %s", code, e)
+
+    # --- Load price data for all target codes in a single query ---
+    df_price = pd.read_sql(
+        """
+        SELECT P.code, P.date, P.adj_open, P.adj_high, P.adj_low, P.adj_close
+        FROM prices P
+        JOIN listed_info L ON P.code = L.code
+        WHERE L.market_code != '0109' AND P.date>=? AND P.date<=?
+        """,
+        conn,
+        params=(start, as_of),
+    ).sort_values(["code", "date"])
+
+    if df_price.empty:
+        logger.info("対象銘柄なし")
+        return
+
+    codes = df_price["code"].unique()
+    total = len(codes)
+    logger.info("開始: %d 銘柄を処理します (as_of=%s)", total, as_of)
+    records = []
+
+    def _calc(group):
+        out = compute_indicators(group)
+        if out.empty:
+            return out
+        out["code"] = group["code"].iloc[0]
+        return out
+
+    all_flags = (
+        df_price.groupby("code", group_keys=False)
+        .apply(_calc)
+        .reset_index(drop=True)
+    )
+
+    today = pd.to_datetime(as_of)
+    today_flags = all_flags[all_flags["signal_date"] == today]
+    if today_flags.empty:
+        logger.info("当日シグナルなし")
+        return
+
+    start_30 = (today - timedelta(days=FIRST_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+    hist = pd.read_sql(
+        "SELECT DISTINCT code FROM technical_indicators "
+        "WHERE signal_date>=? AND signal_date<? AND signals_count>=?",
+        conn,
+        params=(start_30, as_of, SIGNAL_COUNT_MIN),
+    )
+    hist_codes = set(hist["code"]) if not hist.empty else set()
+
+    today_flags = today_flags.copy()
+    today_flags["signals_first"] = 0
+    mask = today_flags["signals_count"] >= SIGNAL_COUNT_MIN
+    today_flags.loc[mask, "signals_first"] = (~today_flags.loc[mask, "code"].isin(hist_codes)).astype(int)
+
+    today_flags["signal_date"] = today_flags["signal_date"].dt.strftime("%Y-%m-%d")
+    records = today_flags.to_dict("records")
+
+    for rec in records:
+        logger.info(
+            "  → 完了 (signal_date=%s,signals_count=%s, overheating=%s)",
+            rec["signal_date"],
+            rec["signals_count"],
+            rec["signals_overheating"],
+        )
     if records:
         sql = """INSERT OR REPLACE INTO technical_indicators
             (code, signal_date, signal_ma, signal_rsi, signal_adx, signal_bb, signal_macd,
