@@ -442,6 +442,10 @@ def build_analyze_json_tab(nb, output):
     ttk.Checkbutton(frame, text="トレード一覧も表示", variable=show_var).pack(
         anchor="w", padx=5
     )
+    by_side_var = tk.BooleanVar()
+    ttk.Checkbutton(frame, text="ロング/ショート別集計", variable=by_side_var).pack(
+        anchor="w", padx=5
+    )
 
     def _run():
         sel = lb.curselection()
@@ -452,6 +456,8 @@ def build_analyze_json_tab(nb, output):
         cmd = "python backtest/analyze_backtest_json.py " + " ".join(files)
         if show_var.get():
             cmd += " --show-trades"
+        if by_side_var.get():
+            cmd += " --by-side"
         run_command(cmd, output)
 
     btn_frame = ttk.Frame(frame)
