@@ -328,6 +328,56 @@ def build_backtest_tech_tab(nb, output):
     ttk.Button(frame, text="実行", command=_run).pack(pady=5)
 
 
+def build_backtest_ml_tab(nb, output):
+    frame = ttk.Frame(nb)
+    nb.add(frame, text="MLバックテスト")
+    desc = "ML 予測を用いたバックテストを実行します。"
+    ttk.Label(frame, text=desc, wraplength=400, justify="left").pack(
+        anchor="w", padx=5, pady=5
+    )
+    arg = ttk.Frame(frame)
+    arg.pack(anchor="w", padx=5)
+    start_var = tk.StringVar()
+    ttk.Label(arg, text="開始日:").grid(row=0, column=0, sticky="e")
+    ttk.Entry(arg, textvariable=start_var, width=12).grid(row=0, column=1)
+    end_var = tk.StringVar()
+    ttk.Label(arg, text="終了日:").grid(row=0, column=2, sticky="e")
+    ttk.Entry(arg, textvariable=end_var, width=12).grid(row=0, column=3)
+    top_var = tk.StringVar(value="10")
+    ttk.Label(arg, text="上位件数:").grid(row=1, column=0)
+    ttk.Entry(arg, textvariable=top_var, width=6).grid(row=1, column=1)
+    cap = tk.StringVar(value="1000000")
+    ttk.Label(arg, text="資金:").grid(row=1, column=2)
+    ttk.Entry(arg, textvariable=cap, width=10).grid(row=1, column=3)
+    out = tk.StringVar(value="ml_backtest.xlsx")
+    ttk.Label(arg, text="出力ファイル:").grid(row=2, column=0)
+    ttk.Entry(arg, textvariable=out, width=20).grid(row=2, column=1)
+
+    def _run():
+        if not start_var.get():
+            messagebox.showerror("エラー", "開始日を入力してください")
+            return
+        path = timestamped_path(out.get())
+        out.set(path)
+        cmd = (
+            f"python backtest/backtest_ml.py --start {start_var.get()} --top {top_var.get()} "
+            f"--capital {cap.get()} --outfile {path}"
+        )
+        if end_var.get():
+            cmd += f" --end {end_var.get()}"
+
+        def _finish(outtxt):
+            def _show():
+                msg = "\n".join(outtxt.strip().splitlines()[-10:])
+                messagebox.showinfo("バックテスト結果", msg)
+
+            output.after(0, _show)
+
+        run_command(cmd, output, on_finish=_finish)
+
+    ttk.Button(frame, text="実行", command=_run).pack(pady=5)
+
+
 def build_update_token_tab(nb, output):
     frame = ttk.Frame(nb)
     nb.add(frame, text="IDトークン更新")
@@ -638,6 +688,7 @@ def main():
     build_screen_ml_tab(nb, output)
     build_backtest_stmt_tab(nb, output)
     build_backtest_tech_tab(nb, output)
+    build_backtest_ml_tab(nb, output)
     build_update_token_tab(nb, output)
     build_thresholds_tab(nb)
     build_db_summary_tab(nb, output)
