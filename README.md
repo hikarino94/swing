@@ -96,6 +96,10 @@ python db/db_schema.py
   タイムスタンプ付きの Excel と JSON に保存されます。`--outfile` と
   `--json` で保存先を変更できます。`--show` を指定するとサマリーが
   標準出力に表示されます。
+* `backtest/backtest_ml.py`
+  機械学習スクリーナーの予測を用いて、日毎に上位銘柄を購入するバックテストを行います。
+  `--start` `--end` で期間を指定し、`--top` 上位件数、`--capital` 資金などを設定します。
+  結果は Excel と JSON に保存され、`--outfile` `--json` でファイル名を変更できます。`--show` でサマリーを表示します。
 * `backtest/analyze_backtest_json.py`
   バックテスト結果として保存した JSON ファイルを読み込み、損益や
   勝率などの指標を集計するツールです。複数ファイルを指定して
