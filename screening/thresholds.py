@@ -41,7 +41,9 @@ def load_thresholds(path: Path | None = None) -> dict[str, float]:
         "RSI_THRESHOLD": 50,
         "ADX_THRESHOLD": 20,
         "OVERHEAT_FACTOR": 1.1,
+        "OVERSOLD_FACTOR": 0.95,
         "SIGNAL_COUNT_MIN": 3,
+        "SHORT_SIGNAL_COUNT_MIN": 4,
         "FIRST_LOOKBACK_DAYS": 30,
     }
 
@@ -61,7 +63,9 @@ TREASURY_DELTA_MAX = _vals["TREASURY_DELTA_MAX"]
 RSI_THRESHOLD = _vals["RSI_THRESHOLD"]
 ADX_THRESHOLD = _vals["ADX_THRESHOLD"]
 OVERHEAT_FACTOR = _vals["OVERHEAT_FACTOR"]
+OVERSOLD_FACTOR = _vals["OVERSOLD_FACTOR"]
 SIGNAL_COUNT_MIN = _vals["SIGNAL_COUNT_MIN"]
+SHORT_SIGNAL_COUNT_MIN = _vals["SHORT_SIGNAL_COUNT_MIN"]
 FIRST_LOOKBACK_DAYS = _vals["FIRST_LOOKBACK_DAYS"]
 
 
@@ -71,7 +75,7 @@ def log_thresholds(logger_: logging.Logger | None = None) -> None:
     logger_ = logger_ or logger
     logger_.info(
         "Thresholds: EPS_YOY_MIN=%s CF_QUALITY_MIN=%s ETA_DELTA_MIN=%s TREASURY_DELTA_MAX=%s "
-        "RSI_THRESHOLD=%s ADX_THRESHOLD=%s OVERHEAT_FACTOR=%s SIGNAL_COUNT_MIN=%s FIRST_LOOKBACK_DAYS=%s",
+        "RSI_THRESHOLD=%s ADX_THRESHOLD=%s OVERHEAT_FACTOR=%s OVERSOLD_FACTOR=%s SIGNAL_COUNT_MIN=%s SHORT_SIGNAL_COUNT_MIN=%s FIRST_LOOKBACK_DAYS=%s",
         EPS_YOY_MIN,
         CF_QUALITY_MIN,
         ETA_DELTA_MIN,
@@ -79,6 +83,8 @@ def log_thresholds(logger_: logging.Logger | None = None) -> None:
         RSI_THRESHOLD,
         ADX_THRESHOLD,
         OVERHEAT_FACTOR,
+        OVERSOLD_FACTOR,
         SIGNAL_COUNT_MIN,
+        SHORT_SIGNAL_COUNT_MIN,
         FIRST_LOOKBACK_DAYS,
     )
