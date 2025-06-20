@@ -152,12 +152,24 @@ def main(argv: List[str] | None = None) -> None:
         action="store_true",
         help="print trade table as well",
     )
+    ap.add_argument(
+        "--side",
+        choices=["long", "short", "all"],
+        default="all",
+        help="analyze only long or short trades (default: all)",
+    )
     args = ap.parse_args(argv)
 
     trades = load_trades(args.files)
     if trades.empty:
         print("No trades loaded.")
         return
+
+    if args.side != "all":
+        if "side" in trades.columns:
+            trades = trades[trades["side"] == args.side]
+        else:
+            print("Warning: 'side' column not found. Ignoring --side option.")
 
     summary = summarize(trades)
     summary = format_summary(summary)

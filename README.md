@@ -97,7 +97,9 @@ python db/db_schema.py
   バックテスト結果として保存した JSON ファイルを読み込み、損益や
   勝率などの指標を集計するツールです。複数ファイルを指定して
   まとめて分析することもできます。GUI の「JSON分析」タブからも
-  実行できます。以下は簡単な実行例です。
+  実行できます。`--side` オプションで `long` または `short` を指定する
+  と、買いもしくは空売りのみを対象に集計できます。以下は簡単な
+  実行例です。
 
   ```bash
   $ python backtest/analyze_backtest_json.py sample.json --show-trades
