@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Swing Web</title>
+</head>
+<body>
+    <h1>Swing Web App</h1>
+    <h2>株価取得</h2>
+    <form action="/run/fetch_quotes" method="post">
+        開始日: <input type="text" name="start">
+        終了日: <input type="text" name="end">
+        <button type="submit">実行</button>
+    </form>
+
+    <h2>上場情報取得</h2>
+    <form action="/run/listed_info" method="post">
+        <button type="submit">実行</button>
+    </form>
+
+    <h2>財務諸表取得</h2>
+    <form action="/run/statements" method="post">
+        モード: <input type="text" name="mode" value="1" size="4">
+        開始日: <input type="text" name="start">
+        終了日: <input type="text" name="end">
+        <button type="submit">実行</button>
+    </form>
+
+    <h2>財務スクリーニング</h2>
+    <form action="/run/screen_fund" method="post">
+        参照期間: <input type="text" name="lookback" value="1095" size="6">
+        開示閾値: <input type="text" name="recent" value="7" size="4">
+        基準日: <input type="text" name="as_of">
+        <button type="submit">実行</button>
+    </form>
+
+    <h2>テクニカルスクリーニング</h2>
+    <form action="/run/screen_tech" method="post">
+        コマンド: <input type="text" name="cmd" value="indicators" size="12">
+        対象日: <input type="text" name="as_of">
+        過去参照日数: <input type="text" name="lookback" value="50" size="6">
+        <button type="submit">実行</button>
+    </form>
+
+    <h2>MLスクリーニング</h2>
+    <form action="/run/screen_ml" method="post">
+        上位件数: <input type="text" name="top" value="30" size="6">
+        学習参照日数: <input type="text" name="lookback" value="1095" size="8">
+        <label><input type="checkbox" name="retrain" value="1">強制再学習</label>
+        <button type="submit">実行</button>
+    </form>
+
+    <h2>ファンダメンタルバックテスト</h2>
+    <form action="/run/backtest_stmt" method="post">
+        保有日数: <input type="text" name="hold" value="40" size="4">
+        オフセット: <input type="text" name="offset" value="1" size="4">
+        資金: <input type="text" name="capital" value="1000000" size="8">
+        開始日: <input type="text" name="start">
+        終了日: <input type="text" name="end">
+        出力ファイル: <input type="text" name="xlsx" value="trades.xlsx" size="12">
+        <button type="submit">実行</button>
+    </form>
+
+    <h2>テクニカルバックテスト</h2>
+    <form action="/run/backtest_tech" method="post">
+        開始日: <input type="text" name="start">
+        終了日: <input type="text" name="end">
+        保有日数: <input type="text" name="hold" value="60" size="4">
+        損切り率: <input type="text" name="stop" value="0.05" size="6">
+        資金: <input type="text" name="capital" value="1000000" size="8">
+        出力ファイル: <input type="text" name="outfile" value="backtest.xlsx" size="15">
+        <button type="submit">実行</button>
+    </form>
+
+    <h2>IDトークン更新</h2>
+    <form action="/run/update_token" method="post">
+        メール: <input type="text" name="mail">
+        パスワード: <input type="password" name="password">
+        <button type="submit">実行</button>
+    </form>
+
+    <h2>DBサマリー</h2>
+    <form action="/run/db_summary" method="post">
+        <button type="submit">実行</button>
+    </form>
+
+    <h2>シグナル確認</h2>
+    <form action="/run/list_signals" method="post">
+        種類:
+        <select name="kind">
+            <option value="fund">ファンダメンタル</option>
+            <option value="tech">テクニカル</option>
+        </select>
+        開始日: <input type="text" name="start">
+        終了日: <input type="text" name="end">
+        表示件数: <input type="text" name="limit" value="20" size="4">
+        <button type="submit">実行</button>
+    </form>
+
+    <h2>JSON分析</h2>
+    <form action="/run/analyze_json" method="post">
+        <select name="files" multiple size="5">
+            {% for f in json_files %}
+            <option value="{{ f }}">{{ f }}</option>
+            {% endfor %}
+        </select>
+        <select name="side">
+            <option value="">両方</option>
+            <option value="long">long</option>
+            <option value="short">short</option>
+        </select>
+        <label><input type="checkbox" name="show_trades" value="1">取引表示</label>
+        <button type="submit">実行</button>
+    </form>
+
+    <h2>閾値設定</h2>
+    <form action="/thresholds" method="post">
+        {% for k, v in thresholds.items() %}
+        {{ k }}: <input type="text" name="{{ k }}" value="{{ v }}" size="6"><br>
+        {% endfor %}
+        <button type="submit">保存</button>
+    </form>
+
+    <h2>結果閲覧</h2>
+    <ul>
+        {% for f in xlsx_files %}
+        <li><a href="{{ f }}">{{ f }}</a></li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
