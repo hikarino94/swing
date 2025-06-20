@@ -37,6 +37,10 @@ logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("screen_technical")
 log_thresholds(logger)
 
+# Price history to load for indicator calculation
+# Holidays can create gaps, so keep roughly 80 days of data
+PRICE_LOOKBACK_DAYS = 80
+
 # --- Compute flags ----------------------------------------------------------
 
 
@@ -142,19 +146,25 @@ def run_indicators(conn, as_of=None):
         logger.info("%s の価格データがないためスキップ", as_of)
         return
     codes = [
-        row[0] for row in conn.execute("SELECT DISTINCT A.code FROM prices A join listed_info B on A.code = B.code where B.market_code!= '0109';").fetchall()
+        row[0]
+        for row in conn.execute(
+            "SELECT DISTINCT A.code FROM prices A join listed_info B on A.code = B.code where B.market_code!= '0109';"
+        ).fetchall()
     ]
     total = len(codes)
     logger.info("開始: %d 銘柄を処理します (as_of=%s)", total, as_of)
     records = []
+    start = (
+        datetime.strptime(as_of, "%Y-%m-%d") - timedelta(days=PRICE_LOOKBACK_DAYS)
+    ).strftime("%Y-%m-%d")
     for idx, code in enumerate(codes, start=1):
         # print(f"[{idx}/{total}] 銘柄 {code} のシグナル算出中...", flush=True)
         try:
             df = pd.read_sql(
                 "SELECT date, adj_open, adj_high, adj_low, adj_close FROM prices "
-                "WHERE code=? AND date<=? ORDER BY date",
+                "WHERE code=? AND date>=? AND date<=? ORDER BY date",
                 conn,
-                params=(code, as_of),
+                params=(code, start, as_of),
             )
             flags = compute_indicators(df)
             if flags.empty:
