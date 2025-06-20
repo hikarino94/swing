@@ -443,6 +443,29 @@ def build_analyze_json_tab(nb, output):
         anchor="w", padx=5
     )
 
+    side_frame = ttk.Frame(frame)
+    side_frame.pack(anchor="w", padx=5)
+    ttk.Label(side_frame, text="対象:").grid(row=0, column=0, sticky="e")
+    side_var = tk.StringVar(value="all")
+    ttk.Radiobutton(
+        side_frame,
+        text="すべて",
+        variable=side_var,
+        value="all",
+    ).grid(row=0, column=1)
+    ttk.Radiobutton(
+        side_frame,
+        text="ロング",
+        variable=side_var,
+        value="long",
+    ).grid(row=0, column=2)
+    ttk.Radiobutton(
+        side_frame,
+        text="ショート",
+        variable=side_var,
+        value="short",
+    ).grid(row=0, column=3)
+
     def _run():
         sel = lb.curselection()
         if not sel:
@@ -452,6 +475,8 @@ def build_analyze_json_tab(nb, output):
         cmd = "python backtest/analyze_backtest_json.py " + " ".join(files)
         if show_var.get():
             cmd += " --show-trades"
+        if side_var.get() != "all":
+            cmd += f" --side {side_var.get()}"
         run_command(cmd, output)
 
     btn_frame = ttk.Frame(frame)
