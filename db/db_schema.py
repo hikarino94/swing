@@ -224,7 +224,12 @@ CREATE TABLE IF NOT EXISTS technical_indicators (
     signal_adx INTEGER,
     signal_bb INTEGER,
     signal_macd INTEGER,
+    signal_ma_short INTEGER,
+    signal_rsi_short INTEGER,
+    signal_bb_short INTEGER,
+    signal_macd_short INTEGER,
     signals_count INTEGER,
+    signals_short_count INTEGER,
     signals_overheating INTEGER,
     signals_first INTEGER,
 
