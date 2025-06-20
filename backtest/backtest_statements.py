@@ -24,6 +24,10 @@ import sys
 import datetime as dt
 from pathlib import Path
 
+SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
+sys.path.append(str(SCREENING_DIR))
+from thresholds import log_thresholds
+
 import pandas as pd
 
 TD_FMT = "%Y-%m-%d"
@@ -279,6 +283,7 @@ def main():
         level=logging.DEBUG if args.verbose else logging.INFO,
         format=LOG_FMT,
     )
+    log_thresholds(logger)
 
     with sqlite3.connect(args.db) as conn:
         prices = read_prices(conn)

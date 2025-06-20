@@ -37,19 +37,24 @@ import sqlite3
 import pandas as pd
 import datetime as dt
 import logging
+import sys
 from pathlib import Path
 from typing import Tuple
+
+SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
+sys.path.append(str(SCREENING_DIR))
+from thresholds import SIGNAL_COUNT_MIN, SHORT_SIGNAL_COUNT_MIN, log_thresholds
 
 CAPITAL_DEFAULT = 1_000_000
 HOLD_DAYS_DEFAULT = 60
 STOP_LOSS_PCT_DEFAULT = 0.05
 MIN_PRICE_DEFAULT = 300
-SHORT_SIGNAL_COUNT_MIN = 4
 DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("backtest_technical")
+log_thresholds(logger)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -80,12 +85,12 @@ def run_backtest(
     sig_df = pd.read_sql(
         "SELECT code FROM technical_indicators "
         "WHERE signal_date=? "
-        "AND signals_count>=3 "
+        "AND signals_count>=? "
         "AND signals_first=1 "
         "AND signals_overheating=0 "
         "AND signals_oversold=0",
         conn,
-        params=(as_of,),
+        params=(as_of, SIGNAL_COUNT_MIN),
     )
     if sig_df.empty:
         logger.info("No signals on %s", as_of)
