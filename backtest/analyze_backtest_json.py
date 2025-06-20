@@ -13,6 +13,8 @@ import argparse
 from pathlib import Path
 from typing import List
 
+import sys
+
 import pandas as pd
 
 
@@ -102,20 +104,27 @@ def _ascii_table(df: pd.DataFrame, heavy: bool = False) -> str:
     """Return a simple ASCII table.
 
     If ``heavy`` is ``True`` box drawing characters with heavier lines are used
-    for better visibility.
+    for better visibility.  When those characters cannot be encoded by the
+    current output encoding, the function falls back to plain ASCII
+    characters.
     """
 
     cols = list(df.columns)
     widths = [max(len(str(v)) for v in [c] + df[c].astype(str).tolist()) for c in cols]
 
+    # Determine which characters to use for drawing.  Heavy box drawing
+    # characters improve readability but are not available in all encodings,
+    # notably the Windows ``cp932`` encoding.  In such cases we silently
+    # fall back to simple ASCII characters.
     if heavy:
-        h = "═"
-        v = "║"
-        c = "╬"
-    else:
-        h = "-"
-        v = "|"
-        c = "+"
+        try:
+            "═╬║".encode(sys.stdout.encoding or "utf-8")
+            h, v, c = "═", "║", "╬"
+        except Exception:
+            heavy = False
+
+    if not heavy:
+        h, v, c = "-", "|", "+"
 
     def border() -> str:
         return c + c.join(h * (w + 2) for w in widths) + c
