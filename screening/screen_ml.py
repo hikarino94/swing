@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-screen_ml.py — Machine-learning swing-trade screener
+screen_ml.py — Machine‑learning swing‑trade screener
 ---------------------------------------------------
 * 学習: 財務指標 + 株価特徴量 → 30 営業日後に +5% 以上上昇する確率を推定
 * 予測: 直近データで上位銘柄を抽出し CLI / GUI から利用
@@ -29,7 +29,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 # -----------------------------------------------------------------------------
-# pandas future-proof settings & logger
+# pandas future‑proof settings & logger
 # -----------------------------------------------------------------------------
 pd.set_option("future.no_silent_downcasting", True)
 logging.basicConfig(
@@ -123,7 +123,7 @@ def _make_price_features(df_price: pd.DataFrame) -> pd.DataFrame:
 
 
 def _merge_features(price_feat: pd.DataFrame, stmt: pd.DataFrame) -> pd.DataFrame:
-    """Forward-fill latest statement per code & asof-merge to price."""
+    """Forward‑fill latest statement per code & asof‑merge to price."""
     # ----- forward fill statements per code -----
     stmt_filled = (
         stmt.sort_values(["code", "DisclosedDate"])
@@ -190,7 +190,7 @@ def _train_model(df: pd.DataFrame):
     )
     pipe.fit(X, y)
     auc = roc_auc_score(y, pipe.predict_proba(X)[:, 1])
-    logger.info("Training done — in-sample AUC: %.3f", auc)
+    logger.info("Training done — in‑sample AUC: %.3f", auc)
     return pipe
 
 
@@ -200,7 +200,7 @@ def _train_model(df: pd.DataFrame):
 
 
 def cli():
-    p = argparse.ArgumentParser(description="ML-based swing-trade screener")
+    p = argparse.ArgumentParser(description="ML‑based swing‑trade screener")
     p.add_argument("cmd", choices=["train", "screen"], help="Command")
     p.add_argument("--db", default="./db/stock.db", help="SQLite DB path")
     p.add_argument(
@@ -209,7 +209,7 @@ def cli():
     p.add_argument("--top", type=int, default=30, help="Rows to output when screening")
     p.add_argument("--retrain", action="store_true", help="Force retrain before screen")
     args = p.parse_args()
-
+    logger.info("screen_ml.py running with command '%s'", args.cmd)
     db_path = Path(args.db)
     model_path = db_path.parent / MODEL_FNAME
 
@@ -236,13 +236,13 @@ def cli():
             model = pickle.load(fh)
         logger.info("Loaded model from %s", model_path)
 
-    # 最新日の特徴量だけ抽出
+    # 最新日の特徴量だけ抽出 — フル履歴から特徴量計算 → 最新日だけ抜粋
     price = _fetch_price(con, args.lookback)
-    latest_dt = price["date"].max()
-    price_window = price[price["date"] >= latest_dt]
-    price_feat = _make_price_features(price_window)
+    price_feat = _make_price_features(price)
+    latest_dt = price_feat["date"].max()
+    feat_today = price_feat[price_feat["date"] == latest_dt]
     stmt = _fetch_stmt(con)
-    merged = _merge_features(price_feat, stmt)
+    merged = _merge_features(feat_today, stmt)
 
     feat_df = merged.dropna(subset=PRICE_FEATURES + NUMERIC_STMT_COLS)
     if feat_df.empty:

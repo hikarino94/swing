@@ -125,9 +125,16 @@ def compute_indicators(df):
         },
         index=df.index,
     )
-    flags["signals_count"] = flags[
-        ["signal_ma", "signal_rsi", "signal_adx", "signal_bb", "signal_macd"]
-    ].sum(axis=1)
+    WEIGHTS = {
+        "signal_ma": 2,  # trend confirmation
+        "signal_bb": 2,  # momentum confirmation
+        "signal_rsi": 1,
+        "signal_adx": 1,
+        "signal_macd": 1,
+    }
+    flags["signals_count"] = (
+        flags[list(WEIGHTS)].mul(pd.Series(WEIGHTS)).sum(axis=1).astype(int)
+    )
     flags = flags.reset_index().rename(columns={"date": "signal_date"})
     return flags
 
@@ -136,7 +143,9 @@ def compute_indicators(df):
 def run_indicators(conn, as_of=None):
     if not as_of:
         as_of = datetime.today().strftime("%Y-%m-%d")
-    cnt = conn.execute("SELECT COUNT(*) FROM prices WHERE date=?", (as_of,)).fetchone()[0]
+    cnt = conn.execute("SELECT COUNT(*) FROM prices WHERE date=?", (as_of,)).fetchone()[
+        0
+    ]
     if cnt == 0:
         logger.info("%s の価格データがないためスキップ", as_of)
         return
@@ -173,9 +182,7 @@ def run_indicators(conn, as_of=None):
         return out
 
     all_flags = (
-        df_price.groupby("code", group_keys=False)
-        .apply(_calc)
-        .reset_index(drop=True)
+        df_price.groupby("code", group_keys=False).apply(_calc).reset_index(drop=True)
     )
 
     today = pd.to_datetime(as_of)
@@ -196,7 +203,9 @@ def run_indicators(conn, as_of=None):
     today_flags = today_flags.copy()
     today_flags["signals_first"] = 0
     mask = today_flags["signals_count"] >= SIGNAL_COUNT_MIN
-    today_flags.loc[mask, "signals_first"] = (~today_flags.loc[mask, "code"].isin(hist_codes)).astype(int)
+    today_flags.loc[mask, "signals_first"] = (
+        ~today_flags.loc[mask, "code"].isin(hist_codes)
+    ).astype(int)
 
     today_flags["signal_date"] = today_flags["signal_date"].dt.strftime("%Y-%m-%d")
     records = today_flags.to_dict("records")
@@ -210,9 +219,11 @@ def run_indicators(conn, as_of=None):
         )
     if records:
         sql = """INSERT OR REPLACE INTO technical_indicators
-            (code, signal_date, signal_ma, signal_rsi, signal_adx, signal_bb, signal_macd,
+            (code, signal_date, signal_ma, signal_rsi,
+            signal_adx, signal_bb, signal_macd,
             signals_count, signals_overheating, signals_first)
-            VALUES (:code, :signal_date, :signal_ma, :signal_rsi, :signal_adx, :signal_bb,
+            VALUES (:code, :signal_date, :signal_ma, :signal_rsi,
+            :signal_adx, :signal_bb,
             :signal_macd, :signals_count, :signals_overheating, :signals_first)"""
         conn.executemany(sql, records)
         conn.commit()
