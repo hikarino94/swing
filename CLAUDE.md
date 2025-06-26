@@ -16,6 +16,28 @@ This is a Japanese stock market analysis and trading system that integrates with
 - **`cli_utils.py`** - Common command-line argument parsing utilities
 - **`common.py`** - Shared utility functions (date handling, file I/O, etc.)
 - **`exceptions.py`** - Custom exception classes for better error handling
+- **`screening_utils.py`** - Screening common utilities (price data, technical indicators, export)
+- **`backtest_utils.py`** - Backtesting engine and utilities (signals, trades, results)
+
+### Refactored Modules
+#### `/fetch/` - Data Fetching
+- **`daily_quotes.py`** - Refactored with DailyQuotesFetcher class and common utilities
+- ~~`listed_info.py`~~ - Pending refactoring
+- ~~`statements.py`~~ - Pending refactoring
+
+#### `/screening/` - Stock Screening
+- **`screen_statements.py`** - Refactored with service-oriented architecture:
+  - `StatementsFetcher` - Database data retrieval
+  - `FeaturesCalculator` - Financial metrics calculation  
+  - `FundamentalScreener` - Filtering logic
+  - `SignalsSaver` - Result persistence
+  - `FundamentalScreeningService` - Orchestration layer
+
+### Design Patterns Applied
+1. **Service Layer Pattern** - Business logic separated from data access
+2. **Factory Pattern** - Common creation of managers and clients
+3. **Strategy Pattern** - Pluggable screening and backtesting algorithms
+4. **Repository Pattern** - Unified data access interfaces
 
 ## Essential Commands
 
