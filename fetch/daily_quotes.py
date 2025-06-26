@@ -25,25 +25,23 @@ python daily_quotes.py --start 2024-01-01 --end 2024-03-31
 
 from __future__ import annotations
 
-import argparse
-import datetime as dt
-import json
-import logging
-import sqlite3
-import time
+import sys
 from pathlib import Path
 from typing import List, Optional
-
+from datetime import date, datetime, timedelta
 import pandas as pd
-import requests
-from requests import Session, Response
 
-API_URL = "https://api.jquants.com/v1/prices/daily_quotes"
-RATE_SLEEP = 0.35  # ~3 req/sec safety
-LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
-logging.basicConfig(format=LOG_FMT, level=logging.INFO)
-logger = logging.getLogger("daily_quotes")
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
+# プロジェクトルートをパスに追加
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from utils.config import get_config_manager
+from utils.db_utils import get_db_manager, DatabaseManager
+from utils.jquants_client import get_jquants_client, JQuantsClient
+from utils.logging_config import get_logger
+from utils.cli_utils import create_parser, add_date_arguments, setup_logging_from_args, validate_date_range
+from utils.exceptions import APIError, DatabaseError
+
+logger = get_logger(__name__)
 
 # SQLite prices テーブルのカラム順序を定義
 _PRICE_COLS = [
@@ -64,93 +62,67 @@ _PRICE_COLS = [
     "adj_close",
     "adj_volume",
 ]
-# ---------------------------------------------------------------------------
-# helpers
-# ---------------------------------------------------------------------------
 
 
-def _load_token() -> str:
-    """Read the JWT token stored in ``idtoken.json``."""
-    path = Path(__file__).resolve().parents[1] / "idtoken.json"
-    with path.open("r", encoding="utf-8") as f:
-        tok = json.load(f).get("idToken")
-    if not tok:
-        raise RuntimeError("idToken not found in idtoken.json")
-    return tok
+def _daterange(start_date: date, end_date: date) -> List[date]:
+    """Return all weekdays between start_date and end_date (inclusive).
+    
+    Args:
+        start_date: 開始日
+        end_date: 終了日
+        
+    Returns:
+        営業日のリスト
+    """
+    current, dates = start_date, []
+    while current <= end_date:
+        if current.weekday() < 5:  # 土日を除外
+            dates.append(current)
+        current += timedelta(days=1)
+    return dates
 
 
-def _daterange(s: dt.date, e: dt.date) -> List[dt.date]:
-    """Return all weekdays between ``s`` and ``e`` (inclusive)."""
-    d, out = s, []
-    while d <= e:
-        if d.weekday() < 5:
-            out.append(d)
-        d += dt.timedelta(days=1)
-    return out
+def _fetch_all_pages(client: JQuantsClient, target_date: Optional[date] = None, code: Optional[str] = None) -> pd.DataFrame:
+    """ページネーションを考慮して全データを取得
+    
+    Args:
+        client: JQuantsClientインスタンス
+        target_date: 対象日付
+        code: 銘柄コード
+        
+    Returns:
+        取得したデータのDataFrame
+    """
+    all_data = []
+    
+    if target_date:
+        # 指定日のデータを取得
+        data = client.get_daily_quotes(date_from=target_date, date_to=target_date)
+        all_data.extend(data)
+    elif code:
+        # 指定銘柄の全データを取得
+        data = client.get_daily_quotes(code=code)
+        all_data.extend(data)
+    else:
+        raise ValueError("target_date または code を指定してください")
+    
+    return pd.DataFrame(all_data) if all_data else pd.DataFrame()
 
 
-# ---------------------------------------------------------------------------
-# API with pagination
-# ---------------------------------------------------------------------------
-
-
-def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
-    """Send one API request with simple retry and rate limiting."""
-    headers = {"Authorization": f"Bearer {token}"}
-    for i in range(retries):
-        r: Response = session.get(API_URL, headers=headers, params=params, timeout=60)
-        if r.status_code < 400:
-            js = r.json()
-            if "message" in js:
-                logger.info("API message: %s", js["message"])
-            time.sleep(RATE_SLEEP)
-            return js
-        wait = 2**i
-        logger.warning("HTTP %s → %ss 後に再試行", r.status_code, wait)
-        time.sleep(wait)
-    r.raise_for_status()
-
-
-def _fetch_all(session: Session, base_params: dict, token: str) -> pd.DataFrame:
-    """Retrieve all pages for the given API parameters."""
-    frames: List[pd.DataFrame] = []
-    params = base_params.copy()
-    seen: set[str] = set()
-    while True:
-        js = _call(session, params, token)
-        rows = js.get("daily_quotes", [])
-        if not rows:
-            logger.debug("データなし → ループ終了")
-            break
-        frames.append(pd.DataFrame(rows))
-        key = js.get("pagination_key") or js.get("page_key")
-        if not key or key in seen:
-            break
-        seen.add(key)
-        params = base_params.copy()
-        params["pagination_key"] = key  # per Attention doc
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-
-
-def _by_date(sess: Session, tok: str, d: dt.date) -> pd.DataFrame:
-    """指定日の株価を取得する."""
-    # API は YYYY-MM-DD 形式を受け付ける
-    return _fetch_all(sess, {"date": d.strftime("%Y-%m-%d")}, tok)
-
-
-def _by_code(sess: Session, tok: str, code: str) -> pd.DataFrame:
-    """Fetch all quotes for the specified stock code."""
-    return _fetch_all(sess, {"code": code}, tok)
-
-
-# ---------------------------------------------------------------------------
-# dataframe utils
-# ---------------------------------------------------------------------------
-
-
-def _norm(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalize API columns and types for the database."""
-    rename = {
+def _normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """APIレスポンスのDataFrameを正規化
+    
+    Args:
+        df: APIから取得したDataFrame
+        
+    Returns:
+        正規化されたDataFrame
+    """
+    if df.empty:
+        return df
+    
+    # カラム名の変換マップ
+    rename_map = {
         "Code": "code",
         "Date": "date",
         "Open": "open",
@@ -168,113 +140,170 @@ def _norm(df: pd.DataFrame) -> pd.DataFrame:
         "AdjustmentClose": "adj_close",
         "AdjustmentVolume": "adj_volume",
     }
-    df = df.rename(columns=rename)
-    num = [
-        "open",
-        "high",
-        "low",
-        "close",
-        "upper_limit",
-        "lower_limit",
-        "volume",
-        "turnover_value",
-        "adj_factor",
-        "adj_open",
-        "adj_high",
-        "adj_low",
-        "adj_close",
-        "adj_volume",
+    
+    # カラム名を変換
+    df = df.rename(columns=rename_map)
+    
+    # 数値型に変換するカラム
+    numeric_columns = [
+        "open", "high", "low", "close",
+        "upper_limit", "lower_limit",
+        "volume", "turnover_value", "adj_factor",
+        "adj_open", "adj_high", "adj_low", "adj_close", "adj_volume"
     ]
-    for c in num:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
-    # Store dates as YYYY-MM-DD in the DB
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
-    return df[[c for c in _PRICE_COLS if c in df.columns]]
+    
+    for col in numeric_columns:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    
+    # 日付をYYYY-MM-DD形式に統一
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    
+    # 必要なカラムのみを選択
+    return df[[col for col in _PRICE_COLS if col in df.columns]]
 
 
-# ---------------------------------------------------------------------------
-# SQLite
-# ---------------------------------------------------------------------------
-
-
-def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
-    """Insert or update rows into ``prices`` using executemany."""
-
+def _save_to_database(db_manager: DatabaseManager, df: pd.DataFrame) -> int:
+    """DataFrameをデータベースに保存
+    
+    Args:
+        db_manager: DatabaseManagerインスタンス
+        df: 保存するDataFrame
+        
+    Returns:
+        保存した行数
+    """
     if df.empty:
-        return
-
-    cols = [c for c in _PRICE_COLS if c in df.columns]
+        return 0
+    
+    # データベースに存在するカラムのみを選択
+    cols = [col for col in _PRICE_COLS if col in df.columns]
+    
+    # INSERT OR REPLACE文を生成
     placeholders = ", ".join("?" for _ in cols)
     sql = f"INSERT OR REPLACE INTO prices ({', '.join(cols)}) VALUES ({placeholders})"
+    
+    # データをタプルのリストに変換
+    records = df[cols].values.tolist()
+    
+    # バッチ処理で保存
+    rows_affected = db_manager.execute_many(sql, records)
+    logger.info(f"{rows_affected} 行のデータを保存しました")
+    
+    return rows_affected
 
-    records = df[cols].itertuples(index=False, name=None)
-    conn.executemany(sql, records)
 
-
-# ---------------------------------------------------------------------------
-# main
-# ---------------------------------------------------------------------------
-
-
-def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
-    """Fetch quotes from the API and load them into SQLite."""
-    tok = _load_token()
-    sess = requests.Session()
-    conn = sqlite3.connect(DB_PATH)
-    try:
-        if start or end:
-            s = (
-                dt.datetime.strptime(start, "%Y-%m-%d").date()
-                if start
-                else dt.date.today()
-            )
-            e = dt.datetime.strptime(end, "%Y-%m-%d").date() if end else dt.date.today()
-            for d in _daterange(s, e):
-                df = _by_date(sess, tok, d)
+class DailyQuotesFetcher:
+    """日次株価データ取得クラス"""
+    
+    def __init__(self, client: Optional[JQuantsClient] = None, db_manager: Optional[DatabaseManager] = None):
+        """
+        Args:
+            client: JQuantsClientインスタンス
+            db_manager: DatabaseManagerインスタンス
+        """
+        self.client = client or get_jquants_client()
+        self.db_manager = db_manager or get_db_manager()
+    
+    def fetch_by_date_range(self, start_date: date, end_date: date) -> None:
+        """指定期間のデータを取得して保存
+        
+        Args:
+            start_date: 開始日
+            end_date: 終了日
+        """
+        logger.info(f"{start_date} から {end_date} までのデータを取得します")
+        
+        for target_date in _daterange(start_date, end_date):
+            try:
+                # データ取得
+                df = _fetch_all_pages(self.client, target_date=target_date)
+                
                 if df.empty:
-                    logger.info("%s: データなし（休場）", d)
+                    logger.info(f"{target_date}: データなし（休場）")
                     continue
-                logger.info("%s のデータ取得", d)
-                _upsert(conn, _norm(df))
+                
+                logger.info(f"{target_date}: {len(df)} 件のデータを取得")
+                
+                # 正規化して保存
+                normalized_df = _normalize_dataframe(df)
+                _save_to_database(self.db_manager, normalized_df)
+                
+            except APIError as e:
+                logger.error(f"{target_date} のデータ取得中にエラー: {e}")
+                continue
+    
+    def fetch_today_and_splits(self) -> None:
+        """本日のデータを取得し、株式分割があれば全履歴を再取得"""
+        today = date.today()
+        logger.info(f"本日 {today} のデータを取得します")
+        
+        try:
+            # 本日のデータを取得
+            df_today = _fetch_all_pages(self.client, target_date=today)
+            
+            if df_today.empty:
+                logger.info("本日のデータはありません（休場）")
+                return
+            
+            # 正規化して保存
+            normalized_df = _normalize_dataframe(df_today)
+            _save_to_database(self.db_manager, normalized_df)
+            
+            # 株式分割のチェック
+            if "adj_factor" in normalized_df.columns:
+                split_codes = normalized_df.loc[
+                    normalized_df["adj_factor"].fillna(1.0) != 1.0,
+                    "code"
+                ].unique()
+                
+                for code in split_codes:
+                    logger.info(f"株式分割検出: {code} → 全履歴を再取得")
+                    df_all = _fetch_all_pages(self.client, code=code)
+                    if not df_all.empty:
+                        normalized_all = _normalize_dataframe(df_all)
+                        _save_to_database(self.db_manager, normalized_all)
+            
+        except APIError as e:
+            logger.error(f"データ取得中にエラー: {e}")
+            raise
+
+
+def main() -> None:
+    """メイン処理"""
+    # パーサーの作成
+    parser = create_parser("J-Quants の日次株価データを取得してデータベースに保存")
+    add_date_arguments(parser)
+    
+    args = parser.parse_args()
+    
+    # ロギングの設定
+    setup_logging_from_args(args)
+    
+    try:
+        # フェッチャーのインスタンス作成
+        if args.db:
+            db_manager = DatabaseManager(args.db)
         else:
-            today = dt.date.today()
-            logger.info("本日 %s", today)
-            df_today = _norm(_by_date(sess, tok, today))
-            _upsert(conn, df_today)
-            splits = df_today.loc[
-                df_today["adj_factor"].fillna(1.0) != 1.0,
-                "code",
-            ].unique()
-            for c in splits:
-                logger.info("株式分割検出 %s → 全履歴取得", c)
-                _upsert(conn, _norm(_by_code(sess, tok, c)))
-    except requests.HTTPError as exc:
-        conn.commit()
-        logger.error("API error: %s", exc)
+            db_manager = get_db_manager()
+        
+        fetcher = DailyQuotesFetcher(db_manager=db_manager)
+        
+        # 日付範囲の処理
+        if args.start or args.end:
+            start_date, end_date = validate_date_range(args.start, args.end)
+            fetcher.fetch_by_date_range(start_date, end_date)
+        else:
+            # 引数なしの場合は本日のデータと株式分割の処理
+            fetcher.fetch_today_and_splits()
+        
+        logger.info("処理が完了しました")
+        
+    except Exception as e:
+        logger.error(f"エラーが発生しました: {e}")
         raise
-    else:
-        conn.commit()
-    finally:
-        conn.close()
-    logger.info("完了")
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
-
-def _cli() -> None:
-    """Command‑line entry point."""
-    ap = argparse.ArgumentParser(description="J‑Quants の日足データを SQLite に保存")
-    ap.add_argument("--start", help="開始日 YYYY-MM-DD")
-    ap.add_argument("--end", help="終了日 YYYY-MM-DD")
-    a = ap.parse_args()
-    fetch_and_load(a.start, a.end)
 
 
 if __name__ == "__main__":
-    # • 開始日と終了日を受け取り日足データを取得
-    # • prices テーブルへ保存
-    _cli()
+    main()
