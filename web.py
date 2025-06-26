@@ -1,19 +1,24 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import shlex
+import subprocess
 from pathlib import Path
-from typing import Tuple
 
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, redirect, render_template, request, url_for
 
 app = Flask(__name__)
 
 
-def run_command(cmd: str) -> Tuple[str, int]:
+def run_command(cmd: str) -> tuple[str, int]:
     """Run a shell command and return output and exit code."""
-    proc = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
+    import os
+
+    # PATH設定を追加
+    env = os.environ.copy()
+    env["PATH"] = f"{os.path.expanduser('~/.local/bin')}:{env.get('PATH', '')}"
+
+    proc = subprocess.run(shlex.split(cmd), capture_output=True, text=True, env=env)
     output = proc.stdout + proc.stderr
     return output, proc.returncode
 
@@ -44,35 +49,35 @@ def run(cmd_name: str):
     cmd = ""
 
     if cmd_name == "fetch_quotes":
-        cmd = "python fetch/daily_quotes.py"
+        cmd = "python3 fetch/daily_quotes.py"
         if form.get("start"):
             cmd += f" --start {form['start']}"
         if form.get("end"):
             cmd += f" --end {form['end']}"
     elif cmd_name == "listed_info":
-        cmd = "python fetch/listed_info.py"
+        cmd = "python3 fetch/listed_info.py"
     elif cmd_name == "statements":
-        cmd = f"python fetch/statements.py {form.get('mode', '1')}"
+        cmd = f"python3 fetch/statements.py {form.get('mode', '1')}"
         if form.get("start"):
             cmd += f" --start {form['start']}"
         if form.get("end"):
             cmd += f" --end {form['end']}"
     elif cmd_name == "screen_fund":
         cmd = (
-            f"python screening/screen_statements.py --lookback {form.get('lookback')} "
+            f"python3 screening/screen_statements.py --lookback {form.get('lookback')} "
             f"--recent {form.get('recent')}"
         )
         if form.get("as_of"):
             cmd += f" --as-of {form['as_of']}"
     elif cmd_name == "screen_tech":
-        cmd = f"python screening/screen_technical.py {form.get('cmd', 'indicators')}"
+        cmd = f"python3 screening/screen_technical.py {form.get('cmd', 'indicators')}"
         if form.get("as_of"):
             cmd += f" --as-of {form['as_of']}"
         if form.get("lookback"):
             cmd += f" --lookback {form['lookback']}"
     elif cmd_name == "screen_ml":
         cmd = (
-            f"python screening/screen_ml.py screen --top {form.get('top', '30')} "
+            f"python3 screening/screen_ml.py screen --top {form.get('top', '30')} "
             f"--lookback {form.get('lookback', '1095')}"
         )
         if form.get("retrain"):
@@ -80,7 +85,7 @@ def run(cmd_name: str):
     elif cmd_name == "backtest_stmt":
         out = form.get("xlsx", "trades.xlsx")
         cmd = (
-            f"python backtest/backtest_statements.py --hold {form.get('hold')} "
+            f"python3 backtest/backtest_statements.py --hold {form.get('hold')} "
             f"--entry-offset {form.get('offset')} --capital {form.get('capital')} "
             f"--xlsx {out}"
         )
@@ -90,30 +95,28 @@ def run(cmd_name: str):
             cmd += f" --end {form['end']}"
     elif cmd_name == "backtest_tech":
         cmd = (
-            f"python backtest/backtest_technical.py --start {form.get('start')} "
+            f"python3 backtest/backtest_technical.py --start {form.get('start')} "
             f"--hold-days {form.get('hold')} --stop-loss {form.get('stop')} "
             f"--capital {form.get('capital')} --outfile {form.get('outfile')}"
         )
         if form.get("end"):
             cmd += f" --end {form['end']}"
     elif cmd_name == "update_token":
-        cmd = "python update_idtoken.py"
+        cmd = "python3 update_idtoken.py"
         if form.get("mail"):
             cmd += f" --mail {form['mail']}"
         if form.get("password"):
             cmd += f" --password {form['password']}"
     elif cmd_name == "db_summary":
-        cmd = "python db/db_summary.py"
+        cmd = "python3 db/db_summary.py"
     elif cmd_name == "list_signals":
-        cmd = (
-            f"python db/list_signals.py {form.get('kind')} --limit {form.get('limit')}"
-        )
+        cmd = f"python3 db/list_signals.py {form.get('kind')} --limit {form.get('limit')}"
         if form.get("start"):
             cmd += f" --start {form['start']}"
         if form.get("end"):
             cmd += f" --end {form['end']}"
     elif cmd_name == "analyze_json":
-        cmd = "python backtest/analyze_backtest_json.py"
+        cmd = "python3 backtest/analyze_backtest_json.py"
         for fname in request.form.getlist("files"):
             cmd += f" {fname}"
         if form.get("side"):
@@ -138,4 +141,4 @@ def save_thresholds():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    app.run(host="0.0.0.0", port=8080, debug=True)

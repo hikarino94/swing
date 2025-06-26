@@ -1,7 +1,11 @@
+# Python依存関係
+# システム要件: Ubuntu/Debian: sudo apt install python3-tk
 pandas
 requests
 schedule
 XlsxWriter
+openpyxl
 Flask
+scikit-learn
 pytest
 pytest-cov

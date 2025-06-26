@@ -75,11 +75,36 @@ GitHub Actionsによる継続的インテグレーションを設定済み：
 
 ## セットアップ
 
+### クイックセットアップ（Ubuntu）
+
+```bash
+# リポジトリをクローン
+git clone https://github.com/YOUR_USERNAME/swing.git
+cd swing
+
+# 自動セットアップスクリプトを実行
+./setup.sh
+```
+
+### 手動セットアップ
+
 Python 3.9 以上を想定しています。必要なライブラリは
 `requirements.txt` にまとめています。機械学習機能には scikit-learn が必要です。
 
 ```bash
+# Ubuntu/Debianでtkinter（GUI用）をインストール
+sudo apt update
+sudo apt install python3-tk
+
+# Python依存関係をインストール
 pip install -r requirements.txt
+
+# pre-commitフックをセットアップ
+pip install pre-commit
+pre-commit install
+
+# データベースを初期化
+python db/db_schema.py
 ```
 
 J‑Quants API の `idToken` を取得し、次の内容で `idtoken.json` を作成してください。
@@ -124,17 +149,17 @@ python db/db_schema.py
 
 ## 主なスクリプトと起動引数
 
-* `fetch/daily_quotes.py`  
-  日足株価を取得して `prices` テーブルへ保存します。  
+* `fetch/daily_quotes.py`
+  日足株価を取得して `prices` テーブルへ保存します。
   `--start` と `--end` を指定すると期間を取得します（省略時は当日分）。
 
-* `fetch/listed_info.py`  
-  上場銘柄情報を取得して `listed_info` テーブルを更新します。  
+* `fetch/listed_info.py`
+  上場銘柄情報を取得して `listed_info` テーブルを更新します。
   引数はありません。
 
-* `fetch/statements.py`  
-  決算データを取得して `statements` テーブルに保存します。  
-  `mode` に `1` を指定すると銘柄単位で一括取得、`2` を指定すると日付または期間を取得します。  
+* `fetch/statements.py`
+  決算データを取得して `statements` テーブルに保存します。
+  `mode` に `1` を指定すると銘柄単位で一括取得、`2` を指定すると日付または期間を取得します。
   `--start` と `--end` を併用することで期間を指定できます。
 * `screening/screen_statements.py`
   財務データをスクリーニングし、シグナルを `fundamental_signals` に保存します。
@@ -148,11 +173,11 @@ python db/db_schema.py
   機械学習モデル（勾配ブースティング分類器）で30日後の株価上昇確率を推定し、上位銘柄を抽出します。
   財務指標と株価テクニカル特徴量を組み合わせて予測を行います。
   `train` と `screen` サブコマンドがあり、`--top` 上位件数や `--lookback` 学習データ期間を指定できます。
-  
+
   ```bash
   # モデル学習（3年間のデータを使用）
   python screening/screen_ml.py train --lookback 1095
-  
+
   # スクリーニング実行（上位30銘柄を抽出）
   python screening/screen_ml.py screen --top 30
   ```
@@ -173,7 +198,7 @@ python db/db_schema.py
   機械学習スクリーナーの予測を用いて、日毎に上位銘柄を購入するバックテストを行います。
   `--start` `--end` で期間を指定し、`--top` 上位件数、`--capital` 資金などを設定します。
   結果は Excel と JSON に保存され、`--outfile` `--json` でファイル名を変更できます。`--show` でサマリーを表示します。
-  
+
   ```bash
   # MLモデルを使った1年間のバックテスト（上位10銘柄、資金100万円）
   python backtest/backtest_ml.py --start 2024-01-01 --end 2024-12-31 --top 10 --capital 1000000 --show
@@ -236,6 +261,54 @@ python db/db_schema.py
 操作をまとめた GUI (`gui.py`) に加え、Web 版 (`web.py`) も用意しており、すべての機能をブラウザから実行できます。
 バックテスト結果の Excel ファイルは「結果閲覧」タブから確認でき、JSON分析機能ではロング/ショートを分けた詳細な
 パフォーマンス分析が可能です。
+
+### WSL環境でのGUI実行
+
+WSL（Windows Subsystem for Linux）環境でGUIアプリケーションを実行する場合は、以下の手順に従ってください：
+
+#### 1. X11サーバーのインストールと設定
+
+Windowsに X11 サーバーをインストールします：
+
+```bash
+# VcXsrvをダウンロード・インストール
+# https://sourceforge.net/projects/vcxsrv/
+```
+
+VcXsrv起動時の設定：
+- "Multiple windows" を選択
+- "Start no client" を選択
+- "Disable access control" をチェック
+- 設定を保存
+
+#### 2. WSL側の環境設定
+
+```bash
+# 環境変数を設定（自動）
+source ~/.bashrc
+
+# またはGUI起動スクリプトを使用
+./start_gui.sh
+```
+
+#### 3. GUI アプリケーション起動
+
+```bash
+# 直接起動
+python3 gui.py
+
+# またはスクリプト経由
+./start_gui.sh
+```
+
+#### トラブルシューティング
+
+- `TclError: no display name and no $DISPLAY environment variable` エラーが出る場合：
+  - VcXsrvが起動していることを確認
+  - WSLを再起動してから再度実行
+- GUI が表示されない場合：
+  - Windowsファイアウォールの設定を確認
+  - VcXsrvの「Disable access control」が有効になっているか確認
 ## 定期実行
 
 `scheduler.py` を起動しておくと株価や決算情報の取得を自動化できます。
@@ -256,4 +329,3 @@ python scheduler.py
 * `login.json` - Web アプリ専用の認証情報（オプション）
   - `account.json` と分けて管理したい場合に使用
   - 環境変数 `LOGIN_ACCOUNT` でファイルパスを変更可能
-
