@@ -69,8 +69,11 @@ def generate_timestamped_filename(
     Returns:
         生成されたファイルパス
     """
-    timestamp = datetime.now().strftime(timestamp_format)
-    filename = f"{base_name}_{timestamp}{extension}"
+    # マイクロ秒を追加して一意性を保証
+    now = datetime.now()
+    timestamp = now.strftime(timestamp_format)
+    microseconds = f"{now.microsecond:06d}"
+    filename = f"{base_name}_{timestamp}_{microseconds}{extension}"
     
     if directory:
         directory = Path(directory)

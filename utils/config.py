@@ -59,6 +59,38 @@ class ConfigManager:
             logger.error(error_msg)
             raise ConfigError(error_msg)
     
+    def load_idtoken(self) -> Dict[str, Any]:
+        """idtoken.jsonを読み込む
+        
+        Returns:
+            idTokenを含む辞書
+        """
+        return self.load_json("idtoken.json")
+    
+    def load_account(self) -> Dict[str, Any]:
+        """account.jsonを読み込む
+        
+        Returns:
+            アカウント情報を含む辞書
+        """
+        return self.load_json("account.json")
+    
+    def load_login(self) -> Dict[str, Any]:
+        """login.jsonを読み込む
+        
+        Returns:
+            ログイン情報を含む辞書
+        """
+        return self.load_json("login.json")
+    
+    def load_thresholds(self) -> Dict[str, Any]:
+        """screening/thresholds.jsonを読み込む
+        
+        Returns:
+            閾値設定を含む辞書
+        """
+        return self.load_json("screening/thresholds.json")
+    
     def get_token(self) -> str:
         """idtoken.jsonからトークンを取得
         
