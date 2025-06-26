@@ -3,3 +3,5 @@ requests
 schedule
 XlsxWriter
 Flask
+pytest
+pytest-cov

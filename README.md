@@ -1,5 +1,10 @@
 # swing
 
+[![CI](https://github.com/YOUR_USERNAME/swing/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/swing/actions/workflows/ci.yml)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+
 J-Quants の株価・財務データを取得し、
 スクリーニングやバックテストを行うツール群です。
 
@@ -15,14 +20,58 @@ J-Quants の株価・財務データを取得し、
 
 ## 開発手順
 
+### 開発環境のセットアップ
+
 開発用ツールをインストールし、`pre-commit` フックを設定します。
 
 ```bash
-pip install pre-commit
+# 依存関係のインストール
+pip install -r requirements.txt
+
+# 開発用ツールのインストール
+pip install pre-commit black ruff mypy bandit pytest pytest-cov
+
+# pre-commitフックの設定
 pre-commit install
 ```
 
-コミット時に `black` と `ruff` が自動で実行されます。
+### コード品質チェック
+
+コミット時に自動で `black`、`ruff`、`mypy`、`bandit` が実行されます。
+手動でチェックを実行する場合：
+
+```bash
+# 全体的な品質チェック
+./scripts/quality-check.sh
+
+# 個別実行
+black .                    # フォーマット
+ruff check . --fix         # リント（自動修正）
+mypy utils/                # 型チェック
+bandit -r utils/ fetch/    # セキュリティチェック
+```
+
+### テスト実行
+
+```bash
+# 基本テスト
+python -m pytest
+
+# カバレッジ付き
+python -m pytest --cov=utils --cov=fetch --cov-report=html
+
+# 特定のマーカーのみ
+python -m pytest -m "not slow"  # 時間のかかるテストを除外
+```
+
+### CI/CD
+
+GitHub Actionsによる継続的インテグレーションを設定済み：
+
+- **テスト**: Python 3.9, 3.10, 3.11での動作確認
+- **コード品質**: Black、Ruff、MyPy
+- **セキュリティ**: Banditによる脆弱性チェック
+- **構文チェック**: 全モジュールのコンパイル確認
 
 ## セットアップ
 

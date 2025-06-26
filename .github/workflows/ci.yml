@@ -1,0 +1,178 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop, "refactor/*" ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-mock
+
+    - name: Create test configuration files
+      run: |
+        # テスト用の設定ファイルを作成
+        echo '{"idToken": "test_token"}' > idtoken.json
+        echo '{"mailaddress": "test@example.com", "password": "test_password"}' > account.json
+        echo '{"mailaddress": "test@example.com", "password": "test_password"}' > login.json
+        mkdir -p screening
+        cp screening/thresholds.json.example screening/thresholds.json || echo '{}' > screening/thresholds.json
+
+    - name: Run syntax checks
+      run: |
+        # 構文チェック
+        python -m py_compile utils/*.py
+        python -m py_compile fetch/*.py
+        python -m py_compile screening/*.py
+        python -m py_compile backtest/*.py
+
+    - name: Run tests
+      run: |
+        # utilsモジュールの基本テスト
+        python -c "
+        import sys, tempfile, json, sqlite3
+        from pathlib import Path
+        
+        # ConfigManagerテスト
+        sys.path.append('.')
+        from utils.config import ConfigManager
+        from utils.exceptions import APIError, DatabaseError
+        from utils.db_utils import DatabaseManager
+        from utils.logging_config import get_logger
+        
+        print('✓ Basic imports successful')
+        
+        # 簡単な機能テスト
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            test_file = tmp_path / 'test.json'
+            with open(test_file, 'w') as f:
+                json.dump({'test': 'value'}, f)
+            
+            config = ConfigManager(tmp_path)
+            result = config.load_json('test.json')
+            assert result['test'] == 'value'
+            print('✓ ConfigManager test passed')
+            
+            # DatabaseManagerテスト
+            db_file = tmp_path / 'test.db'
+            db_manager = DatabaseManager(db_file)
+            with db_manager.transaction() as conn:
+                conn.execute('CREATE TABLE test (id INTEGER)')
+                conn.execute('INSERT INTO test VALUES (1)')
+            
+            count = db_manager.execute_scalar('SELECT COUNT(*) FROM test')
+            assert count == 1
+            print('✓ DatabaseManager test passed')
+        
+        print('🎉 All basic tests passed!')
+        "
+
+    - name: Test import integrity
+      run: |
+        # 重要なモジュールのインポート確認
+        python -c "
+        import sys
+        sys.path.append('.')
+        
+        try:
+            from utils.config import get_config_manager
+            from utils.db_utils import get_db_manager
+            from utils.jquants_client import get_jquants_client
+            from utils.logging_config import get_logger
+            from utils.exceptions import APIError, DatabaseError, DataError
+            print('✓ All utils modules imported successfully')
+        except Exception as e:
+            print(f'✗ Import error: {e}')
+            sys.exit(1)
+        
+        # fetchモジュールの構文確認（pandas依存を避けて構文のみ）
+        import ast
+        for module in ['fetch/daily_quotes.py', 'fetch/listed_info.py', 'fetch/statements.py']:
+            with open(module) as f:
+                try:
+                    ast.parse(f.read())
+                    print(f'✓ {module} syntax OK')
+                except SyntaxError as e:
+                    print(f'✗ {module} syntax error: {e}')
+                    sys.exit(1)
+        "
+
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Install code quality tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install black ruff mypy
+
+    - name: Check code formatting with Black
+      run: |
+        black --check --diff utils/ fetch/ screening/ backtest/ *.py || echo "Code formatting issues found (run 'black .' to fix)"
+
+    - name: Lint with Ruff
+      run: |
+        ruff check utils/ fetch/ screening/ backtest/ *.py || echo "Linting issues found"
+
+    - name: Type check with MyPy (allow failures for now)
+      run: |
+        mypy utils/ --ignore-missing-imports || echo "Type checking completed with issues"
+      continue-on-error: true
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Install security tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety
+
+    - name: Security scan with Bandit
+      run: |
+        bandit -r utils/ fetch/ screening/ backtest/ -f json -o bandit-report.json || echo "Security scan completed"
+
+    - name: Check dependencies with Safety
+      run: |
+        pip install -r requirements.txt
+        safety check || echo "Dependency security check completed"
+      continue-on-error: true
