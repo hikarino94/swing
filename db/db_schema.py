@@ -18,7 +18,7 @@ LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("db_schema")
 
-DB_PATH = "./stock.db"
+DB_PATH = Path(__file__).resolve().parent / "stock.db"
 
 DDL = """
 PRAGMA journal_mode = WAL;

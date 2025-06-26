@@ -1,157 +1,180 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+このファイルは、このリポジトリでコードを扱う際のClaude Code (claude.ai/code) へのガイダンスを提供します。
 必ず日本語で回答してください。
-## Project Overview
 
-This is a Japanese stock market analysis and trading system that integrates with J-Quants API for fetching stock data, screening stocks based on fundamental/technical/ML criteria, and backtesting trading strategies.
+## プロジェクト概要
 
-## Refactored Architecture (2025)
+これは、J-Quants APIと統合して株式データを取得し、ファンダメンタル・テクニカル・ML基準に基づいて株式をスクリーニングし、トレーディング戦略をバックテストする日本株式市場分析・取引システムです。
 
-### Common Utilities (`/utils/`)
-- **`config.py`** - Centralized configuration management (JSON files, tokens)
-- **`db_utils.py`** - Database connection management with context managers
-- **`jquants_client.py`** - J-Quants API client with retry and rate limiting
-- **`logging_config.py`** - Unified logging configuration
-- **`cli_utils.py`** - Common command-line argument parsing utilities
-- **`common.py`** - Shared utility functions (date handling, file I/O, etc.)
-- **`exceptions.py`** - Custom exception classes for better error handling
-- **`screening_utils.py`** - Screening common utilities (price data, technical indicators, export)
-- **`backtest_utils.py`** - Backtesting engine and utilities (signals, trades, results)
+## リファクタリング済みアーキテクチャ (2025年)
 
-### Refactored Modules
-#### `/fetch/` - Data Fetching
-- **`daily_quotes.py`** - Refactored with DailyQuotesFetcher class and common utilities
-- ~~`listed_info.py`~~ - Pending refactoring
-- ~~`statements.py`~~ - Pending refactoring
+### 共通ユーティリティ (`/utils/`)
+- **`config.py`** - 統一設定管理（JSONファイル、トークン）
+- **`db_utils.py`** - コンテキストマネージャーを使用したデータベース接続管理
+- **`jquants_client.py`** - リトライ・レート制限付きJ-Quants APIクライアント
+- **`logging_config.py`** - 統一ログ設定
+- **`cli_utils.py`** - 共通コマンドライン引数解析ユーティリティ
+- **`common.py`** - 共有ユーティリティ関数（日付処理、ファイルI/O等）
+- **`exceptions.py`** - エラーハンドリング向上のためのカスタム例外クラス
+- **`screening_utils.py`** - スクリーニング共通ユーティリティ（価格データ、テクニカル指標、エクスポート）
+- **`backtest_utils.py`** - バックテストエンジンとユーティリティ（シグナル、トレード、結果）
 
-#### `/screening/` - Stock Screening
-- **`screen_statements.py`** - Refactored with service-oriented architecture:
-  - `StatementsFetcher` - Database data retrieval
-  - `FeaturesCalculator` - Financial metrics calculation  
-  - `FundamentalScreener` - Filtering logic
-  - `SignalsSaver` - Result persistence
-  - `FundamentalScreeningService` - Orchestration layer
+### リファクタリング済みモジュール
+#### `/fetch/` - データ取得
+- **`daily_quotes.py`** - DailyQuotesFetcherクラスと共通ユーティリティでリファクタリング済み
+- **`listed_info.py`** - 上場企業情報取得（リファクタリング済み）
+- **`statements.py`** - 財務諸表データ取得（リファクタリング済み）
 
-#### `/backtest/` - Strategy Backtesting
-- **`backtest_statements.py`** - Refactored with service-oriented architecture:
-  - `FundamentalBacktestEngine` - Specialized backtest engine
-  - `TradingDaysCalculator` - Business day calculations
-  - `LegacyCompatibleBacktester` - Backward compatibility layer
-  - `FundamentalBacktestService` - Orchestration layer
+#### `/screening/` - 株式スクリーニング
+- **`screen_statements.py`** - サービス指向アーキテクチャでリファクタリング済み：
+  - `StatementsFetcher` - データベースデータ取得
+  - `FeaturesCalculator` - 財務指標計算
+  - `FundamentalScreener` - フィルタリングロジック
+  - `SignalsSaver` - 結果保存
+  - `FundamentalScreeningService` - オーケストレーション層
+- **`screen_technical.py`** - テクニカル指標スクリーニング（リファクタリング済み）
+- **`screen_ml.py`** - 機械学習スクリーニング（リファクタリング済み）
+- **`thresholds.py`** - スクリーニング閾値設定管理
 
-#### `/tests/` - Test Infrastructure
-- **`conftest.py`** - Common test fixtures and configurations
-- **`test_utils.py`** - Unit tests for utility modules
-- Basic test structure for pytest integration
+#### `/backtest/` - 戦略バックテスト
+- **`backtest_statements.py`** - サービス指向アーキテクチャでリファクタリング済み：
+  - `FundamentalBacktestEngine` - 専用バックテストエンジン
+  - `TradingDaysCalculator` - 営業日計算
+  - `LegacyCompatibleBacktester` - 後方互換性レイヤー
+  - `FundamentalBacktestService` - オーケストレーション層
+- **`backtest_technical.py`** - テクニカル戦略バックテスト（リファクタリング済み）
+- **`backtest_ml.py`** - ML戦略バックテスト（リファクタリング済み）
+- **`analyze_backtest_json.py`** - バックテスト結果分析（リファクタリング済み）
 
-### Design Patterns Applied
-1. **Service Layer Pattern** - Business logic separated from data access
-2. **Factory Pattern** - Common creation of managers and clients
-3. **Strategy Pattern** - Pluggable screening and backtesting algorithms
-4. **Repository Pattern** - Unified data access interfaces
-5. **Template Method Pattern** - Common backtest workflow with specialized implementations
+#### `/tests/` - テストインフラ
+- **`conftest.py`** - 共通テストフィクスチャと設定
+- **`test_utils.py`** - ユーティリティモジュールの単体テスト
+- **`test_config.py`** - 設定モジュールテスト
+- **`test_db_utils.py`** - データベースユーティリティテスト
+- **`test_exceptions.py`** - 例外処理テスト
+- **`test_common.py`** - 共通関数テスト
+- pytest統合用の基本テスト構造
 
-## Essential Commands
+### 適用されたデザインパターン
+1. **サービス層パターン** - ビジネスロジックとデータアクセスの分離
+2. **ファクトリパターン** - マネージャーとクライアントの共通作成
+3. **ストラテジーパターン** - プラガブルなスクリーニング・バックテストアルゴリズム
+4. **リポジトリパターン** - 統一データアクセスインターフェース
+5. **テンプレートメソッドパターン** - 特化実装による共通バックテストワークフロー
 
-### Setup & Development
+## 必須コマンド
+
+### セットアップ・開発
 ```bash
-# Install dependencies and setup pre-commit hooks
+# 依存関係のインストールとpre-commitフックのセットアップ
 pip install -r requirements.txt
 pip install pre-commit
 pre-commit install
 
-# Initialize database
+# データベース初期化
 python db/db_schema.py
 
-# Database info and signals
+# データベース情報とシグナル確認
 python db/db_summary.py
 python db/list_signals.py [fund|tech] [--start DATE --end DATE]
+
+# IDトークン更新
+python update_idtoken.py
 ```
 
-### Code Quality
-- Pre-commit hooks run `black` and `ruff` automatically on commit
-- No manual lint/test commands - formatting happens via pre-commit
+### コード品質管理
+- Pre-commitフックが自動で`black`と`ruff`を実行
+- 手動のlint/testコマンドは不要 - pre-commit経由で自動フォーマット
+- 品質チェックスクリプト: `scripts/quality-check.sh`
 
-### Data Fetching
+### データ取得
 ```bash
-# Daily stock prices (current day or date range)
+# 日次株価データ（当日または日付範囲指定）
 python fetch/daily_quotes.py [--start DATE --end DATE]
 
-# Financial statements (mode 1=bulk by company, mode 2=by date/period) 
+# 財務諸表データ（mode 1=企業別一括、mode 2=日付・期間別）
 python fetch/statements.py [1|2] [--start DATE --end DATE]
 
-# Listed company information
+# 上場企業情報
 python fetch/listed_info.py
 ```
 
-### Stock Screening
+### 株式スクリーニング
 ```bash
-# Fundamental analysis screening
+# ファンダメンタル分析スクリーニング
 python screening/screen_statements.py [--lookback N --recent N --as-of DATE]
 
-# Technical indicators screening  
+# テクニカル指標スクリーニング
 python screening/screen_technical.py [indicators|screen] [--as-of DATE --lookback N]
 
-# Machine learning screening
+# 機械学習スクリーニング
 python screening/screen_ml.py [train|screen] [--top N --lookback N]
 ```
 
-### Backtesting
+### バックテスト
 ```bash
-# Fundamental signals backtest
+# ファンダメンタルシグナルバックテスト
 python backtest/backtest_statements.py [--hold N --capital N --start DATE --end DATE --xlsx FILE --json FILE --show]
 
-# Technical signals backtest  
+# テクニカルシグナルバックテスト
 python backtest/backtest_technical.py [--start DATE --end DATE --hold-days N --stop-loss N --capital N --outfile FILE --show]
 
-# ML model backtest
+# MLモデルバックテスト
 python backtest/backtest_ml.py [--start DATE --end DATE --top N --capital N --outfile FILE --show]
 
-# Analyze backtest results
+# バックテスト結果分析
 python backtest/analyze_backtest_json.py FILE.json [--side long|short --show-trades]
 ```
 
-### Applications
+### アプリケーション
 ```bash
-# Desktop GUI interface
+# デスクトップGUIインターフェース
 python gui.py
 
-# Web interface (Flask)
-python web.py  
+# Webインターフェース（Flask）
+python web.py
 
-# Automated scheduler for data updates
+# データ更新自動スケジューラー
 python scheduler.py
 ```
 
-## Architecture
+## アーキテクチャ
 
-### Database Schema (SQLite: `db/stock.db`)
-- `prices` - Daily stock price data
-- `statements` - Financial statement data  
-- `listed_info` - Company listing information
-- `fundamental_signals` - Fundamental analysis results
-- `technical_indicators` - Technical analysis results
+### データベーススキーマ（SQLite: `db/stock.db`）
+- `prices` - 日次株価データ
+- `statements` - 財務諸表データ
+- `listed_info` - 企業上場情報
+- `fundamental_signals` - ファンダメンタル分析結果
+- `technical_indicators` - テクニカル分析結果
 
-### Core Modules
-- **`/fetch/`** - J-Quants API integration for data retrieval
-- **`/screening/`** - Stock screening algorithms (fundamental, technical, ML)
-- **`/backtest/`** - Strategy backtesting and performance analysis
-- **`/db/`** - Database schema and utility functions
+### コアモジュール
+- **`/fetch/`** - データ取得用J-Quants API統合
+- **`/screening/`** - 株式スクリーニングアルゴリズム（ファンダメンタル、テクニカル、ML）
+- **`/backtest/`** - 戦略バックテスト・パフォーマンス分析
+- **`/db/`** - データベーススキーマ・ユーティリティ関数
+- **`/utils/`** - 共通ユーティリティ・ヘルパー関数
+- **`/tests/`** - テストスイート・品質保証
 
-### Configuration Files Required
-- `idtoken.json` - J-Quants API token: `{"idToken": "YOUR_TOKEN"}`
-- `account.json` - J-Quants credentials for token refresh (optional)
-- `login.json` - Web app authentication (optional, falls back to account.json)
-- `screening/thresholds.json` - Screening parameter configuration
+### 必須設定ファイル
+- `idtoken.json` - J-Quants APIトークン: `{"idToken": "YOUR_TOKEN"}`
+- `account.json` - J-Quants認証情報（トークン更新用、オプション）
+- `login.json` - Webアプリ認証（オプション、account.jsonにフォールバック）
+- `screening/thresholds.json` - スクリーニングパラメータ設定
 
-### Key Integration Points
-- All modules use the central SQLite database for data persistence
-- J-Quants API requires valid `idToken` for data access
-- Screening results are stored as signals for backtesting
-- Results export to Excel/JSON formats with timestamps
+### 主要統合ポイント
+- 全モジュールが中央SQLiteデータベースを使用してデータ永続化
+- J-Quants APIは有効な`idToken`によるデータアクセス必須
+- スクリーニング結果はバックテスト用シグナルとして保存
+- 結果はタイムスタンプ付きでExcel/JSON形式にエクスポート
 
-### Automated Workflows
-- `scheduler.py` runs daily data fetches (20:00 prices, 20:30 statements, Mon 6:00 listings)
-- Pre-commit hooks ensure code formatting with black/ruff
-- Backtest results include comprehensive performance metrics and trade details
+### 自動化ワークフロー
+- `scheduler.py`による日次データ取得（20:00株価、20:30財務諸表、月曜6:00上場情報）
+- Pre-commitフックによるblack/ruffコードフォーマット保証
+- バックテスト結果に包括的パフォーマンス指標・取引詳細を含む
+
+### 追加ユーティリティ
+- `update_idtoken.py` - J-Quants APIトークン更新
+- `scripts/quality-check.sh` - コード品質チェック
+- `start_gui.sh` - GUI起動スクリプト
+- `setup.sh` - 環境セットアップ

@@ -18,7 +18,7 @@ class DatabaseManager:
             db_path: データベースファイルパス。Noneの場合はデフォルトパス
         """
         if db_path is None:
-            self.db_path = Path(__file__).resolve().parents[2] / "db" / "stock.db"
+            self.db_path = Path(__file__).resolve().parents[1] / "db" / "stock.db"
         else:
             self.db_path = Path(db_path)
         

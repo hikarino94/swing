@@ -22,7 +22,7 @@ class ConfigManager:
         """
         if base_path is None:
             # プロジェクトルートを自動検出
-            self.base_path = Path(__file__).resolve().parents[2]
+            self.base_path = Path(__file__).resolve().parent.parent
         else:
             self.base_path = Path(base_path)
         

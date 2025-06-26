@@ -31,7 +31,7 @@ from screening.screen_ml import (
     _train_model,
 )
 
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
+DB_PATH = (Path(__file__).resolve().parents[1] / "db" / "stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)

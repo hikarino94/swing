@@ -75,8 +75,15 @@ class JQuantsClient:
         url = f"{self.BASE_URL}/{endpoint}"
         
         try:
-            logger.debug(f"GET request to {endpoint} with params: {params}")
+            logger.info(f"🔗 API Call: {url}")
+            logger.info(f"📋 Parameters: {params}")
+            logger.info(f"🔑 Authorization: Bearer {self.token[:20]}...")
+            
             response = self.session.get(url, params=params, timeout=timeout)
+            
+            logger.info(f"📊 Response Status: {response.status_code}")
+            logger.info(f"🌐 Response Headers: {dict(response.headers)}")
+            logger.info(f"📄 Response Body: {response.text[:500]}...")
             
             # HTTPエラーのチェック
             if response.status_code != 200:
