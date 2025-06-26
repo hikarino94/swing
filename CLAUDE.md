@@ -33,11 +33,24 @@ This is a Japanese stock market analysis and trading system that integrates with
   - `SignalsSaver` - Result persistence
   - `FundamentalScreeningService` - Orchestration layer
 
+#### `/backtest/` - Strategy Backtesting
+- **`backtest_statements.py`** - Refactored with service-oriented architecture:
+  - `FundamentalBacktestEngine` - Specialized backtest engine
+  - `TradingDaysCalculator` - Business day calculations
+  - `LegacyCompatibleBacktester` - Backward compatibility layer
+  - `FundamentalBacktestService` - Orchestration layer
+
+#### `/tests/` - Test Infrastructure
+- **`conftest.py`** - Common test fixtures and configurations
+- **`test_utils.py`** - Unit tests for utility modules
+- Basic test structure for pytest integration
+
 ### Design Patterns Applied
 1. **Service Layer Pattern** - Business logic separated from data access
 2. **Factory Pattern** - Common creation of managers and clients
 3. **Strategy Pattern** - Pluggable screening and backtesting algorithms
 4. **Repository Pattern** - Unified data access interfaces
+5. **Template Method Pattern** - Common backtest workflow with specialized implementations
 
 ## Essential Commands
 

@@ -17,307 +17,564 @@ $ python backtest_statements.py \
 
 from __future__ import annotations
 
-import argparse
-import logging
-import sqlite3
 import sys
-import datetime as dt
 from pathlib import Path
-
-SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
-sys.path.append(str(SCREENING_DIR))
-from thresholds import log_thresholds
-
+from typing import Optional, Dict, Any
+from datetime import date, datetime, timedelta
 import pandas as pd
 
-TD_FMT = "%Y-%m-%d"
+# プロジェクトルートをパスに追加
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from utils.config import get_config_manager
+from utils.db_utils import get_db_manager, DatabaseManager
+from utils.logging_config import get_logger
+from utils.cli_utils import create_parser, add_date_arguments, setup_logging_from_args, validate_date_range
+from utils.exceptions import DatabaseError, DataError
+from utils.backtest_utils import (
+    BacktestConfig, BacktestEngine, BacktestResult, 
+    PriceDataProvider, SignalProvider, BacktestResultExporter
+)
+from utils.common import generate_timestamped_filename
+
+# Threshold constants
+from screening.thresholds import log_thresholds
+
+logger = get_logger(__name__)
+
 DEFAULT_CAPITAL = 1_000_000  # JPY
-MIN_PRICE_DEFAULT = 300
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
-
-LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
-logger = logging.getLogger("backtest_statements")
+MIN_PRICE_DEFAULT = 300.0
 
 
-def _result_paths(prefix: str) -> tuple[str, str]:
-    """Return Excel and JSON file paths with a timestamp."""
-
-    ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}_{ts}.xlsx", f"{prefix}_{ts}.json"
-
-
-# ---------------------------------------------------------------------------
-# DB helpers
-# ---------------------------------------------------------------------------
-
-
-def read_prices(conn: sqlite3.Connection) -> pd.DataFrame:
-    """価格テーブルを読み込む。
-
-    入力パラメータ: SQLite の接続オブジェクト。
-    戻り値: 銘柄コードと取引日をインデックスとした DataFrame。
-    処理内容: prices テーブルを取得しマルチインデックスで整形して返す。
-    """
-
-    q = (
-        "SELECT code   AS LocalCode,"
-        "       date   AS trade_date,"
-        "       adj_close"
-        "  FROM prices"
-    )
-    df = pd.read_sql(q, conn, parse_dates=["trade_date"])
-    return df.set_index(["LocalCode", "trade_date"]).sort_index()
-
-
-def read_signals(
-    conn: sqlite3.Connection, start: str | None, end: str | None
-) -> pd.DataFrame:
-    """シグナルを日付範囲で取得する。
-
-    入力パラメータ: SQLite 接続と開始・終了日の文字列。
-    戻り値: DisclosedAt を持つ DataFrame。
-    処理内容: fundamental_signals テーブルから期間で絞り込んで読み込む。
-    """
-
-    q = "SELECT LocalCode, DisclosedAt FROM fundamental_signals"
-    if start or end:
-        q += " WHERE 1=1"
-        if start:
-            q += f" AND DisclosedAt >= '{start} 00:00:00'"
-        if end:
-            q += f" AND DisclosedAt <= '{end} 23:59:59'"
-    df = pd.read_sql(q, conn, parse_dates=["DisclosedAt"])
-    return df
-
-
-# ---------------------------------------------------------------------------
-# Trading-days utility
-# ---------------------------------------------------------------------------
-
-
-def add_n_trading_days(s: pd.Series, n: int, calendar: pd.DatetimeIndex) -> pd.Series:
-    """営業日ベースで日付をずらす。
-
-    入力パラメータ: 日付シリーズ、加算日数、取引日カレンダー。
-    戻り値: カレンダー上で n 日後の日付を並べた Series。
-    処理内容: searchsorted を使い範囲外は最終日に丸めて返す。
-    """
-
-    idx = calendar.searchsorted(s) + n
-    idx[idx >= len(calendar)] = len(calendar) - 1
-    return calendar[idx]
+class FundamentalBacktestEngine(BacktestEngine):
+    """ファンダメンタルシグナル用バックテストエンジン"""
+    
+    def run_fundamental_backtest(
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        hold_days: int = 40,
+        entry_offset: int = 1,
+        capital: float = DEFAULT_CAPITAL,
+        min_price: float = MIN_PRICE_DEFAULT
+    ) -> BacktestResult:
+        """ファンダメンタルシグナルでバックテストを実行
+        
+        Args:
+            start_date: 開始日
+            end_date: 終了日
+            hold_days: 保有日数
+            entry_offset: エントリーオフセット
+            capital: 初期資金
+            min_price: 最低株価
+            
+        Returns:
+            バックテスト結果
+        """
+        if start_date is None:
+            start_date = date.today() - timedelta(days=365)
+        if end_date is None:
+            end_date = date.today()
+        
+        config = BacktestConfig(
+            start_date=start_date,
+            end_date=end_date,
+            initial_capital=capital,
+            hold_days=hold_days,
+            entry_offset=entry_offset,
+            min_price=min_price,
+            max_positions=1  # ファンダメンタルは1銘柄ずつ
+        )
+        
+        logger.info(f"ファンダメンタルバックテスト開始: {start_date} - {end_date}")
+        
+        # ファンダメンタルシグナルを取得
+        signals_df = self.signal_provider.get_fundamental_signals(
+            start_date, end_date
+        )
+        
+        if signals_df.empty:
+            logger.warning("対象期間にシグナルがありません")
+            return BacktestResult(config=config)
+        
+        logger.info(f"取得したシグナル数: {len(signals_df)}")
+        
+        # バックテスト実行
+        return self.run_backtest(signals_df, config)
 
 
-# ---------------------------------------------------------------------------
-# Backtest core
-# ---------------------------------------------------------------------------
+class TradingDaysCalculator:
+    """営業日計算ユーティリティ"""
+    
+    def __init__(self, price_provider: PriceDataProvider):
+        """
+        Args:
+            price_provider: 価格データ提供者
+        """
+        self.price_provider = price_provider
+        self._trading_calendar = None
+    
+    def get_trading_calendar(self, start_date: date, end_date: date) -> pd.DatetimeIndex:
+        """営業日カレンダーを取得
+        
+        Args:
+            start_date: 開始日
+            end_date: 終了日
+            
+        Returns:
+            営業日のインデックス
+        """
+        if self._trading_calendar is None:
+            # 価格データから営業日を抽出
+            extended_start = start_date - timedelta(days=100)
+            extended_end = end_date + timedelta(days=100)
+            
+            # 適当な銘柄コードで価格データを取得して営業日を抽出
+            df = self.price_provider.get_price_data(
+                ["1301"], extended_start, extended_end  # 極洋（流動性の高い銘柄）
+            )
+            
+            if not df.empty:
+                self._trading_calendar = pd.to_datetime(df["date"].unique()).sort_values()
+            else:
+                # フォールバック: 平日カレンダー
+                self._trading_calendar = pd.bdate_range(extended_start, extended_end)
+        
+        return self._trading_calendar
+    
+    def add_trading_days(
+        self,
+        dates: pd.Series,
+        n_days: int,
+        start_date: date,
+        end_date: date
+    ) -> pd.Series:
+        """営業日ベースで日付をずらす
+        
+        Args:
+            dates: 基準日のSeries
+            n_days: 加算する営業日数
+            start_date: カレンダーの開始日
+            end_date: カレンダーの終了日
+            
+        Returns:
+            n_days後の営業日のSeries
+        """
+        calendar = self.get_trading_calendar(start_date, end_date)
+        
+        # 各日付に対してn日後の営業日を計算
+        result_dates = []
+        for date_val in dates:
+            # カレンダー内での位置を取得
+            try:
+                idx = calendar.get_loc(pd.Timestamp(date_val))
+                new_idx = min(idx + n_days, len(calendar) - 1)
+                result_dates.append(calendar[new_idx])
+            except KeyError:
+                # 該当日が営業日でない場合は最も近い営業日を使用
+                nearest_idx = calendar.searchsorted(pd.Timestamp(date_val))
+                if nearest_idx >= len(calendar):
+                    nearest_idx = len(calendar) - 1
+                new_idx = min(nearest_idx + n_days, len(calendar) - 1)
+                result_dates.append(calendar[new_idx])
+        
+        return pd.Series(result_dates, index=dates.index)
 
 
-def run_backtest(
-    prices: pd.DataFrame,
-    signals: pd.DataFrame,
-    *,
-    hold: int,
-    offset: int,
-    capital: int,
-    min_price: float = MIN_PRICE_DEFAULT,
-) -> pd.DataFrame:
-    """シグナルに基づくバックテストを実施する。
-
-    入力パラメータ: 価格データ、シグナル、保有日数、エントリーオフセット、資金量。
-    戻り値: 各トレードの結果をまとめた DataFrame。
-    処理内容: エントリー日とイグジット日を計算し損益などを算出する。
-    """
-
-    calendar = prices.index.get_level_values(1).unique().sort_values()
-
-    signals = signals.copy()
-    signals["entry_date"] = add_n_trading_days(signals["DisclosedAt"], offset, calendar)
-    signals["exit_date"] = add_n_trading_days(signals["entry_date"], hold, calendar)
-
-    # マルチ‑インデックスで価格取得
-    entry_idx = signals.set_index(["LocalCode", "entry_date"]).index
-    exit_idx = signals.set_index(["LocalCode", "exit_date"]).index
-
-    entry_px = prices.reindex(entry_idx)["adj_close"].values
-    exit_px = prices.reindex(exit_idx)["adj_close"].values
-
-    mask = entry_px >= min_price
-    entry_px = entry_px[mask]
-    exit_px = exit_px[mask]
-    signals = signals[mask].reset_index(drop=True)
-
-    shares = (capital // entry_px).astype(int)
-    invest = shares * entry_px
-    proceed = shares * exit_px
-    profit = proceed - invest
-
-    trades = pd.DataFrame(
-        {
-            "code": signals["LocalCode"],
-            "DisclosedAt": signals["DisclosedAt"].dt.date,
-            "entry_date": signals["entry_date"].dt.date,
-            "exit_date": signals["exit_date"].dt.date,
-            "entry_px": entry_px,
-            "exit_px": exit_px,
-            "shares": shares,
-            "invest": invest,
-            "proceed": proceed,
-            "profit_jpy": profit,
-            "ret_pct": profit / invest,
-            "days": hold,
-        }
-    )
-    return trades
-
-
-def summarize(trades: pd.DataFrame) -> pd.DataFrame:
-    """バックテスト結果のサマリーを作成する。
-
-    入力パラメータ: トレード結果の DataFrame。
-    戻り値: 指標をまとめた DataFrame。
-    処理内容: 総損益や勝率などを計算して表形式にまとめる。
-    """
-
-    total_profit = trades["profit_jpy"].sum()
-    win_rate = (trades["profit_jpy"] > 0).mean()
-    mean_ret_pct = trades["ret_pct"].mean()
-    sharpe = trades["ret_pct"].mean() / trades["ret_pct"].std(ddof=0)
-
-    summary = pd.DataFrame(
-        {
+class LegacyCompatibleBacktester:
+    """従来のバックテストロジックとの互換性を保つクラス"""
+    
+    def __init__(self, db_manager: Optional[DatabaseManager] = None):
+        """
+        Args:
+            db_manager: DatabaseManagerインスタンス
+        """
+        self.db_manager = db_manager or get_db_manager()
+        self.price_provider = PriceDataProvider(db_manager)
+        self.signal_provider = SignalProvider(db_manager)
+        self.trading_calc = TradingDaysCalculator(self.price_provider)
+    
+    def read_prices(self) -> pd.DataFrame:
+        """価格テーブルを読み込む（従来形式）
+        
+        Returns:
+            マルチインデックス形式の価格DataFrame
+        """
+        sql = """
+            SELECT code AS LocalCode,
+                   date AS trade_date,
+                   adj_close
+            FROM prices
+        """
+        
+        try:
+            with self.db_manager.get_connection() as conn:
+                df = pd.read_sql(sql, conn, parse_dates=["trade_date"])
+                return df.set_index(["LocalCode", "trade_date"]).sort_index()
+        except Exception as e:
+            logger.error(f"価格データ読み込み中にエラー: {e}")
+            raise DatabaseError(f"価格データの読み込みに失敗しました: {e}")
+    
+    def read_signals(
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> pd.DataFrame:
+        """シグナルを日付範囲で取得する（従来形式）
+        
+        Args:
+            start_date: 開始日
+            end_date: 終了日
+            
+        Returns:
+            シグナルのDataFrame
+        """
+        sql = "SELECT LocalCode, DisclosedAt FROM fundamental_signals"
+        params = []
+        
+        if start_date or end_date:
+            conditions = []
+            if start_date:
+                conditions.append("DisclosedAt >= ?")
+                params.append(f"{start_date.strftime('%Y-%m-%d')} 00:00:00")
+            if end_date:
+                conditions.append("DisclosedAt <= ?")
+                params.append(f"{end_date.strftime('%Y-%m-%d')} 23:59:59")
+            
+            if conditions:
+                sql += " WHERE " + " AND ".join(conditions)
+        
+        try:
+            with self.db_manager.get_connection() as conn:
+                df = pd.read_sql(sql, conn, params=params, parse_dates=["DisclosedAt"])
+                logger.debug(f"取得したシグナル数: {len(df)}")
+                return df
+        except Exception as e:
+            logger.error(f"シグナル読み込み中にエラー: {e}")
+            raise DatabaseError(f"シグナルの読み込みに失敗しました: {e}")
+    
+    def run_backtest(
+        self,
+        prices: pd.DataFrame,
+        signals: pd.DataFrame,
+        hold_days: int,
+        entry_offset: int,
+        capital: float,
+        min_price: float = MIN_PRICE_DEFAULT
+    ) -> pd.DataFrame:
+        """従来のバックテストロジックを実行
+        
+        Args:
+            prices: 価格DataFrame（マルチインデックス）
+            signals: シグナルDataFrame
+            hold_days: 保有日数
+            entry_offset: エントリーオフセット
+            capital: 投資資金
+            min_price: 最低株価
+            
+        Returns:
+            取引結果のDataFrame
+        """
+        if signals.empty:
+            return pd.DataFrame()
+        
+        # 営業日カレンダーを取得
+        calendar = prices.index.get_level_values(1).unique().sort_values()
+        
+        # エントリー日とエグジット日を計算
+        signals = signals.copy()
+        signals["entry_date"] = self.trading_calc.add_trading_days(
+            signals["DisclosedAt"], entry_offset,
+            calendar.min().date(), calendar.max().date()
+        )
+        signals["exit_date"] = self.trading_calc.add_trading_days(
+            signals["entry_date"], hold_days,
+            calendar.min().date(), calendar.max().date()
+        )
+        
+        # マルチインデックスで価格取得
+        entry_idx = signals.set_index(["LocalCode", "entry_date"]).index
+        exit_idx = signals.set_index(["LocalCode", "exit_date"]).index
+        
+        try:
+            entry_prices = prices.reindex(entry_idx)["adj_close"].values
+            exit_prices = prices.reindex(exit_idx)["adj_close"].values
+            
+            # 有効な価格データのみフィルタリング
+            valid_mask = (~pd.isna(entry_prices)) & (~pd.isna(exit_prices)) & (entry_prices >= min_price)
+            
+            if not valid_mask.any():
+                logger.warning("有効な取引データがありません")
+                return pd.DataFrame()
+            
+            entry_prices = entry_prices[valid_mask]
+            exit_prices = exit_prices[valid_mask]
+            signals_filtered = signals[valid_mask].reset_index(drop=True)
+            
+            # 取引計算
+            shares = (capital // entry_prices).astype(int)
+            invest = shares * entry_prices
+            proceed = shares * exit_prices
+            profit = proceed - invest
+            
+            trades = pd.DataFrame({
+                "code": signals_filtered["LocalCode"],
+                "DisclosedAt": signals_filtered["DisclosedAt"].dt.date,
+                "entry_date": signals_filtered["entry_date"].dt.date,
+                "exit_date": signals_filtered["exit_date"].dt.date,
+                "entry_px": entry_prices,
+                "exit_px": exit_prices,
+                "shares": shares,
+                "invest": invest,
+                "proceed": proceed,
+                "profit_jpy": profit,
+                "ret_pct": profit / invest,
+                "days": hold_days,
+            })
+            
+            logger.info(f"バックテスト完了: {len(trades)} 取引")
+            return trades
+            
+        except Exception as e:
+            logger.error(f"バックテスト実行中にエラー: {e}")
+            raise DataError(f"バックテストの実行に失敗しました: {e}")
+    
+    def summarize(self, trades: pd.DataFrame) -> pd.DataFrame:
+        """バックテスト結果のサマリーを作成
+        
+        Args:
+            trades: 取引結果DataFrame
+            
+        Returns:
+            サマリーDataFrame
+        """
+        if trades.empty:
+            return pd.DataFrame({
+                "metric": ["trades", "total_profit", "win_rate", "avg_ret_pct", "sharpe"],
+                "value": [0, 0, 0, 0, 0]
+            })
+        
+        total_profit = trades["profit_jpy"].sum()
+        win_rate = (trades["profit_jpy"] > 0).mean()
+        mean_ret_pct = trades["ret_pct"].mean()
+        
+        # シャープレシオ計算（ゼロ除算対策）
+        ret_std = trades["ret_pct"].std(ddof=0)
+        sharpe = mean_ret_pct / ret_std if ret_std > 0 else 0
+        
+        summary = pd.DataFrame({
             "metric": ["trades", "total_profit", "win_rate", "avg_ret_pct", "sharpe"],
             "value": [len(trades), total_profit, win_rate, mean_ret_pct, sharpe],
-        }
+        })
+        
+        return summary
+
+
+class FundamentalBacktestService:
+    """ファンダメンタルバックテストサービス"""
+    
+    def __init__(self, db_manager: Optional[DatabaseManager] = None):
+        """
+        Args:
+            db_manager: DatabaseManagerインスタンス
+        """
+        self.backtester = LegacyCompatibleBacktester(db_manager)
+        self.exporter = BacktestResultExporter()
+    
+    def run_backtest(
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        hold_days: int = 40,
+        entry_offset: int = 1,
+        capital: float = DEFAULT_CAPITAL,
+        min_price: float = MIN_PRICE_DEFAULT,
+        excel_file: Optional[str] = None,
+        json_file: Optional[str] = None,
+        show_results: bool = False
+    ) -> Dict[str, Any]:
+        """ファンダメンタルバックテストを実行
+        
+        Args:
+            start_date: 開始日
+            end_date: 終了日
+            hold_days: 保有日数
+            entry_offset: エントリーオフセット
+            capital: 投資資金
+            min_price: 最低株価
+            excel_file: Excelファイル名
+            json_file: JSONファイル名
+            show_results: 結果表示フラグ
+            
+        Returns:
+            実行結果の辞書
+        """
+        logger.info(f"ファンダメンタルバックテスト開始")
+        logger.info(f"期間: {start_date} - {end_date}")
+        logger.info(f"設定: 保有{hold_days}日, オフセット{entry_offset}日, 資金{capital:,.0f}円")
+        
+        try:
+            # データ読み込み
+            prices = self.backtester.read_prices()
+            signals = self.backtester.read_signals(start_date, end_date)
+            
+            logger.info(f"価格データ: {len(prices)} レコード")
+            logger.info(f"シグナル: {len(signals)} 件")
+            
+            if signals.empty:
+                return {
+                    "status": "success",
+                    "message": "対象期間にシグナルがありません",
+                    "trades_count": 0
+                }
+            
+            # バックテスト実行
+            trades = self.backtester.run_backtest(
+                prices, signals, hold_days, entry_offset, capital, min_price
+            )
+            summary = self.backtester.summarize(trades)
+            
+            # ファイル出力
+            output_files = {}
+            
+            if excel_file or json_file:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                
+                if excel_file:
+                    if not excel_file.endswith('.xlsx'):
+                        excel_file = f"{excel_file}_{timestamp}.xlsx"
+                    self._save_to_excel(trades, summary, excel_file)
+                    output_files["excel"] = excel_file
+                
+                if json_file:
+                    if not json_file.endswith('.json'):
+                        json_file = f"{json_file}_{timestamp}.json"
+                    trades.to_json(json_file, orient="records", force_ascii=False)
+                    output_files["json"] = json_file
+                    logger.info(f"JSON出力: {json_file}")
+            
+            # 結果表示
+            if show_results:
+                self._show_results(trades, summary)
+            
+            result = {
+                "status": "success",
+                "trades_count": len(trades),
+                "total_profit": summary.loc[summary["metric"] == "total_profit", "value"].iloc[0] if not summary.empty else 0,
+                "win_rate": summary.loc[summary["metric"] == "win_rate", "value"].iloc[0] if not summary.empty else 0,
+                "output_files": output_files,
+                "summary": summary.to_dict("records") if not summary.empty else []
+            }
+            
+            logger.info(f"バックテスト完了: {len(trades)} 取引")
+            return result
+            
+        except Exception as e:
+            logger.error(f"バックテスト実行中にエラー: {e}")
+            return {"status": "error", "error": str(e)}
+    
+    def _save_to_excel(self, trades: pd.DataFrame, summary: pd.DataFrame, filepath: str):
+        """Excel形式で保存"""
+        try:
+            with pd.ExcelWriter(filepath, engine="openpyxl") as writer:
+                trades.to_excel(writer, sheet_name="trades", index=False)
+                summary.to_excel(writer, sheet_name="summary", index=False)
+            
+            logger.info(f"Excel出力: {filepath}")
+        except Exception as e:
+            logger.error(f"Excel出力中にエラー: {e}")
+            raise DataError(f"Excel出力に失敗しました: {e}")
+    
+    def _show_results(self, trades: pd.DataFrame, summary: pd.DataFrame):
+        """結果を標準出力に表示"""
+        print("\n=== Summary ===")
+        if not summary.empty:
+            for _, row in summary.iterrows():
+                metric, value = row["metric"], row["value"]
+                if metric == "total_profit":
+                    print(f"{metric:>15}: {value:>12,.0f} JPY")
+                elif metric in ["win_rate", "avg_ret_pct"]:
+                    print(f"{metric:>15}: {value:>12.2%}")
+                elif metric == "sharpe":
+                    print(f"{metric:>15}: {value:>12.3f}")
+                else:
+                    print(f"{metric:>15}: {value:>12}")
+        
+        if not trades.empty and len(trades) <= 20:
+            print(f"\n=== Top Trades (showing {len(trades)}) ===")
+            display_cols = ["code", "entry_date", "exit_date", "profit_jpy", "ret_pct"]
+            available_cols = [col for col in display_cols if col in trades.columns]
+            print(trades[available_cols].to_string(index=False))
+
+
+def create_backtest_parser():
+    """バックテスト用ArgumentParserを作成"""
+    parser = create_parser("ファンダメンタルシグナルのバックテストを実行")
+    
+    add_date_arguments(parser, 
+                      start_help="シグナル開始日 (YYYY-MM-DD)",
+                      end_help="シグナル終了日 (YYYY-MM-DD)")
+    
+    parser.add_argument("--hold", type=int, default=40, help="保有期間（日数、デフォルト: 40）")
+    parser.add_argument("--entry-offset", type=int, default=1, help="エントリー日のオフセット（デフォルト: 1）")
+    parser.add_argument(
+        "--capital", type=float, default=DEFAULT_CAPITAL,
+        help=f"1取引あたりの資金 (JPY、デフォルト: {DEFAULT_CAPITAL:,})"
     )
-    return summary
-
-
-def _ascii_bar_chart(values: list[float], width: int = 40) -> str:
-    """Return simple ASCII bar chart for a sequence of values."""
-    if not values:
-        return ""
-    max_v = max(abs(v) for v in values) or 1
-    lines = []
-    for i, v in enumerate(values, 1):
-        bar = "#" * int(abs(v) / max_v * width)
-        sign = "" if v >= 0 else "-"
-        lines.append(f"{i:>3} {sign}{bar} ({v:+.0f})")
-    return "\n".join(lines)
-
-
-def show_results(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
-    """Display trades and summary on stdout."""
-    print("=== Summary ===")
-    print(summary.to_string(index=False))
-    if not trades.empty:
-        print("\n=== Profit per Trade ===")
-        chart = _ascii_bar_chart(trades["profit_jpy"].tolist())
-        print(chart)
-
-
-# ---------------------------------------------------------------------------
-# Excel output
-# ---------------------------------------------------------------------------
-
-
-def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
-    """バックテスト結果を Excel ファイルに出力する。
-
-    入力パラメータ: トレード表、サマリー表、保存先パス。
-    戻り値: なし。
-    処理内容: trades と summary をシートに書き込み、グラフを追加する。
-    """
-
-    with pd.ExcelWriter(path, engine="xlsxwriter") as writer:
-        trades.to_excel(writer, sheet_name="trades", index=False)
-        summary.to_excel(writer, sheet_name="summary", index=False)
-
-        sheet = writer.sheets["trades"]
-
-        # 自動列幅調整
-        for i, col in enumerate(trades.columns):
-            width = max(10, int(trades[col].astype(str).str.len().max() * 1.1))
-            sheet.set_column(i, i, width)
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
-
-def parse_args(argv=None):
-    p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    p.add_argument("--db", default=DB_PATH, help="SQLite DB ファイル")
-    p.add_argument("--hold", type=int, default=40, help="保有期間（日数）")
-    p.add_argument("--entry-offset", type=int, default=1, help="エントリー日のオフセット")
-    p.add_argument(
-        "--capital",
-        type=int,
-        default=DEFAULT_CAPITAL,
-        help="1 トレードあたりの資金 (JPY)",
+    parser.add_argument(
+        "--min-price", type=float, default=MIN_PRICE_DEFAULT,
+        help=f"エントリー株価の下限 (JPY、デフォルト: {MIN_PRICE_DEFAULT})"
     )
-    p.add_argument(
-        "--min-price",
-        type=float,
-        default=MIN_PRICE_DEFAULT,
-        help="エントリー株価の下限 (JPY)",
-    )
-    p.add_argument("--start", type=str, default=None, help="開始日 YYYY-MM-DD")
-    p.add_argument("--end", type=str, default=None, help="終了日 YYYY-MM-DD")
-    default_xlsx, default_json = _result_paths("fundamental")
-    p.add_argument("--xlsx", type=str, default=default_xlsx, help="Excel 出力ファイル")
-    p.add_argument("--json", type=str, default=default_json, help="結果を保存するJSONファイル")
-    p.add_argument(
-        "--show",
-        action="store_true",
-        help="結果を標準出力に表示",
-    )
-    p.add_argument("-v", "--verbose", action="store_true", help="詳細ログを表示")
-    return p.parse_args(argv)
+    
+    parser.add_argument("--xlsx", type=str, help="Excel出力ファイル名")
+    parser.add_argument("--json", type=str, help="JSON出力ファイル名")
+    parser.add_argument("--show", action="store_true", help="結果を標準出力に表示")
+    
+    return parser
 
 
-def main():
-    args = parse_args()
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format=LOG_FMT,
-    )
+def main() -> None:
+    """メイン処理"""
+    parser = create_backtest_parser()
+    args = parser.parse_args()
+    
+    # ロギングの設定
+    setup_logging_from_args(args)
     log_thresholds(logger)
-
-    with sqlite3.connect(args.db) as conn:
-        prices = read_prices(conn)
-        signals = read_signals(conn, args.start, args.end)
-
-    logger.info("signals : %d rows", len(signals))
-    logger.info("prices  : %d rows", len(prices))
-
-    if signals.empty:
-        logger.warning("No signals to back‑test.")
-        sys.exit()
-
-    trades = run_backtest(
-        prices,
-        signals,
-        hold=args.hold,
-        offset=args.entry_offset,
-        capital=args.capital,
-        min_price=args.min_price,
-    )
-    summary = summarize(trades)
-
-    logger.info("Saving Excel → %s", args.xlsx)
-    to_excel(trades, summary, args.xlsx)
-
-    trades.to_json(args.json, orient="records", force_ascii=False)
-    logger.info("JSON exported -> %s", args.json)
-
-    logger.info("\n%s", summary.to_string(index=False))
-    if args.show:
-        show_results(trades, summary)
+    
+    try:
+        # データベースマネージャーの設定
+        if args.db:
+            db_manager = DatabaseManager(args.db)
+        else:
+            db_manager = get_db_manager()
+        
+        # サービスの実行
+        service = FundamentalBacktestService(db_manager)
+        result = service.run_backtest(
+            start_date=args.start,
+            end_date=args.end,
+            hold_days=args.hold,
+            entry_offset=args.entry_offset,
+            capital=args.capital,
+            min_price=args.min_price,
+            excel_file=args.xlsx,
+            json_file=args.json,
+            show_results=args.show
+        )
+        
+        if result["status"] == "success":
+            logger.info(f"処理完了: {result['trades_count']} 取引")
+            if result.get("output_files"):
+                for file_type, path in result["output_files"].items():
+                    logger.info(f"{file_type.upper()}ファイル: {path}")
+        else:
+            logger.error(f"処理失敗: {result.get('error', '不明なエラー')}")
+            
+    except Exception as e:
+        logger.error(f"予期しないエラー: {e}")
+        raise
 
 
 if __name__ == "__main__":
-    # • 引数を解析して価格とシグナルを取得
-    # • バックテストを実施し Excel に保存
     main()
