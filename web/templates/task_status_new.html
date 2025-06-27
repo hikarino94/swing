@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>タスク進捗状況 - Swing Trading</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>🚀 タスク進捗状況</h1>
+            <p class="subtitle">実行中のタスクの詳細な進捗を確認</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Navigation -->
+        <div class="nav-section slide-in">
+            <div class="nav-links">
+                <a href="/" class="nav-link">
+                    🏠 <span>メイン画面</span>
+                </a>
+                <a href="/logs" class="nav-link secondary">
+                    📊 <span>リアルタイムログ</span>
+                </a>
+                <a href="#" onclick="showAllTasks()" class="nav-link">
+                    📋 <span>全タスク一覧</span>
+                </a>
+                <a href="#" onclick="refreshStatus()" class="nav-link accent">
+                    🔄 <span>状態更新</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Task Information -->
+        <div class="main-content">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-icon">⚡</span>
+                    <h2>タスク情報</h2>
+                    <div class="status-indicator" id="task-status-indicator">
+                        <span id="status-text">確認中...</span>
+                    </div>
+                </div>
+
+                <div class="task-details">
+                    <div class="detail-row">
+                        <span class="detail-label">タスクID:</span>
+                        <span class="detail-value" id="task-id">{{ task_id }}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">コマンド:</span>
+                        <span class="detail-value code" id="task-command">{{ task_info.command }}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">開始時刻:</span>
+                        <span class="detail-value" id="task-start">{{ task_info.start_time }}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">経過時間:</span>
+                        <span class="detail-value" id="task-duration">計算中...</span>
+                    </div>
+                    <div class="detail-row" id="end-time-row" style="display: none;">
+                        <span class="detail-label">終了時刻:</span>
+                        <span class="detail-value" id="task-end">-</span>
+                    </div>
+                    <div class="detail-row" id="return-code-row" style="display: none;">
+                        <span class="detail-label">終了コード:</span>
+                        <span class="detail-value" id="task-return-code">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-icon">📋</span>
+                    <h2>実行結果</h2>
+                    <div class="card-controls">
+                        <button onclick="toggleAutoRefresh()" class="btn btn-secondary" id="auto-refresh-btn">
+                            ⏸️ 自動更新
+                        </button>
+                        <button onclick="copyOutput()" class="btn btn-secondary">
+                            📋 コピー
+                        </button>
+                    </div>
+                </div>
+
+                <div class="output-container" id="output-container">
+                    <div class="output-placeholder">
+                        <div class="spinner"></div>
+                        <p>タスクの実行を待っています...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Other Tasks -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-icon">📊</span>
+                <h2>その他のタスク</h2>
+            </div>
+            <div id="other-tasks-container">
+                <div class="loading-placeholder">他のタスクを読み込み中...</div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .task-details {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .detail-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: var(--text-primary);
+            min-width: 100px;
+        }
+
+        .detail-value {
+            flex: 1;
+            font-family: inherit;
+        }
+
+        .detail-value.code {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: #f8f9fa;
+            padding: 0.3rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+        }
+
+        .card-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .card-controls .btn {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+        }
+
+        .output-container {
+            max-height: 500px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .output-placeholder {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .output-content {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .task-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.8rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            background: var(--card-background);
+            transition: var(--transition);
+        }
+
+        .task-item:hover {
+            background: #f8f9fa;
+            cursor: pointer;
+        }
+
+        .task-status-badge {
+            padding: 0.3rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .task-status-running {
+            background: rgba(52,152,219,0.1);
+            color: var(--primary-color);
+        }
+
+        .task-status-completed {
+            background: rgba(46,204,113,0.1);
+            color: var(--success-color);
+        }
+
+        .task-status-failed {
+            background: rgba(231,76,60,0.1);
+            color: var(--accent-color);
+        }
+
+        .task-command {
+            flex: 1;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .task-time {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            min-width: 80px;
+        }
+
+        .loading-placeholder {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 2rem;
+            font-style: italic;
+        }
+
+        .auto-refresh-enabled {
+            background: linear-gradient(135deg, var(--success-color), #27ae60) !important;
+            color: white !important;
+        }
+
+        .auto-refresh-disabled {
+            background: linear-gradient(135deg, var(--text-secondary), #6c7b7d) !important;
+            color: white !important;
+        }
+    </style>
+
+    <script>
+        const taskId = '{{ task_id }}';
+        let autoRefresh = true;
+        let refreshInterval;
+
+        function updateTaskStatus() {
+            fetch(`/api/task/${taskId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById('status-text').textContent = 'エラー';
+                        return;
+                    }
+
+                    // ステータスの更新
+                    const statusElement = document.getElementById('task-status-indicator');
+                    const statusText = document.getElementById('status-text');
+
+                    if (data.status === 'running') {
+                        statusElement.className = 'status-indicator status-running';
+                        statusText.textContent = '⚡ 実行中';
+                    } else if (data.status === 'completed') {
+                        statusElement.className = 'status-indicator status-completed';
+                        statusText.textContent = '✅ 完了';
+                    } else if (data.status === 'failed') {
+                        statusElement.className = 'status-indicator status-failed';
+                        statusText.textContent = '❌ 失敗';
+                    }
+
+                    // 詳細情報の更新
+                    if (data.end_time) {
+                        document.getElementById('task-end').textContent = data.end_time;
+                        document.getElementById('end-time-row').style.display = 'flex';
+                    }
+
+                    if (data.output && data.output.return_code !== undefined) {
+                        document.getElementById('task-return-code').textContent = data.output.return_code;
+                        document.getElementById('return-code-row').style.display = 'flex';
+                    }
+
+                    // 経過時間の計算
+                    if (data.start_time) {
+                        const startTime = new Date(data.start_time + ' JST');
+                        const endTime = data.end_time ? new Date(data.end_time + ' JST') : new Date();
+                        const duration = Math.floor((endTime - startTime) / 1000);
+                        const minutes = Math.floor(duration / 60);
+                        const seconds = duration % 60;
+                        document.getElementById('task-duration').textContent = `${minutes}分${seconds}秒`;
+                    }
+
+                    // 出力の表示
+                    const outputContainer = document.getElementById('output-container');
+                    if (data.output && data.output.output) {
+                        outputContainer.innerHTML = `<div class="output-content">${escapeHtml(data.output.output)}</div>`;
+                    } else if (data.status === 'running') {
+                        outputContainer.innerHTML = `
+                            <div class="output-placeholder">
+                                <div class="spinner"></div>
+                                <p>タスクを実行中です...</p>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('タスク状態取得エラー:', error);
+                });
+        }
+
+        function refreshStatus() {
+            updateTaskStatus();
+            loadOtherTasks();
+        }
+
+        function toggleAutoRefresh() {
+            autoRefresh = !autoRefresh;
+            const btn = document.getElementById('auto-refresh-btn');
+
+            if (autoRefresh) {
+                btn.innerHTML = '⏸️ 自動更新';
+                btn.classList.remove('auto-refresh-disabled');
+                btn.classList.add('auto-refresh-enabled');
+                startAutoRefresh();
+            } else {
+                btn.innerHTML = '▶️ 手動更新';
+                btn.classList.remove('auto-refresh-enabled');
+                btn.classList.add('auto-refresh-disabled');
+                stopAutoRefresh();
+            }
+        }
+
+        function startAutoRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(updateTaskStatus, 2000);
+        }
+
+        function stopAutoRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+        }
+
+        function copyOutput() {
+            const outputContent = document.querySelector('.output-content');
+            if (outputContent) {
+                navigator.clipboard.writeText(outputContent.textContent)
+                    .then(() => alert('出力をクリップボードにコピーしました'))
+                    .catch(() => alert('コピーに失敗しました'));
+            }
+        }
+
+        function loadOtherTasks() {
+            fetch('/api/tasks')
+                .then(response => response.json())
+                .then(tasks => {
+                    const container = document.getElementById('other-tasks-container');
+                    const taskEntries = Object.entries(tasks).filter(([tid, task]) => tid !== taskId);
+
+                    if (taskEntries.length === 0) {
+                        container.innerHTML = '<div class="loading-placeholder">他のタスクはありません</div>';
+                        return;
+                    }
+
+                    const tasksHtml = taskEntries.map(([tid, task]) => {
+                        const statusClass = `task-status-${task.status}`;
+                        const statusText = task.status === 'running' ? '実行中' :
+                                         task.status === 'completed' ? '完了' : '失敗';
+                        const timeText = task.start_time ? task.start_time.substring(11, 16) : '-';
+
+                        return `
+                            <div class="task-item" onclick="openTask('${tid}')">
+                                <div class="task-status-badge ${statusClass}">${statusText}</div>
+                                <div class="task-command">${escapeHtml(task.command)}</div>
+                                <div class="task-time">${timeText}</div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    container.innerHTML = tasksHtml;
+                })
+                .catch(error => {
+                    console.error('他のタスクの取得エラー:', error);
+                });
+        }
+
+        function openTask(taskId) {
+            window.location.href = `/task/${taskId}`;
+        }
+
+        function showAllTasks() {
+            fetch('/api/tasks')
+                .then(response => response.json())
+                .then(tasks => {
+                    let taskList = '📋 全タスク一覧:\n\n';
+                    const taskEntries = Object.entries(tasks);
+
+                    if (taskEntries.length === 0) {
+                        taskList += '現在、実行中または完了したタスクはありません。';
+                    } else {
+                        taskEntries.forEach(([taskId, task]) => {
+                            const status = task.status === 'running' ? '⚡実行中' :
+                                          task.status === 'completed' ? '✅完了' : '❌失敗';
+                            taskList += `${status} [${taskId.substring(0,8)}] ${task.command}\n`;
+                            if (task.start_time) {
+                                taskList += `   開始: ${task.start_time}\n`;
+                            }
+                            if (task.end_time) {
+                                taskList += `   終了: ${task.end_time}\n`;
+                            }
+                            taskList += '\n';
+                        });
+                    }
+
+                    alert(taskList);
+                })
+                .catch(error => {
+                    alert('タスク一覧の取得に失敗しました: ' + error);
+                });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTaskStatus();
+            loadOtherTasks();
+
+            // 自動更新の初期化
+            const btn = document.getElementById('auto-refresh-btn');
+            btn.classList.add('auto-refresh-enabled');
+            startAutoRefresh();
+        });
+
+        // ページが非表示になったときに自動更新を停止
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                stopAutoRefresh();
+            } else if (autoRefresh) {
+                startAutoRefresh();
+            }
+        });
+    </script>
+</body>
+</html>

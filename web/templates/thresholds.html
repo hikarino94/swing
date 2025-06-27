@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>閾値設定 - Swing Trading</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>⚙️ 閾値設定</h1>
+            <p class="subtitle">スクリーニング・分析アルゴリズムのパラメータ調整</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Navigation -->
+        <div class="nav-section slide-in">
+            <div class="nav-links">
+                <a href="/" class="nav-link">
+                    🏠 <span>メイン画面</span>
+                </a>
+                <a href="/logs" class="nav-link secondary">
+                    📊 <span>リアルタイムログ</span>
+                </a>
+                <a href="#" onclick="resetToDefaults()" class="nav-link" style="background: linear-gradient(135deg, #f39c12, #e67e22);">
+                    🔄 <span>デフォルト値に戻す</span>
+                </a>
+                <a href="#" onclick="exportSettings()" class="nav-link accent">
+                    📤 <span>設定をエクスポート</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Settings Form -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-icon">📊</span>
+                <h2>スクリーニング閾値設定</h2>
+                <div class="status-indicator">
+                    <span id="save-status">設定を調整できます</span>
+                </div>
+            </div>
+
+            <div class="form-description">
+                ⚙️ <strong>機能:</strong> ファンダメンタル・テクニカル分析のスクリーニング基準値を調整。<br>
+                ⚠️ <strong>注意:</strong> 値を変更すると、今後のスクリーニング結果に影響します。
+            </div>
+
+            <form action="/thresholds" method="post" onsubmit="showSavingMessage()">
+                <!-- Financial Indicators -->
+                <div class="threshold-section">
+                    <h3 class="section-title">💰 財務指標閾値</h3>
+                    <div class="threshold-grid">
+                        <div class="threshold-item">
+                            <label for="EPS_YOY_MIN">EPS成長率最小値</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="EPS_YOY_MIN" name="EPS_YOY_MIN"
+                                       value="{{ thresholds.get('EPS_YOY_MIN', 0.30) }}"
+                                       step="0.01" min="0" max="2">
+                                <span class="unit">倍</span>
+                            </div>
+                            <div class="field-description">前年同期比でのEPS（1株当たり利益）成長率の最小値</div>
+                        </div>
+
+                        <div class="threshold-item">
+                            <label for="CF_QUALITY_MIN">キャッシュフロー品質最小値</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="CF_QUALITY_MIN" name="CF_QUALITY_MIN"
+                                       value="{{ thresholds.get('CF_QUALITY_MIN', 0.8) }}"
+                                       step="0.01" min="0" max="1">
+                                <span class="unit">比率</span>
+                            </div>
+                            <div class="field-description">営業キャッシュフローの品質を示す比率（1に近いほど良好）</div>
+                        </div>
+
+                        <div class="threshold-item">
+                            <label for="ETA_DELTA_MIN">予想変化率最小値</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="ETA_DELTA_MIN" name="ETA_DELTA_MIN"
+                                       value="{{ thresholds.get('ETA_DELTA_MIN', 0.0) }}"
+                                       step="0.01" min="-1" max="1">
+                                <span class="unit">変化率</span>
+                            </div>
+                            <div class="field-description">業績予想の上方修正率（正の値は上方修正を意味）</div>
+                        </div>
+
+                        <div class="threshold-item">
+                            <label for="TREASURY_DELTA_MAX">自己株式変化率最大値</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="TREASURY_DELTA_MAX" name="TREASURY_DELTA_MAX"
+                                       value="{{ thresholds.get('TREASURY_DELTA_MAX', 0.0) }}"
+                                       step="0.01" min="-1" max="1">
+                                <span class="unit">変化率</span>
+                            </div>
+                            <div class="field-description">自己株式の増減率上限（負の値は自社株買いを示す）</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Technical Indicators -->
+                <div class="threshold-section">
+                    <h3 class="section-title">📈 テクニカル指標閾値</h3>
+                    <div class="threshold-grid">
+                        <div class="threshold-item">
+                            <label for="RSI_THRESHOLD">RSI閾値</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="RSI_THRESHOLD" name="RSI_THRESHOLD"
+                                       value="{{ thresholds.get('RSI_THRESHOLD', 50) }}"
+                                       step="1" min="0" max="100">
+                                <span class="unit">%</span>
+                            </div>
+                            <div class="field-description">RSI（相対力指数）の判定基準値（50を超えると上昇トレンド）</div>
+                        </div>
+
+                        <div class="threshold-item">
+                            <label for="ADX_THRESHOLD">ADX閾値</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="ADX_THRESHOLD" name="ADX_THRESHOLD"
+                                       value="{{ thresholds.get('ADX_THRESHOLD', 20) }}"
+                                       step="1" min="0" max="100">
+                                <span class="unit">%</span>
+                            </div>
+                            <div class="field-description">ADX（平均方向性指数）の最小値（20以上でトレンド有り）</div>
+                        </div>
+
+                        <div class="threshold-item">
+                            <label for="OVERHEAT_FACTOR">過熱判定係数</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="OVERHEAT_FACTOR" name="OVERHEAT_FACTOR"
+                                       value="{{ thresholds.get('OVERHEAT_FACTOR', 1.1) }}"
+                                       step="0.01" min="1" max="2">
+                                <span class="unit">倍</span>
+                            </div>
+                            <div class="field-description">移動平均線からの乖離率（1.1 = 10%上昇で過熱と判定）</div>
+                        </div>
+
+                        <div class="threshold-item">
+                            <label for="OVERSOLD_FACTOR">売られすぎ判定係数</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="OVERSOLD_FACTOR" name="OVERSOLD_FACTOR"
+                                       value="{{ thresholds.get('OVERSOLD_FACTOR', 0.95) }}"
+                                       step="0.01" min="0.5" max="1">
+                                <span class="unit">倍</span>
+                            </div>
+                            <div class="field-description">移動平均線からの下方乖離率（0.95 = 5%下落で売られすぎ）</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Signal Processing -->
+                <div class="threshold-section">
+                    <h3 class="section-title">🎯 シグナル処理設定</h3>
+                    <div class="threshold-grid">
+                        <div class="threshold-item">
+                            <label for="SIGNAL_COUNT_MIN">買いシグナル最小数</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="SIGNAL_COUNT_MIN" name="SIGNAL_COUNT_MIN"
+                                       value="{{ thresholds.get('SIGNAL_COUNT_MIN', 3) }}"
+                                       step="1" min="1" max="10">
+                                <span class="unit">個</span>
+                            </div>
+                            <div class="field-description">買い推奨とするために必要な条件達成数</div>
+                        </div>
+
+                        <div class="threshold-item">
+                            <label for="SHORT_SIGNAL_COUNT_MIN">売りシグナル最小数</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="SHORT_SIGNAL_COUNT_MIN" name="SHORT_SIGNAL_COUNT_MIN"
+                                       value="{{ thresholds.get('SHORT_SIGNAL_COUNT_MIN', 4) }}"
+                                       step="1" min="1" max="10">
+                                <span class="unit">個</span>
+                            </div>
+                            <div class="field-description">売り推奨とするために必要な条件達成数</div>
+                        </div>
+
+                        <div class="threshold-item">
+                            <label for="FIRST_LOOKBACK_DAYS">初期参照日数</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="FIRST_LOOKBACK_DAYS" name="FIRST_LOOKBACK_DAYS"
+                                       value="{{ thresholds.get('FIRST_LOOKBACK_DAYS', 30) }}"
+                                       step="1" min="5" max="90">
+                                <span class="unit">日</span>
+                            </div>
+                            <div class="field-description">短期トレンド分析で参照する過去の日数</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-full" id="save-btn">💾 設定を保存</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Preset Templates -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-icon">📋</span>
+                <h2>プリセット設定</h2>
+            </div>
+
+            <div class="preset-grid">
+                <div class="preset-item" onclick="applyPreset('conservative')">
+                    <div class="preset-header">
+                        <span class="preset-icon">🛡️</span>
+                        <h3>保守的設定</h3>
+                    </div>
+                    <p>リスクを抑えた安全重視の設定</p>
+                    <ul>
+                        <li>高いEPS成長率要求 (0.5倍)</li>
+                        <li>厳しいキャッシュフロー基準 (0.9)</li>
+                        <li>多くのシグナル条件 (4個以上)</li>
+                    </ul>
+                </div>
+
+                <div class="preset-item" onclick="applyPreset('balanced')">
+                    <div class="preset-header">
+                        <span class="preset-icon">⚖️</span>
+                        <h3>バランス設定</h3>
+                    </div>
+                    <p>リスクとリターンのバランス重視</p>
+                    <ul>
+                        <li>標準的なEPS成長率 (0.3倍)</li>
+                        <li>中程度のキャッシュフロー基準 (0.8)</li>
+                        <li>適度なシグナル条件 (3個以上)</li>
+                    </ul>
+                </div>
+
+                <div class="preset-item" onclick="applyPreset('aggressive')">
+                    <div class="preset-header">
+                        <span class="preset-icon">🚀</span>
+                        <h3>積極的設定</h3>
+                    </div>
+                    <p>高リターンを狙った攻撃的な設定</p>
+                    <ul>
+                        <li>低いEPS成長率要求 (0.1倍)</li>
+                        <li>緩いキャッシュフロー基準 (0.6)</li>
+                        <li>少ないシグナル条件 (2個以上)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .threshold-section {
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            color: var(--text-primary);
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--primary-color);
+        }
+
+        .threshold-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .threshold-item {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .threshold-item label {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .input-with-unit {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .input-with-unit input {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .unit {
+            font-weight: 600;
+            color: var(--text-secondary);
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .form-actions {
+            margin-top: 2rem;
+            text-align: center;
+        }
+
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .preset-item {
+            background: var(--card-background);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .preset-item:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .preset-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .preset-icon {
+            font-size: 1.5rem;
+        }
+
+        .preset-item h3 {
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .preset-item p {
+            color: var(--text-secondary);
+            margin: 0.5rem 0;
+        }
+
+        .preset-item ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .preset-item li {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin: 0.2rem 0;
+            padding-left: 1rem;
+            position: relative;
+        }
+
+        .preset-item li:before {
+            content: "•";
+            color: var(--primary-color);
+            position: absolute;
+            left: 0;
+        }
+
+        .saving {
+            background: linear-gradient(135deg, var(--warning-color), #e67e22) !important;
+            animation: pulse 1.5s infinite;
+        }
+
+        @media (max-width: 768px) {
+            .threshold-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .preset-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    <script>
+        const presets = {
+            conservative: {
+                EPS_YOY_MIN: 0.5,
+                CF_QUALITY_MIN: 0.9,
+                ETA_DELTA_MIN: 0.1,
+                TREASURY_DELTA_MAX: -0.1,
+                RSI_THRESHOLD: 60,
+                ADX_THRESHOLD: 25,
+                OVERHEAT_FACTOR: 1.05,
+                OVERSOLD_FACTOR: 0.98,
+                SIGNAL_COUNT_MIN: 4,
+                SHORT_SIGNAL_COUNT_MIN: 5,
+                FIRST_LOOKBACK_DAYS: 45
+            },
+            balanced: {
+                EPS_YOY_MIN: 0.3,
+                CF_QUALITY_MIN: 0.8,
+                ETA_DELTA_MIN: 0.0,
+                TREASURY_DELTA_MAX: 0.0,
+                RSI_THRESHOLD: 50,
+                ADX_THRESHOLD: 20,
+                OVERHEAT_FACTOR: 1.1,
+                OVERSOLD_FACTOR: 0.95,
+                SIGNAL_COUNT_MIN: 3,
+                SHORT_SIGNAL_COUNT_MIN: 4,
+                FIRST_LOOKBACK_DAYS: 30
+            },
+            aggressive: {
+                EPS_YOY_MIN: 0.1,
+                CF_QUALITY_MIN: 0.6,
+                ETA_DELTA_MIN: -0.1,
+                TREASURY_DELTA_MAX: 0.1,
+                RSI_THRESHOLD: 40,
+                ADX_THRESHOLD: 15,
+                OVERHEAT_FACTOR: 1.15,
+                OVERSOLD_FACTOR: 0.9,
+                SIGNAL_COUNT_MIN: 2,
+                SHORT_SIGNAL_COUNT_MIN: 3,
+                FIRST_LOOKBACK_DAYS: 20
+            }
+        };
+
+        function applyPreset(presetName) {
+            if (!presets[presetName]) return;
+
+            const preset = presets[presetName];
+            const confirmed = confirm(`「${getPresetDisplayName(presetName)}」を適用しますか？\n現在の設定値が上書きされます。`);
+
+            if (confirmed) {
+                Object.entries(preset).forEach(([key, value]) => {
+                    const input = document.getElementById(key);
+                    if (input) {
+                        input.value = value;
+                        input.style.background = 'rgba(52,152,219,0.1)';
+                        setTimeout(() => {
+                            input.style.background = '';
+                        }, 1000);
+                    }
+                });
+
+                document.getElementById('save-status').textContent = `${getPresetDisplayName(presetName)}を適用しました`;
+            }
+        }
+
+        function getPresetDisplayName(presetName) {
+            const names = {
+                conservative: '保守的設定',
+                balanced: 'バランス設定',
+                aggressive: '積極的設定'
+            };
+            return names[presetName] || presetName;
+        }
+
+        function resetToDefaults() {
+            const confirmed = confirm('デフォルト値に戻しますか？\n現在の設定値が失われます。');
+            if (confirmed) {
+                applyPreset('balanced');
+            }
+        }
+
+        function exportSettings() {
+            const form = document.querySelector('form');
+            const formData = new FormData(form);
+            const settings = {};
+
+            for (let [key, value] of formData.entries()) {
+                settings[key] = parseFloat(value);
+            }
+
+            const jsonString = JSON.stringify(settings, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `thresholds_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            document.getElementById('save-status').textContent = '設定をエクスポートしました';
+        }
+
+        function showSavingMessage() {
+            const btn = document.getElementById('save-btn');
+            btn.textContent = '💾 保存中...';
+            btn.classList.add('saving');
+            btn.disabled = true;
+
+            document.getElementById('save-status').textContent = '設定を保存中...';
+        }
+
+        // Auto-save indication
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputs = document.querySelectorAll('input[type="number"]');
+            inputs.forEach(input => {
+                input.addEventListener('input', function() {
+                    document.getElementById('save-status').textContent = '未保存の変更があります';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

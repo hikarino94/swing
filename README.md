@@ -12,7 +12,7 @@ J-Quants の株価・財務データを取得し、
 
 本プロジェクトはClaude Codeとの連携を最適化するためにリファクタリングされました：
 
-- **統一された設定管理**: `utils/config.py`による一元的な設定ファイル管理
+- **統一された設定管理**: `src/utils/config.py`による一元的な設定ファイル管理
 - **改善されたエラーハンドリング**: カスタム例外クラスと統一されたロギング
 - **共通ユーティリティ**: データベース接続、APIクライアント、CLIユーティリティの共通化
 - **型安全性**: 包括的な型ヒントの追加
@@ -47,8 +47,8 @@ pre-commit install
 # 個別実行
 black .                    # フォーマット
 ruff check . --fix         # リント（自動修正）
-mypy utils/                # 型チェック
-bandit -r utils/ fetch/    # セキュリティチェック
+mypy src/utils/            # 型チェック
+bandit -r src/             # セキュリティチェック
 ```
 
 ### テスト実行
@@ -58,7 +58,7 @@ bandit -r utils/ fetch/    # セキュリティチェック
 python -m pytest
 
 # カバレッジ付き
-python -m pytest --cov=utils --cov=fetch --cov-report=html
+python -m pytest --cov=src/utils --cov=src/api --cov-report=html
 
 # 特定のマーカーのみ
 python -m pytest -m "not slow"  # 時間のかかるテストを除外
@@ -104,19 +104,19 @@ pip install pre-commit
 pre-commit install
 
 # データベースを初期化
-python db/db_schema.py
+python data/db/db_schema.py
 ```
 
-J‑Quants API の `idToken` を取得し、次の内容で `idtoken.json` を作成してください。
+J‑Quants API の `idToken` を取得し、次の内容で `config/idtoken.json` を作成してください。
 
 ```json
 {"idToken": "YOUR_TOKEN"}
 ```
 
 J‑Quants の認証に使用するメールアドレスとパスワードを保存する
-`account.json` を用意しておくと、`update_idtoken.py` から自動的に参照されます。
+`config/account.json` を用意しておくと、`tools/update_idtoken.py` から自動的に参照されます。
 
-Web アプリ用の認証情報を分けたい場合は `login.json` を用意してください。
+Web アプリ用の認証情報を分けたい場合は `config/login.json` を用意してください。
 こちらには Web アプリにログインする際の **ID** とパスワード（または
 `password_hash`）を保存します。`login.json` がない場合は `account.json`
 が使われますが、この場合はメールアドレスが ID として扱われます。
@@ -136,74 +136,73 @@ EOF
 
 このファイルは `.gitignore` に含まれ、リポジトリには登録されません。
 
-スクリーニング条件を調整したい場合は、`screening/thresholds.json.example` を参考に
-`screening/thresholds.json` を作成してください。RSI、ADX、株価位置などの
+スクリーニング条件を調整したい場合は、`src/analysis/thresholds.json` を編集してください。RSI、ADX、株価位置などの
 テクニカル指標の閾値を設定できます。
 
 続いて SQLite データベースを初期化します。
 
 ```bash
-python db/db_schema.py
+python data/db/db_schema.py
 ```
-`db/stock.db` が生成されれば準備完了です。
+`data/db/stock.db` が生成されれば準備完了です。
 
 ## 主なスクリプトと起動引数
 
-* `fetch/daily_quotes.py`
+* `src/api/daily_quotes.py`
   日足株価を取得して `prices` テーブルへ保存します。
   `--start` と `--end` を指定すると期間を取得します（省略時は当日分）。
 
-* `fetch/listed_info.py`
+* `src/api/listed_info.py`
   上場銘柄情報を取得して `listed_info` テーブルを更新します。
   引数はありません。
 
-* `fetch/statements.py`
+* `src/api/statements.py`
   決算データを取得して `statements` テーブルに保存します。
   `mode` に `1` を指定すると銘柄単位で一括取得、`2` を指定すると日付または期間を取得します。
   `--start` と `--end` を併用することで期間を指定できます。
-* `screening/screen_statements.py`
+* `src/analysis/screen_statements.py`
   財務データをスクリーニングし、シグナルを `fundamental_signals` に保存します。
   `--lookback` 過去参照日数、`--recent` 開示閾値日数、`--as-of` 基準日（省略時は当日）を指定できます。
-* `screening/screen_technical.py`
+* `src/analysis/screen_technical.py`
   `indicators` または `screen` をコマンドとして指定します。
   `--as-of` で対象日を指定し、`--lookback` は遡る日数です。
   当日の `prices` データが存在しない場合は処理をスキップします。
   買いシグナルに加えて売りシグナルも検出し、`technical_indicators` テーブルに保存します。
-* `screening/screen_ml.py`
+* `src/analysis/screen_ml.py`
   機械学習モデル（勾配ブースティング分類器）で30日後の株価上昇確率を推定し、上位銘柄を抽出します。
   財務指標と株価テクニカル特徴量を組み合わせて予測を行います。
   `train` と `screen` サブコマンドがあり、`--top` 上位件数や `--lookback` 学習データ期間を指定できます。
 
   ```bash
   # モデル学習（3年間のデータを使用）
-  python screening/screen_ml.py train --lookback 1095
+  python src/analysis/screen_ml.py train --lookback 1095
 
   # スクリーニング実行（上位30銘柄を抽出）
-  python screening/screen_ml.py screen --top 30
+  python src/analysis/screen_ml.py screen --top 30
   ```
-* `backtest/backtest_statements.py`
+* `src/backtest/backtest_statements.py`
   財務シグナルを用いたバックテストを実行します。
   `--hold` 保有日数、`--entry-offset` エントリー日のオフセット、`--capital` 資金、
   `--min-price` 最低株価、`--start` と `--end` で対象期間を指定します。結果は毎回タイムスタンプ付きの
   Excel と JSON に保存され、`--xlsx` と `--json` でファイル名を変更できます。
   `--show` を付けるとサマリーを標準出力に表示します。
-* `backtest/backtest_technical.py`
+* `src/backtest/backtest_technical.py`
   テクニカル指標を用いたスイングトレードのバックテストを行います。
   `--start` と `--end` でエントリー期間を指定し、`--hold-days` 保有日数、
   `--stop-loss` 損切り率、`--min-price` 最低株価、`--capital` 資金を与えます。結果は実行ごとに
   タイムスタンプ付きの Excel と JSON に保存されます。`--outfile` と
   `--json` で保存先を変更できます。`--show` を指定するとサマリーが
   標準出力に表示されます。
-* `backtest/backtest_ml.py`
+* `src/backtest/backtest_ml.py`
   機械学習スクリーナーの予測を用いて、日毎に上位銘柄を購入するバックテストを行います。
   `--start` `--end` で期間を指定し、`--top` 上位件数、`--capital` 資金などを設定します。
   結果は Excel と JSON に保存され、`--outfile` `--json` でファイル名を変更できます。`--show` でサマリーを表示します。
 
   ```bash
   # MLモデルを使った1年間のバックテスト（上位10銘柄、資金100万円）
-  python backtest/backtest_ml.py --start 2024-01-01 --end 2024-12-31 --top 10 --capital 1000000 --show
+  python src/backtest/backtest_ml.py --start 2024-01-01 --end 2024-12-31 --top 10 --capital 1000000 --show
   ```
-* `backtest/analyze_backtest_json.py`
+* `src/backtest/analyze_backtest_json.py`
   バックテスト結果として保存した JSON ファイルを読み込み、損益や
   勝率などの指標を集計するツールです。複数ファイルを指定して
   まとめて分析することもできます。GUI の「JSON分析」タブからも
@@ -212,7 +211,7 @@ python db/db_schema.py
   複数のJSONファイルをまとめて分析することも可能です。以下は簡単な実行例です。
 
   ```bash
-  $ python backtest/analyze_backtest_json.py sample.json --show-trades
+  $ python src/backtest/analyze_backtest_json.py sample.json --show-trades
 
   === Summary ===
         trades: 2
@@ -234,31 +233,31 @@ python db/db_schema.py
     1 ######################################## (1000)
     2 -#################### (-500)
   ```
-* `update_idtoken.py`
-  J‑Quants にログインして `idtoken.json` を更新します。
-  `--mail` と `--password` を省略すると `account.json` が参照されます。
-* `db/db_summary.py`
+* `tools/update_idtoken.py`
+  J‑Quants にログインして `config/idtoken.json` を更新します。
+  `--mail` と `--password` を省略すると `config/account.json` が参照されます。
+* `data/db/db_summary.py`
   データベースの各テーブル件数と日付範囲を表示します。引数はありません。
   GUI の「DBサマリー」タブからも確認できます。
-* `db/list_signals.py`
+* `data/db/list_signals.py`
   `fundamental_signals` または `technical_indicators` テーブルから
   スクリーニング結果を表示します。引数 `fund`/`tech` で種別を選択し、
   `--start` `--end` で期間を指定できます。開始日と終了日をどちらも
   指定しない場合は当日の日付が自動的に使われます。テクニカルの場合は
   バックテストと同じ条件（`signals_count>=3` など）が自動で適用されます。
-* `web.py`
+* `web/app.py`
   Flask を使った Web インターフェイスを起動します。
   フォームから各種スクリプト（データ取得、スクリーニング、バックテスト）を実行でき、
   結果もブラウザ上で確認できます。機械学習スクリーニングやJSON分析機能にも対応しています。
-  認証機能付きで、`login.json` または `account.json` で設定したユーザーでログインできます。
+  認証機能付きで、`config/login.json` または `config/account.json` で設定したユーザーでログインできます。
 
 ## 利用の流れ
-1. `fetch` スクリプトでデータベースを更新
-2. `screening` スクリプトで売買シグナルを生成（財務・テクニカル・ML）
-3. `backtest` スクリプトでシグナルを検証
-4. `analyze_backtest_json.py` で結果を詳細分析
+1. `src/api/` スクリプトでデータベースを更新
+2. `src/analysis/` スクリプトで売買シグナルを生成（財務・テクニカル・ML）
+3. `src/backtest/` スクリプトでシグナルを検証
+4. `src/backtest/analyze_backtest_json.py` で結果を詳細分析
 
-操作をまとめた GUI (`gui.py`) に加え、Web 版 (`web.py`) も用意しており、すべての機能をブラウザから実行できます。
+操作をまとめた GUI (`desktop/gui.py`) に加え、Web 版 (`web/app.py`) も用意しており、すべての機能をブラウザから実行できます。
 バックテスト結果の Excel ファイルは「結果閲覧」タブから確認でき、JSON分析機能ではロング/ショートを分けた詳細な
 パフォーマンス分析が可能です。
 
@@ -295,7 +294,7 @@ source ~/.bashrc
 
 ```bash
 # 直接起動
-python3 gui.py
+python3 desktop/gui.py
 
 # またはスクリプト経由
 ./start_gui.sh
@@ -323,9 +322,9 @@ python scheduler.py
 
 ## 設定ファイル詳細
 
-* `screening/thresholds.json` - テクニカル指標の閾値設定
+* `config/thresholds.json` - テクニカル指標の閾値設定
   - RSI上限・下限、ADX最小値、株価位置係数など
   - ファイルが存在しない場合はデフォルト値を使用
-* `login.json` - Web アプリ専用の認証情報（オプション）
-  - `account.json` と分けて管理したい場合に使用
+* `config/login.json` - Web アプリ専用の認証情報（オプション）
+  - `config/account.json` と分けて管理したい場合に使用
   - 環境変数 `LOGIN_ACCOUNT` でファイルパスを変更可能

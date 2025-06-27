@@ -38,19 +38,20 @@ jobs:
     - name: Create test configuration files
       run: |
         # テスト用の設定ファイルを作成
-        echo '{"idToken": "test_token"}' > idtoken.json
-        echo '{"mailaddress": "test@example.com", "password": "test_password"}' > account.json
-        echo '{"mailaddress": "test@example.com", "password": "test_password"}' > login.json
-        mkdir -p screening
-        cp screening/thresholds.json.example screening/thresholds.json || echo '{}' > screening/thresholds.json
+        mkdir -p config
+        echo '{"idToken": "test_token"}' > config/idtoken.json
+        echo '{"mailaddress": "test@example.com", "password": "test_password"}' > config/account.json
+        echo '{"mailaddress": "test@example.com", "password": "test_password"}' > config/login.json
+        echo '{}' > config/thresholds.json
 
     - name: Run syntax checks
       run: |
         # 構文チェック
-        python -m py_compile utils/*.py
-        python -m py_compile fetch/*.py
-        python -m py_compile screening/*.py
-        python -m py_compile backtest/*.py
+        python -m py_compile src/utils/*.py
+        python -m py_compile src/api/*.py
+        python -m py_compile src/analysis/*.py
+        python -m py_compile src/strategies/*.py
+        python -m py_compile src/gui/*.py
 
     - name: Run tests
       run: |
@@ -58,39 +59,39 @@ jobs:
         python -c "
         import sys, tempfile, json, sqlite3
         from pathlib import Path
-        
+
         # ConfigManagerテスト
         sys.path.append('.')
-        from utils.config import ConfigManager
-        from utils.exceptions import APIError, DatabaseError
-        from utils.db_utils import DatabaseManager
-        from utils.logging_config import get_logger
-        
+        from src.utils.config import ConfigManager
+        from src.utils.exceptions import APIError, DatabaseError
+        from src.utils.db_utils import DatabaseManager
+        from src.utils.logging_config import get_logger
+
         print('✓ Basic imports successful')
-        
+
         # 簡単な機能テスト
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             test_file = tmp_path / 'test.json'
             with open(test_file, 'w') as f:
                 json.dump({'test': 'value'}, f)
-            
+
             config = ConfigManager(tmp_path)
             result = config.load_json('test.json')
             assert result['test'] == 'value'
             print('✓ ConfigManager test passed')
-            
+
             # DatabaseManagerテスト
             db_file = tmp_path / 'test.db'
             db_manager = DatabaseManager(db_file)
             with db_manager.transaction() as conn:
                 conn.execute('CREATE TABLE test (id INTEGER)')
                 conn.execute('INSERT INTO test VALUES (1)')
-            
+
             count = db_manager.execute_scalar('SELECT COUNT(*) FROM test')
             assert count == 1
             print('✓ DatabaseManager test passed')
-        
+
         print('🎉 All basic tests passed!')
         "
 
@@ -100,21 +101,21 @@ jobs:
         python -c "
         import sys
         sys.path.append('.')
-        
+
         try:
-            from utils.config import get_config_manager
-            from utils.db_utils import get_db_manager
-            from utils.jquants_client import get_jquants_client
-            from utils.logging_config import get_logger
-            from utils.exceptions import APIError, DatabaseError, DataError
+            from src.utils.config import get_config_manager
+            from src.utils.db_utils import get_db_manager
+            from src.utils.jquants_client import get_jquants_client
+            from src.utils.logging_config import get_logger
+            from src.utils.exceptions import APIError, DatabaseError, DataError
             print('✓ All utils modules imported successfully')
         except Exception as e:
             print(f'✗ Import error: {e}')
             sys.exit(1)
-        
+
         # fetchモジュールの構文確認（pandas依存を避けて構文のみ）
         import ast
-        for module in ['fetch/daily_quotes.py', 'fetch/listed_info.py', 'fetch/statements.py']:
+        for module in ['src/api/daily_quotes.py', 'src/api/listed_info.py', 'src/api/statements.py']:
             with open(module) as f:
                 try:
                     ast.parse(f.read())
@@ -141,15 +142,15 @@ jobs:
 
     - name: Check code formatting with Black
       run: |
-        black --check --diff utils/ fetch/ screening/ backtest/ *.py || echo "Code formatting issues found (run 'black .' to fix)"
+        black --check --diff src/ *.py || echo "Code formatting issues found (run 'black .' to fix)"
 
     - name: Lint with Ruff
       run: |
-        ruff check utils/ fetch/ screening/ backtest/ *.py || echo "Linting issues found"
+        ruff check src/ *.py || echo "Linting issues found"
 
     - name: Type check with MyPy (allow failures for now)
       run: |
-        mypy utils/ --ignore-missing-imports || echo "Type checking completed with issues"
+        mypy src/utils/ --ignore-missing-imports || echo "Type checking completed with issues"
       continue-on-error: true
 
   security:
@@ -169,7 +170,7 @@ jobs:
 
     - name: Security scan with Bandit
       run: |
-        bandit -r utils/ fetch/ screening/ backtest/ -f json -o bandit-report.json || echo "Security scan completed"
+        bandit -r src/ -f json -o bandit-report.json || echo "Security scan completed"
 
     - name: Check dependencies with Safety
       run: |

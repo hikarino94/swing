@@ -23,7 +23,7 @@ check_result() {
 }
 
 # 対象ディレクトリ
-DIRS="utils fetch screening backtest"
+DIRS="src/utils src/api src/analysis src/strategies"
 FILES="*.py"
 
 echo "対象ディレクトリ: $DIRS"
@@ -55,7 +55,7 @@ echo ""
 # MyPy 型チェック
 echo "🔍 MyPy 型チェック..."
 if command -v mypy &> /dev/null; then
-    mypy utils/ --ignore-missing-imports 2>/dev/null || true
+    mypy src/utils/ --ignore-missing-imports 2>/dev/null || true
     check_result "MyPy 型チェック (警告のみ)"
 else
     echo -e "${YELLOW}⚠ MyPy がインストールされていません${NC}"
@@ -127,9 +127,9 @@ sys.path.append('.')
 
 # 基本的なインポートテスト
 try:
-    from utils.config import ConfigManager
-    from utils.db_utils import DatabaseManager
-    from utils.exceptions import APIError
+    from src.utils.config import ConfigManager
+    from src.utils.db_utils import DatabaseManager
+    from src.utils.exceptions import APIError
     print('✓ 基本インポート成功')
 except Exception as e:
     print(f'✗ インポートエラー: {e}')

@@ -57,13 +57,13 @@ warn_unreachable = true
 minversion = "6.0"
 addopts = [
     "-ra",
-    "-q", 
+    "-q",
     "--strict-markers",
     "--strict-config",
-    "--cov=utils",
-    "--cov=fetch", 
-    "--cov=screening",
-    "--cov=backtest",
+    "--cov=src/utils",
+    "--cov=src/api",
+    "--cov=src/analysis",
+    "--cov=src/strategies",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
     "--cov-report=xml",
@@ -80,7 +80,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["utils", "fetch", "screening", "backtest"]
+source = ["src/utils", "src/api", "src/analysis", "src/strategies"]
 omit = [
     "*/tests/*",
     "*/test_*.py",
@@ -112,5 +112,5 @@ skips = ["*_test.py", "*/test_*.py"]
 profile = "black"
 multi_line_output = 3
 line_length = 120
-known_first_party = ["utils", "fetch", "screening", "backtest"]
+known_first_party = ["src"]
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]

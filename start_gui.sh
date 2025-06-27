@@ -13,4 +13,4 @@ echo "DISPLAY設定: $DISPLAY"
 echo "GUI起動中..."
 
 # GUIアプリケーションを起動
-python3 gui.py
+python3 desktop/gui.py

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>結果ファイル一覧 - Swing Trading</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>📊 結果ファイル一覧</h1>
+            <p class="subtitle">バックテスト結果とスクリーニング結果の管理</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Navigation -->
+        <div class="nav-section slide-in">
+            <div class="nav-links">
+                <a href="/" class="nav-link">
+                    🏠 <span>メイン画面</span>
+                </a>
+                <a href="/logs" class="nav-link secondary">
+                    📊 <span>リアルタイムログ</span>
+                </a>
+                <a href="/thresholds" class="nav-link" style="background: linear-gradient(135deg, #f39c12, #e67e22);">
+                    ⚙️ <span>閾値設定</span>
+                </a>
+                <a href="#" onclick="refreshFileList()" class="nav-link accent">
+                    🔄 <span>一覧更新</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- Excel Files -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-icon">📈</span>
+                    <h2>Excelファイル</h2>
+                    <div class="status-indicator">
+                        <span id="xlsx-count">{{ xlsx_files|length }}</span> ファイル
+                    </div>
+                </div>
+
+                <div class="file-list" id="xlsx-list">
+                    {% if xlsx_files %}
+                        {% for file in xlsx_files %}
+                        <div class="file-item">
+                            <div class="file-info">
+                                <div class="file-name">📊 {{ file.name }}</div>
+                                <div class="file-details">
+                                    <span class="file-size">{{ "%.1f"|format(file.stat().st_size / 1024 / 1024) }} MB</span>
+                                    <span class="file-date">{{ file.stat().st_mtime | datetime_format }}</span>
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <a href="{{ file.name }}" class="btn btn-secondary" download>
+                                    💾 ダウンロード
+                                </a>
+                                <button onclick="previewFile('{{ file.name }}')" class="btn btn-secondary">
+                                    👁️ プレビュー
+                                </button>
+                                <button onclick="deleteFile('{{ file.name }}')" class="btn" style="background: var(--accent-color);">
+                                    🗑️ 削除
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <span class="empty-icon">📄</span>
+                            <p>Excelファイルがありません</p>
+                            <p class="empty-hint">バックテストを実行すると結果ファイルが生成されます</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- JSON Files -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-icon">🔧</span>
+                    <h2>JSONファイル</h2>
+                    <div class="status-indicator">
+                        <span id="json-count">{{ json_files|length }}</span> ファイル
+                    </div>
+                </div>
+
+                <div class="file-list" id="json-list">
+                    {% if json_files %}
+                        {% for file in json_files %}
+                        <div class="file-item">
+                            <div class="file-info">
+                                <div class="file-name">🔧 {{ file.name }}</div>
+                                <div class="file-details">
+                                    <span class="file-size">{{ "%.1f"|format(file.stat().st_size / 1024) }} KB</span>
+                                    <span class="file-date">{{ file.stat().st_mtime | datetime_format }}</span>
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <a href="{{ file.name }}" class="btn btn-secondary" download>
+                                    💾 ダウンロード
+                                </a>
+                                <button onclick="previewJson('{{ file.name }}')" class="btn btn-secondary">
+                                    👁️ プレビュー
+                                </button>
+                                {% if file.name.endswith('.json') and not file.name in ['idtoken.json', 'account.json', 'login.json'] %}
+                                <button onclick="analyzeJson('{{ file.name }}')" class="btn btn-success">
+                                    📊 分析実行
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <span class="empty-icon">🔧</span>
+                            <p>JSONファイルがありません</p>
+                            <p class="empty-hint">設定ファイルやバックテスト結果のJSONファイルが表示されます</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- JSON Analysis Modal -->
+        <div class="card" id="json-analysis" style="display: none;">
+            <div class="card-header">
+                <span class="card-icon">📊</span>
+                <h2>JSON分析実行</h2>
+                <button onclick="closeJsonAnalysis()" class="btn btn-secondary" style="margin-left: auto;">
+                    ✕ 閉じる
+                </button>
+            </div>
+
+            <form action="/run/analyze_json" method="post" onsubmit="showExecutingMessage(this)">
+                <div class="form-description">
+                    📈 <strong>機能:</strong> バックテスト結果JSONファイルの詳細分析を実行します。<br>
+                    📊 <strong>出力:</strong> 取引統計、パフォーマンス指標、リスク分析等の詳細レポート。
+                </div>
+
+                <div class="form-row">
+                    <div class="form-field">
+                        <label for="analysis_files">分析対象ファイル</label>
+                        <select id="analysis_files" name="files" multiple size="5">
+                            {% for file in json_files %}
+                                {% if file.name.startswith('backtest_') or file.name.startswith('trades_') %}
+                                <option value="{{ file.name }}">{{ file.name }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                        <div class="field-description">複数選択可能（Ctrl+クリック）</div>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="analysis_side">取引方向</label>
+                        <select id="analysis_side" name="side">
+                            <option value="">両方向</option>
+                            <option value="long">ロング（買い）</option>
+                            <option value="short">ショート（売り）</option>
+                        </select>
+                        <div class="field-description">分析対象の取引方向</div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-field">
+                        <label>オプション</label>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                            <input type="checkbox" id="show_trades" name="show_trades" value="1">
+                            <label for="show_trades" style="margin: 0;">取引詳細を表示</label>
+                        </div>
+                        <div class="field-description">個別取引の詳細情報も出力</div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-full">📊 分析実行</button>
+            </form>
+        </div>
+    </div>
+
+    <style>
+        .file-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: #f8f9fa;
+            transition: var(--transition);
+        }
+
+        .file-item:hover {
+            background: #e9ecef;
+            border-color: var(--primary-color);
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.3rem;
+        }
+
+        .file-details {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .file-actions .btn {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            display: block;
+            margin-bottom: 1rem;
+        }
+
+        .empty-hint {
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .file-item {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 1rem;
+            }
+
+            .file-actions {
+                justify-content: center;
+            }
+        }
+    </style>
+
+    <script>
+        function refreshFileList() {
+            location.reload();
+        }
+
+        function previewFile(filename) {
+            // Excel ファイルのプレビューは簡単な情報表示
+            alert(`📊 ${filename}\n\nExcelファイルをダウンロードして確認してください。\nLibreOffice Calc や Microsoft Excel で開けます。`);
+        }
+
+        function previewJson(filename) {
+            fetch(`/${filename}`)
+                .then(response => response.text())
+                .then(data => {
+                    try {
+                        const jsonData = JSON.parse(data);
+                        const preview = JSON.stringify(jsonData, null, 2).substring(0, 500);
+                        alert(`🔧 ${filename}\n\n${preview}${data.length > 500 ? '\n...(省略)' : ''}`);
+                    } catch (e) {
+                        alert(`🔧 ${filename}\n\nJSONの解析に失敗しました。\nファイルをダウンロードして確認してください。`);
+                    }
+                })
+                .catch(error => {
+                    alert(`ファイルの読み込みに失敗しました: ${error}`);
+                });
+        }
+
+        function deleteFile(filename) {
+            const confirmed = confirm(`⚠️ 確認\n\n「${filename}」を削除しますか？\nこの操作は取り消せません。`);
+            if (confirmed) {
+                // この機能は実装時にサーバーサイドでの削除機能が必要
+                alert('ファイル削除機能は現在開発中です。手動でファイルを削除してください。');
+            }
+        }
+
+        function analyzeJson(filename) {
+            document.getElementById('json-analysis').style.display = 'block';
+            // 選択されたファイルを設定
+            const select = document.getElementById('analysis_files');
+            for (let option of select.options) {
+                option.selected = option.value === filename;
+            }
+
+            // スクロールして表示
+            document.getElementById('json-analysis').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function closeJsonAnalysis() {
+            document.getElementById('json-analysis').style.display = 'none';
+        }
+
+        function showExecutingMessage(form) {
+            const button = form.querySelector('button[type="submit"]');
+            if (button) {
+                const originalHTML = button.innerHTML;
+                button.innerHTML = '⚡ 実行中...';
+                button.classList.add('executing');
+                button.disabled = true;
+
+                setTimeout(() => {
+                    form.submit();
+                }, 100);
+
+                return false;
+            }
+            return true;
+        }
+    </script>
+</body>
+</html>
