@@ -3,89 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <title>Swing Web</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            background: #f5f7fa;
+        }
+        .execute-btn {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(52,152,219,0.3);
+        }
+        .execute-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(52,152,219,0.4);
+        }
+        .execute-btn:active {
+            transform: translateY(0);
+        }
+        .execute-btn.executing {
+            background: linear-gradient(135deg, #e67e22, #d35400);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        form {
+            background: white;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+        input[type="text"], input[type="password"] {
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            margin: 5px;
+            transition: border-color 0.3s ease;
+        }
+        input[type="text"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+    </style>
 </head>
 <body>
     <h1>Swing Web App</h1>
+    <div style="background: linear-gradient(135deg, #e3f2fd, #f0f8ff); padding: 20px; margin: 15px 0; border-radius: 15px; border-left: 5px solid #3498db; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+        <strong style="font-size: 1.3em; color: #2c3e50;">🔍 システム監視 & 進捗確認</strong><br>
+        <div style="margin-top: 15px; display: flex; flex-wrap: wrap; gap: 10px;">
+            <a href="/logs" style="background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 10px 20px; border-radius: 25px; text-decoration: none; font-weight: bold; box-shadow: 0 4px 15px rgba(52,152,219,0.3); transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;">
+                📊 <span>リアルタイムログ</span>
+            </a>
+            <a href="/status" style="background: linear-gradient(135deg, #27ae60, #229954); color: white; padding: 10px 20px; border-radius: 25px; text-decoration: none; font-weight: bold; box-shadow: 0 4px 15px rgba(39,174,96,0.3); transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;">
+                🔍 <span>システムステータス</span>
+            </a>
+            <a href="#" onclick="showAllTasks()" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; padding: 10px 20px; border-radius: 25px; text-decoration: none; font-weight: bold; box-shadow: 0 4px 15px rgba(155,89,182,0.3); transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;">
+                ⚡ <span>全タスク一覧</span>
+            </a>
+            <a href="#" onclick="showLatestTask()" style="background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; padding: 10px 20px; border-radius: 25px; text-decoration: none; font-weight: bold; box-shadow: 0 4px 15px rgba(231,76,60,0.3); transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;">
+                🚀 <span>最新タスク進捗</span>
+            </a>
+        </div>
+        <div style="margin-top: 15px; padding: 10px; background: rgba(52,152,219,0.1); border-radius: 8px; font-size: 0.9em; color: #2c3e50;">
+            💡 <strong>ヒント:</strong> コマンド実行時は自動で進捗状況ページに移動します。ブラウザを閉じても、「最新タスク進捗」から再度確認できます。
+        </div>
+    </div>
     <h2>株価取得</h2>
-    <form action="/run/fetch_quotes" method="post">
+    <form action="/run/fetch_quotes" method="post" onsubmit="showExecutingMessage(this)">
         開始日: <input type="text" name="start" placeholder="2024-01-01">
         終了日: <input type="text" name="end" placeholder="2024-12-31">
-        <button type="submit">実行</button>
+        <button type="submit" class="execute-btn">🚀 実行</button>
     </form>
 
     <h2>上場情報取得</h2>
-    <form action="/run/listed_info" method="post">
-        <button type="submit">実行</button>
+    <form action="/run/listed_info" method="post" onsubmit="showExecutingMessage(this)">
+        <button type="submit" class="execute-btn">📋 実行</button>
     </form>
 
     <h2>財務諸表取得</h2>
-    <form action="/run/statements" method="post">
+    <form action="/run/statements" method="post" onsubmit="showExecutingMessage(this)">
         モード: <input type="text" name="mode" value="1" size="4">
         開始日: <input type="text" name="start" placeholder="2024-01-01">
         終了日: <input type="text" name="end" placeholder="2024-12-31">
-        <button type="submit">実行</button>
+        <button type="submit" class="execute-btn">📊 実行</button>
     </form>
 
     <h2>財務スクリーニング</h2>
-    <form action="/run/screen_fund" method="post">
+    <form action="/run/screen_fund" method="post" onsubmit="showExecutingMessage(this)">
         参照期間: <input type="text" name="lookback" value="1095" size="6">
         開示閾値: <input type="text" name="recent" value="7" size="4">
         基準日: <input type="text" name="as_of" placeholder="2024-12-31">
-        <button type="submit">実行</button>
+        <button type="submit" class="execute-btn">🔍 実行</button>
     </form>
 
     <h2>テクニカルスクリーニング</h2>
-    <form action="/run/screen_tech" method="post">
+    <form action="/run/screen_tech" method="post" onsubmit="showExecutingMessage(this)">
         コマンド: <input type="text" name="cmd" value="indicators" size="12">
         対象日: <input type="text" name="as_of" placeholder="2024-12-31">
         過去参照日数: <input type="text" name="lookback" value="50" size="6">
-        <button type="submit">実行</button>
+        <button type="submit" class="execute-btn">📈 実行</button>
     </form>
 
     <h2>MLスクリーニング</h2>
-    <form action="/run/screen_ml" method="post">
+    <form action="/run/screen_ml" method="post" onsubmit="showExecutingMessage(this)">
         上位件数: <input type="text" name="top" value="30" size="6">
         学習参照日数: <input type="text" name="lookback" value="1095" size="8">
         <label><input type="checkbox" name="retrain" value="1">強制再学習</label>
-        <button type="submit">実行</button>
+        <button type="submit" class="execute-btn">🤖 実行</button>
     </form>
 
     <h2>ファンダメンタルバックテスト</h2>
-    <form action="/run/backtest_stmt" method="post">
+    <form action="/run/backtest_stmt" method="post" onsubmit="showExecutingMessage(this)">
         保有日数: <input type="text" name="hold" value="40" size="4">
         オフセット: <input type="text" name="offset" value="1" size="4">
         資金: <input type="text" name="capital" value="1000000" size="8">
         開始日: <input type="text" name="start" placeholder="2023-01-01">
         終了日: <input type="text" name="end" placeholder="2024-12-31">
         出力ファイル: <input type="text" name="xlsx" value="trades.xlsx" size="12">
-        <button type="submit">実行</button>
+        <button type="submit" class="execute-btn">💹 実行</button>
     </form>
 
     <h2>テクニカルバックテスト</h2>
-    <form action="/run/backtest_tech" method="post">
+    <form action="/run/backtest_tech" method="post" onsubmit="showExecutingMessage(this)">
         開始日: <input type="text" name="start" placeholder="2023-01-01">
         終了日: <input type="text" name="end" placeholder="2024-12-31">
         保有日数: <input type="text" name="hold" value="60" size="4">
         損切り率: <input type="text" name="stop" value="0.05" size="6">
         資金: <input type="text" name="capital" value="1000000" size="8">
         出力ファイル: <input type="text" name="outfile" value="backtest.xlsx" size="15">
-        <button type="submit">実行</button>
+        <button type="submit" class="execute-btn">📊 実行</button>
     </form>
 
     <h2>IDトークン更新</h2>
-    <form action="/run/update_token" method="post">
+    <form action="/run/update_token" method="post" onsubmit="showExecutingMessage(this)">
         メール: <input type="text" name="mail">
         パスワード: <input type="password" name="password">
-        <button type="submit">実行</button>
+        <button type="submit" class="execute-btn">🔑 実行</button>
     </form>
 
     <h2>DBサマリー</h2>
-    <form action="/run/db_summary" method="post">
-        <button type="submit">実行</button>
+    <form action="/run/db_summary" method="post" onsubmit="showExecutingMessage(this)">
+        <button type="submit" class="execute-btn">📋 実行</button>
     </form>
 
     <h2>シグナル確認</h2>
-    <form action="/run/list_signals" method="post">
+    <form action="/run/list_signals" method="post" onsubmit="showExecutingMessage(this)">
         種類:
         <select name="kind">
             <option value="fund">ファンダメンタル</option>
@@ -94,11 +172,11 @@
         開始日: <input type="text" name="start" placeholder="2024-01-01">
         終了日: <input type="text" name="end" placeholder="2024-12-31">
         表示件数: <input type="text" name="limit" value="20" size="4">
-        <button type="submit">実行</button>
+        <button type="submit" class="execute-btn">🔍 実行</button>
     </form>
 
     <h2>JSON分析</h2>
-    <form action="/run/analyze_json" method="post">
+    <form action="/run/analyze_json" method="post" onsubmit="showExecutingMessage(this)">
         <select name="files" multiple size="5">
             {% for f in json_files %}
             <option value="{{ f }}">{{ f }}</option>
@@ -110,7 +188,7 @@
             <option value="short">short</option>
         </select>
         <label><input type="checkbox" name="show_trades" value="1">取引表示</label>
-        <button type="submit">実行</button>
+        <button type="submit" class="execute-btn">📄 実行</button>
     </form>
 
     <h2>閾値設定</h2>
@@ -127,5 +205,130 @@
         <li><a href="{{ f }}">{{ f }}</a></li>
         {% endfor %}
     </ul>
+
+    <script>
+        function showExecutingMessage(form) {
+            const button = form.querySelector('button[type="submit"]');
+            if (button) {
+                const originalText = button.innerHTML;
+                button.innerHTML = '⚡ 実行中...';
+                button.classList.add('executing');
+                button.disabled = true;
+
+                // フォームの送信を遅らせてアニメーションを表示
+                setTimeout(() => {
+                    // フォームを送信
+                    form.submit();
+                }, 100);
+
+                return false; // 初回の送信をキャンセル
+            }
+            return true;
+        }
+
+        // ページ読み込み時に実行中タスク数を表示
+        function updateRunningTasksCount() {
+            fetch('/api/tasks')
+                .then(response => response.json())
+                .then(tasks => {
+                    const runningCount = Object.values(tasks).filter(task => task.status === 'running').length;
+                    if (runningCount > 0) {
+                        document.title = `(🖨️${runningCount}) Swing Web`;
+
+                        // ヘッダーに通知を追加
+                        const existingNotice = document.getElementById('running-notice');
+                        if (!existingNotice) {
+                            const notice = document.createElement('div');
+                            notice.id = 'running-notice';
+                            notice.style.cssText = `
+                                background: linear-gradient(135deg, #e67e22, #d35400);
+                                color: white;
+                                padding: 10px;
+                                text-align: center;
+                                font-weight: bold;
+                                animation: pulse 2s infinite;
+                                border-radius: 5px;
+                                margin: 10px 0;
+                            `;
+                            notice.innerHTML = `⚡ 現在 ${runningCount} 個のタスクが実行中です - <a href="/logs" style="color: white; text-decoration: underline;">ログで確認</a>`;
+                            document.body.insertBefore(notice, document.body.firstChild);
+                        }
+                    } else {
+                        document.title = 'Swing Web';
+                        const notice = document.getElementById('running-notice');
+                        if (notice) notice.remove();
+                    }
+                })
+                .catch(error => console.log('タスク状態取得エラー:', error));
+        }
+
+        // 全タスク一覧を表示
+        function showAllTasks() {
+            fetch('/api/tasks')
+                .then(response => response.json())
+                .then(tasks => {
+                    let taskList = '📋 全タスク一覧:\n\n';
+                    const taskEntries = Object.entries(tasks);
+
+                    if (taskEntries.length === 0) {
+                        taskList += '現在、実行中または完了したタスクはありません。';
+                    } else {
+                        taskEntries.forEach(([taskId, task]) => {
+                            const status = task.status === 'running' ? '⚡実行中' :
+                                          task.status === 'completed' ? '✅完了' : '❌失敗';
+                            taskList += `${status} [${taskId.substring(0,8)}] ${task.command}\n`;
+                            if (task.start_time) {
+                                taskList += `   開始: ${task.start_time}\n`;
+                            }
+                            if (task.end_time) {
+                                taskList += `   終了: ${task.end_time}\n`;
+                            }
+                            taskList += '\n';
+                        });
+                    }
+
+                    alert(taskList);
+                })
+                .catch(error => {
+                    alert('タスク一覧の取得に失敗しました: ' + error);
+                });
+        }
+
+        // 最新タスクの進捗状況を表示
+        function showLatestTask() {
+            fetch('/api/tasks')
+                .then(response => response.json())
+                .then(tasks => {
+                    const taskEntries = Object.entries(tasks);
+
+                    if (taskEntries.length === 0) {
+                        alert('📋 実行中または完了したタスクがありません。');
+                        return;
+                    }
+
+                    // 最新のタスクを見つける（開始時刻順）
+                    const latestTask = taskEntries.reduce((latest, [taskId, task]) => {
+                        if (!latest || (task.start_time && task.start_time > latest.start_time)) {
+                            return { taskId, ...task };
+                        }
+                        return latest;
+                    }, null);
+
+                    if (latestTask && latestTask.taskId) {
+                        // 進捗状況ページに移動
+                        window.open(`/task/${latestTask.taskId}`, '_blank');
+                    } else {
+                        alert('📋 利用可能なタスクがありません。');
+                    }
+                })
+                .catch(error => {
+                    alert('最新タスクの取得に失敗しました: ' + error);
+                });
+        }
+
+        // 初回読み込みと定期更新
+        updateRunningTasksCount();
+        setInterval(updateRunningTasksCount, 3000);
+    </script>
 </body>
 </html>

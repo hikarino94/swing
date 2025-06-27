@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>タスク実行状況 - Swing Trading</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+
+        .status-container {
+            padding: 30px;
+        }
+
+        .status-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 5px solid;
+            transition: all 0.3s ease;
+        }
+
+        .status-card.running {
+            border-left-color: #3498db;
+            background: linear-gradient(45deg, #e3f2fd, #f8f9fa);
+            animation: pulse-border 2s infinite;
+        }
+
+        .status-card.completed {
+            border-left-color: #27ae60;
+            background: linear-gradient(45deg, #e8f5e8, #f8f9fa);
+        }
+
+        .status-card.failed {
+            border-left-color: #e74c3c;
+            background: linear-gradient(45deg, #ffebee, #f8f9fa);
+        }
+
+        .status-card.error {
+            border-left-color: #e67e22;
+            background: linear-gradient(45deg, #fff3e0, #f8f9fa);
+        }
+
+        @keyframes pulse-border {
+            0% { border-left-width: 5px; }
+            50% { border-left-width: 8px; }
+            100% { border-left-width: 5px; }
+        }
+
+        .status-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+            display: block;
+            text-align: center;
+        }
+
+        .status-text {
+            font-size: 1.5em;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .status-text.running { color: #3498db; }
+        .status-text.completed { color: #27ae60; }
+        .status-text.failed { color: #e74c3c; }
+        .status-text.error { color: #e67e22; }
+
+        .command-info {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 20px 0;
+            word-break: break-all;
+        }
+
+        .time-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .time-card {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .time-label {
+            font-size: 0.9em;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+
+        .time-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #ecf0f1;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            border-radius: 4px;
+            animation: progress-animate 2s infinite;
+        }
+
+        @keyframes progress-animate {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .output-container {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            max-height: 400px;
+            overflow-y: auto;
+            margin: 20px 0;
+            white-space: pre-wrap;
+            line-height: 1.4;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #27ae60, #229954);
+            color: white;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .auto-refresh {
+            background: #e8f5e8;
+            border: 1px solid #27ae60;
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 0.9em;
+            color: #27ae60;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .log-link {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: bold;
+            background: #e3f2fd;
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+            margin: 10px 5px;
+            transition: all 0.3s ease;
+        }
+
+        .log-link:hover {
+            background: #bbdefb;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ タスク実行状況</h1>
+            <div class="auto-refresh">🔄 自動更新中 (1秒間隔)</div>
+        </div>
+
+        <div class="status-container">
+            <div class="status-card" id="status-card">
+                <div class="spinner" id="spinner"></div>
+                <div class="status-icon" id="status-icon">🚀</div>
+                <div class="status-text" id="status-text">実行中</div>
+
+                <div class="command-info" id="command-info">
+                    <strong>実行コマンド:</strong><br>
+                    <span id="command-text">{{ task_info.command if task_info else 'ロード中...' }}</span>
+                </div>
+
+                <div class="progress-bar" id="progress-bar" style="display: none;">
+                    <div class="progress-fill"></div>
+                </div>
+
+                <div class="time-info" id="time-info">
+                    <div class="time-card">
+                        <div class="time-label">開始時刻</div>
+                        <div class="time-value" id="start-time">-</div>
+                    </div>
+                    <div class="time-card">
+                        <div class="time-label">経過時間</div>
+                        <div class="time-value" id="elapsed-time">-</div>
+                    </div>
+                    <div class="time-card" id="end-time-card" style="display: none;">
+                        <div class="time-label">終了時刻</div>
+                        <div class="time-value" id="end-time">-</div>
+                    </div>
+                    <div class="time-card" id="return-code-card" style="display: none;">
+                        <div class="time-label">終了コード</div>
+                        <div class="time-value" id="return-code">-</div>
+                    </div>
+                </div>
+
+                <div class="output-container" id="output-container" style="display: none;">
+                    <div id="output-content">出力を待機中...</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <a href="/logs" class="log-link">📊 リアルタイムログを見る</a>
+                <a href="/status" class="log-link">🔍 システム状況を見る</a>
+                <button class="btn btn-primary" onclick="refreshStatus()">🔄 手動更新</button>
+                <button class="btn btn-secondary" onclick="toggleOutput()">👁️ 出力表示切替</button>
+                <button class="btn btn-secondary" onclick="showOtherTasks()">📋 他のタスク</button>
+                <a href="/" class="btn btn-success">🏠 メインに戻る</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const taskId = '{{ task_id }}';
+        let taskStartTime = null;
+        let updateInterval = null;
+        let outputVisible = false;
+
+        const statusIcons = {
+            'running': '⚡',
+            'completed': '✅',
+            'failed': '❌',
+            'error': '⚠️'
+        };
+
+        const statusTexts = {
+            'running': '実行中',
+            'completed': '完了',
+            'failed': '失敗',
+            'error': 'エラー'
+        };
+
+        function updateTaskStatus() {
+            fetch(`/api/task/${taskId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Task not found');
+                        window.location.href = '/';
+                        return;
+                    }
+
+                    const status = data.status;
+                    const statusCard = document.getElementById('status-card');
+                    const statusIcon = document.getElementById('status-icon');
+                    const statusText = document.getElementById('status-text');
+                    const spinner = document.getElementById('spinner');
+                    const progressBar = document.getElementById('progress-bar');
+
+                    // ステータス表示更新
+                    statusCard.className = `status-card ${status}`;
+                    statusIcon.textContent = statusIcons[status] || '❓';
+                    statusText.textContent = statusTexts[status] || status;
+                    statusText.className = `status-text ${status}`;
+
+                    // スピナーとプログレスバー
+                    if (status === 'running') {
+                        spinner.style.display = 'block';
+                        progressBar.style.display = 'block';
+                    } else {
+                        spinner.style.display = 'none';
+                        progressBar.style.display = 'none';
+                    }
+
+                    // 時刻情報更新
+                    if (data.start_time) {
+                        document.getElementById('start-time').textContent = data.start_time;
+                        taskStartTime = new Date(data.start_time);
+                    }
+
+                    if (data.end_time) {
+                        document.getElementById('end-time').textContent = data.end_time;
+                        document.getElementById('end-time-card').style.display = 'block';
+                    }
+
+                    if (data.output && data.output.return_code !== undefined) {
+                        document.getElementById('return-code').textContent = data.output.return_code;
+                        document.getElementById('return-code-card').style.display = 'block';
+                    }
+
+                    // 出力表示
+                    if (data.output) {
+                        const outputContainer = document.getElementById('output-container');
+                        const outputContent = document.getElementById('output-content');
+                        outputContent.textContent = data.output.output || '出力なし';
+                        if (outputVisible || status !== 'running') {
+                            outputContainer.style.display = 'block';
+                        }
+                    }
+
+                    // 完了時は自動更新を停止
+                    if (status !== 'running' && updateInterval) {
+                        clearInterval(updateInterval);
+                        updateInterval = null;
+                    }
+                })
+                .catch(error => {
+                    console.error('Status update error:', error);
+                });
+        }
+
+        function updateElapsedTime() {
+            if (taskStartTime) {
+                const now = new Date();
+                const elapsed = Math.floor((now - taskStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                document.getElementById('elapsed-time').textContent =
+                    `${minutes}分${seconds}秒`;
+            }
+        }
+
+        function refreshStatus() {
+            updateTaskStatus();
+        }
+
+        function toggleOutput() {
+            const outputContainer = document.getElementById('output-container');
+            outputVisible = !outputVisible;
+            outputContainer.style.display = outputVisible ? 'block' : 'none';
+        }
+
+        function showOtherTasks() {
+            fetch('/api/tasks')
+                .then(response => response.json())
+                .then(tasks => {
+                    const taskEntries = Object.entries(tasks);
+                    const otherTasks = taskEntries.filter(([id, task]) => id !== taskId);
+
+                    if (otherTasks.length === 0) {
+                        alert('📋 他のタスクはありません。');
+                        return;
+                    }
+
+                    let taskList = '📋 他のタスク一覧:\n\n';
+                    otherTasks.forEach(([id, task]) => {
+                        const status = task.status === 'running' ? '⚡実行中' :
+                                      task.status === 'completed' ? '✅完了' : '❌失敗';
+                        taskList += `${status} [${id.substring(0,8)}] ${task.command}\n`;
+                        if (task.start_time) {
+                            taskList += `   開始: ${task.start_time}\n`;
+                        }
+                        taskList += '\n';
+                    });
+
+                    const choice = confirm(taskList + '\n他のタスクの詳細を見る場合は「OK」を押してください。');
+                    if (choice && otherTasks.length > 0) {
+                        // 最新の他のタスクページを開く
+                        const latestOtherTask = otherTasks[0];
+                        window.open(`/task/${latestOtherTask[0]}`, '_blank');
+                    }
+                })
+                .catch(error => {
+                    alert('他のタスクの取得に失敗しました: ' + error);
+                });
+        }
+
+        // 初期化
+        updateTaskStatus();
+        updateInterval = setInterval(updateTaskStatus, 1000);
+        setInterval(updateElapsedTime, 1000);
+
+        // ページを離れる時に自動更新を停止
+        window.addEventListener('beforeunload', function() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+        });
+    </script>
+</body>
+</html>

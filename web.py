@@ -1,17 +1,128 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
+import queue
 import shlex
 import subprocess
+import threading
+import uuid
+from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, redirect, render_template, request, url_for
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 
 app = Flask(__name__)
 
+# アプリケーションログ設定
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("web_app.log"), logging.StreamHandler()],
+)
+logger = logging.getLogger(__name__)
+
+# ログメッセージのキュー
+log_queue = queue.Queue(maxsize=1000)
+
+# 実行中のタスク管理
+running_tasks = {}
+task_outputs = {}
+
+
+class LogHandler(logging.Handler):
+    """ログをキューに保存するハンドラー"""
+
+    def emit(self, record):
+        log_entry = {
+            "timestamp": datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S"),
+            "level": record.levelname,
+            "message": self.format(record),
+        }
+        try:
+            log_queue.put_nowait(log_entry)
+        except queue.Full:
+            # キューが満杯の場合は古いものを削除
+            try:
+                log_queue.get_nowait()
+                log_queue.put_nowait(log_entry)
+            except queue.Empty:
+                pass
+
+
+# ログハンドラーを追加
+log_handler = LogHandler()
+log_handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
+log_handler.setFormatter(formatter)
+logging.getLogger().addHandler(log_handler)
+
+
+def run_command_async(cmd: str, task_id: str) -> None:
+    """Run a shell command asynchronously and store results."""
+    import os
+
+    logger.info(f"🚀 コマンド実行開始: {cmd} (ID: {task_id})")
+
+    # タスク開始を記録
+    running_tasks[task_id] = {"command": cmd, "status": "running", "start_time": datetime.now(), "pid": None}
+
+    try:
+        # PATH設定を追加
+        env = os.environ.copy()
+        env["PATH"] = f"{os.path.expanduser('~/.local/bin')}:{env.get('PATH', '')}"
+
+        proc = subprocess.Popen(
+            shlex.split(cmd),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=env,
+            bufsize=1,
+            universal_newlines=True,
+        )
+
+        # PIDを記録
+        running_tasks[task_id]["pid"] = proc.pid
+        logger.info(f"📊 プロセス開始 PID: {proc.pid}")
+
+        output_lines = []
+
+        # リアルタイムで出力を読み取り
+        for line in iter(proc.stdout.readline, ""):
+            if line:
+                output_lines.append(line.rstrip())
+                logger.info(f"[{task_id[:8]}] {line.rstrip()}")
+
+        proc.wait()
+
+        full_output = "\n".join(output_lines)
+
+        # タスク完了を記録
+        running_tasks[task_id].update(
+            {
+                "status": "completed" if proc.returncode == 0 else "failed",
+                "end_time": datetime.now(),
+                "return_code": proc.returncode,
+            }
+        )
+
+        task_outputs[task_id] = {"output": full_output, "return_code": proc.returncode, "command": cmd}
+
+        if proc.returncode == 0:
+            logger.info(f"✅ コマンド実行完了: {cmd} (ID: {task_id})")
+        else:
+            logger.error(f"❌ コマンド実行失敗: {cmd} (ID: {task_id}, Code: {proc.returncode})")
+
+    except Exception as e:
+        logger.error(f"💥 コマンド実行エラー: {e} (ID: {task_id})")
+        running_tasks[task_id].update({"status": "error", "end_time": datetime.now(), "error": str(e)})
+        task_outputs[task_id] = {"output": f"エラーが発生しました: {e}", "return_code": -1, "command": cmd}
+
 
 def run_command(cmd: str) -> tuple[str, int]:
-    """Run a shell command and return output and exit code."""
+    """Run a shell command and return output and exit code (legacy function)."""
     import os
 
     # PATH設定を追加
@@ -47,6 +158,9 @@ def run(cmd_name: str):
     """Handle form submission and execute commands."""
     form = request.form
     cmd = ""
+
+    # タスクIDを生成
+    task_id = str(uuid.uuid4())
 
     if cmd_name == "fetch_quotes":
         cmd = "python3 fetch/daily_quotes.py"
@@ -126,8 +240,13 @@ def run(cmd_name: str):
     else:
         return redirect(url_for("index"))
 
-    output, code = run_command(cmd)
-    return render_template("output.html", command=cmd, output=output, code=code)
+    # 非同期でコマンドを実行
+    thread = threading.Thread(target=run_command_async, args=(cmd, task_id))
+    thread.daemon = True
+    thread.start()
+
+    # 実行中ページにリダイレクト
+    return redirect(url_for("task_status", task_id=task_id))
 
 
 @app.post("/thresholds")
@@ -140,5 +259,125 @@ def save_thresholds():
     return redirect(url_for("index"))
 
 
+@app.route("/logs")
+def logs():
+    """ログ表示ページ"""
+    return render_template("logs.html")
+
+
+@app.route("/api/logs")
+def api_logs():
+    """ログデータをJSON形式で返すAPI"""
+    logs = []
+    try:
+        while True:
+            log_entry = log_queue.get_nowait()
+            logs.append(log_entry)
+    except queue.Empty:
+        pass
+
+    # 最新100件に制限
+    return jsonify(logs[-100:])
+
+
+@app.route("/status")
+def status():
+    """アプリケーション状態確認"""
+    status_info = {
+        "status": "running",
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "log_count": log_queue.qsize(),
+        "running_tasks": len([t for t in running_tasks.values() if t["status"] == "running"]),
+        "total_tasks": len(running_tasks),
+    }
+    return jsonify(status_info)
+
+
+@app.route("/task/<task_id>")
+def task_status(task_id: str):
+    """タスクの実行状況を表示"""
+    if task_id not in running_tasks:
+        return redirect(url_for("index"))
+
+    task_info = running_tasks[task_id]
+    return render_template("task_status.html", task_id=task_id, task_info=task_info)
+
+
+@app.route("/api/task/<task_id>")
+def api_task_status(task_id: str):
+    """タスク状態をJSONで返す"""
+    if task_id not in running_tasks:
+        return jsonify({"error": "Task not found"}), 404
+
+    task_info = running_tasks[task_id].copy()
+
+    # 時刻を文字列に変換
+    if "start_time" in task_info:
+        task_info["start_time"] = task_info["start_time"].strftime("%Y-%m-%d %H:%M:%S")
+    if "end_time" in task_info:
+        task_info["end_time"] = task_info["end_time"].strftime("%Y-%m-%d %H:%M:%S")
+
+    # 結果がある場合は追加
+    if task_id in task_outputs:
+        task_info["output"] = task_outputs[task_id]
+
+    return jsonify(task_info)
+
+
+@app.route("/api/tasks")
+def api_all_tasks():
+    """全タスクの状態を返す"""
+    tasks = {}
+    for task_id, task_info in running_tasks.items():
+        task_copy = task_info.copy()
+        if "start_time" in task_copy:
+            task_copy["start_time"] = task_copy["start_time"].strftime("%Y-%m-%d %H:%M:%S")
+        if "end_time" in task_copy:
+            task_copy["end_time"] = task_copy["end_time"].strftime("%Y-%m-%d %H:%M:%S")
+        tasks[task_id] = task_copy
+
+    return jsonify(tasks)
+
+
+def log_startup_info():
+    """起動情報をログに出力"""
+    port = int(os.environ.get("PORT", 8080))
+    logger.info("=" * 60)
+    logger.info("🚀 Swing Trading Web App 起動中...")
+    logger.info(f"📅 起動時刻: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("")
+    logger.info("🌐 アクセスURL:")
+    logger.info(f"   メイン: http://localhost:{port}")
+    logger.info(f"   ログ: http://localhost:{port}/logs")
+    logger.info(f"   ステータス: http://localhost:{port}/status")
+    logger.info("")
+    logger.info("🛠️ 機能:")
+    logger.info("   ・ リアルタイムログ監視")
+    logger.info("   ・ 非同期タスク実行")
+    logger.info("   ・ 進捗状況確認")
+    logger.info("=" * 60)
+    logger.info("✅ アプリケーションが正常に起動しました")
+    logger.info("💬 コマンド実行時はリアルタイムで進捗状況を表示します")
+    port = int(os.environ.get("PORT", 8080))
+    print("\n" + "=" * 60)
+    print("🚀 Swing Trading Web App 起動完了!")
+    print(f"🌐 ブラウザでアクセス: http://localhost:{port}")
+    print(f"📊 リアルタイムログ: http://localhost:{port}/logs")
+    print("=" * 60 + "\n")
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    # 起動情報をログ出力
+    log_startup_info()
+
+    try:
+        print("🔄 サーバー開始中... (Ctrl+C で終了)")
+        port = int(os.environ.get("PORT", 8080))
+        app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+    except KeyboardInterrupt:
+        logger.info("🛑 アプリケーションを終了しています...")
+        print("\n🛑 アプリケーションを終了しました")
+    except Exception as e:
+        logger.error(f"❌ エラーが発生しました: {e}")
+        print(f"\n❌ エラー: {e}")
+        raise
