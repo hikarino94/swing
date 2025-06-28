@@ -1,7 +1,9 @@
 # Python依存関係
 # システム要件: Ubuntu/Debian: sudo apt install python3-tk
 pandas
+pandas-stubs  # Mypy型チェック用
 requests
+types-requests  # Mypy型チェック用
 schedule
 XlsxWriter
 openpyxl
@@ -9,3 +11,4 @@ Flask
 scikit-learn
 pytest
 pytest-cov
+mypy  # 型チェック用

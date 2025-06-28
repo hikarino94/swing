@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swing Trading - メニュー駆動型インターフェース</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* メニュー駆動型UI専用スタイル */
+        .menu-container {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header h1 {
+            color: white;
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 300;
+        }
+
+        .main-content {
+            display: flex;
+            height: calc(100vh - 80px);
+        }
+
+        /* 左サイドメニュー */
+        .sidebar {
+            width: 300px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-y: auto;
+            padding: 1rem 0;
+        }
+
+        .menu-category {
+            margin-bottom: 0.5rem;
+        }
+
+        .menu-category-title {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 0.5rem 1.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .menu-item {
+            display: block;
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            padding: 0.75rem 1.5rem 0.75rem 2rem;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-left-color: #4ade80;
+            padding-left: 2.25rem;
+        }
+
+        .menu-item.active {
+            background: rgba(255, 255, 255, 0.15);
+            border-left-color: #10b981;
+            color: #10b981;
+            font-weight: 500;
+        }
+
+        .menu-item i {
+            margin-right: 0.5rem;
+            width: 16px;
+            text-align: center;
+        }
+
+        /* メインコンテンツエリア */
+        .content-area {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .welcome-screen {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 3rem;
+        }
+
+        .welcome-screen h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* フォームエリア */
+        .form-area {
+            position: fixed;
+            bottom: 0;
+            left: 300px;
+            right: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+            padding: 1.5rem 2rem;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            max-height: 60vh;
+            overflow-y: auto;
+            box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-area.visible {
+            transform: translateY(0);
+        }
+
+        .form-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .form-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin: 0;
+        }
+
+        .form-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #6b7280;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .form-close:hover {
+            background: rgba(0, 0, 0, 0.05);
+            color: #374151;
+        }
+
+        /* フォームコンテンツ */
+        .form-content {
+            display: none;
+        }
+
+        .form-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        /* アイコン（絵文字で代用） */
+        .icon-home:before { content: "🏠"; }
+        .icon-data:before { content: "📥"; }
+        .icon-analysis:before { content: "🔍"; }
+        .icon-backtest:before { content: "📊"; }
+        .icon-system:before { content: "⚙️"; }
+        .icon-results:before { content: "📋"; }
+
+        /* レスポンシブ対応 */
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: auto;
+                max-height: 200px;
+            }
+
+            .form-area {
+                left: 0;
+                position: relative;
+                transform: none;
+                max-height: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-container">
+        <!-- ヘッダー -->
+        <div class="header">
+            <h1>📈 Swing Trading System</h1>
+        </div>
+
+        <!-- メインコンテンツ -->
+        <div class="main-content">
+            <!-- 左サイドメニュー -->
+            <div class="sidebar">
+                <!-- ダッシュボード -->
+                <div class="menu-category">
+                    <div class="menu-category-title">ダッシュボード</div>
+                    <div class="menu-item" data-form="dashboard">
+                        <i class="icon-home"></i>システム概要
+                    </div>
+                </div>
+
+                <!-- データ管理 -->
+                <div class="menu-category">
+                    <div class="menu-category-title">データ管理</div>
+                    <div class="menu-item" data-form="fetch-quotes">
+                        <i class="icon-data"></i>株価データ取得
+                    </div>
+                    <div class="menu-item" data-form="fetch-statements">
+                        <i class="icon-data"></i>財務諸表取得
+                    </div>
+                    <div class="menu-item" data-form="fetch-listed">
+                        <i class="icon-data"></i>上場情報取得
+                    </div>
+                </div>
+
+                <!-- 分析・スクリーニング -->
+                <div class="menu-category">
+                    <div class="menu-category-title">分析・スクリーニング</div>
+                    <div class="menu-item" data-form="screen-fundamental">
+                        <i class="icon-analysis"></i>ファンダメンタル分析
+                    </div>
+                    <div class="menu-item" data-form="screen-technical">
+                        <i class="icon-analysis"></i>テクニカル分析
+                    </div>
+                    <div class="menu-item" data-form="screen-ml">
+                        <i class="icon-analysis"></i>機械学習分析
+                    </div>
+                </div>
+
+                <!-- バックテスト -->
+                <div class="menu-category">
+                    <div class="menu-category-title">バックテスト</div>
+                    <div class="menu-item" data-form="backtest-fundamental">
+                        <i class="icon-backtest"></i>ファンダメンタル戦略
+                    </div>
+                    <div class="menu-item" data-form="backtest-technical">
+                        <i class="icon-backtest"></i>テクニカル戦略
+                    </div>
+                    <div class="menu-item" data-form="analyze-results">
+                        <i class="icon-backtest"></i>結果分析
+                    </div>
+                </div>
+
+                <!-- システム管理 -->
+                <div class="menu-category">
+                    <div class="menu-category-title">システム管理</div>
+                    <div class="menu-item" data-form="update-token">
+                        <i class="icon-system"></i>APIトークン更新
+                    </div>
+                    <div class="menu-item" data-form="db-management">
+                        <i class="icon-system"></i>データベース管理
+                    </div>
+                    <div class="menu-item" data-form="thresholds">
+                        <i class="icon-system"></i>閾値設定
+                    </div>
+                </div>
+
+                <!-- 結果・レポート -->
+                <div class="menu-category">
+                    <div class="menu-category-title">結果・レポート</div>
+                    <div class="menu-item" data-form="view-results">
+                        <i class="icon-results"></i>結果ファイル管理
+                    </div>
+                    <div class="menu-item" data-form="view-logs">
+                        <i class="icon-results"></i>ログ・監視
+                    </div>
+                </div>
+            </div>
+
+            <!-- メインコンテンツエリア -->
+            <div class="content-area">
+                <div class="welcome-screen">
+                    <h2>📈 Swing Trading System へようこそ</h2>
+                    <p>左のメニューから操作したい機能を選択してください。<br>
+                    選択すると画面下部に入力フォームが表示されます。</p>
+
+                    <div style="margin-top: 2rem; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto;">
+                        <h3 style="color: rgba(255, 255, 255, 0.9); margin-bottom: 1rem;">主な機能</h3>
+                        <ul style="color: rgba(255, 255, 255, 0.7); line-height: 1.6;">
+                            <li><strong>📥 データ管理:</strong> J-Quants APIから株価・財務データを取得</li>
+                            <li><strong>🔍 分析・スクリーニング:</strong> ファンダメンタル・テクニカル・ML分析</li>
+                            <li><strong>📊 バックテスト:</strong> 投資戦略の過去パフォーマンス検証</li>
+                            <li><strong>⚙️ システム管理:</strong> 設定・トークン管理・データベース操作</li>
+                            <li><strong>📋 結果・レポート:</strong> 分析結果の確認・エクスポート</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 下部フォームエリア -->
+        <div class="form-area" id="formArea">
+            <div class="form-header">
+                <h3 class="form-title" id="formTitle">フォーム</h3>
+                <button class="form-close" onclick="closeForm()">&times;</button>
+            </div>
+
+            <!-- 各機能のフォームコンテンツ -->
+            <!-- ダッシュボード -->
+            <div class="form-content" id="form-dashboard">
+                <p>システム全体の状況を表示します。</p>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="loadDashboard()">ダッシュボードを表示</button>
+                </div>
+            </div>
+
+            <!-- 株価データ取得 -->
+            <div class="form-content" id="form-fetch-quotes">
+                <div class="form-group">
+                    <label for="quotes-start">開始日</label>
+                    <input type="date" id="quotes-start" name="start">
+                </div>
+                <div class="form-group">
+                    <label for="quotes-end">終了日</label>
+                    <input type="date" id="quotes-end" name="end">
+                </div>
+                <div class="form-group">
+                    <label for="quotes-workers">並列処理数</label>
+                    <input type="number" id="quotes-workers" name="workers" value="4" min="1" max="10">
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="runCommand('fetch_quotes')">データ取得開始</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- 財務諸表取得 -->
+            <div class="form-content" id="form-fetch-statements">
+                <div class="form-group">
+                    <label for="statements-mode">取得モード</label>
+                    <select id="statements-mode" name="mode">
+                        <option value="1">モード1: 企業別一括取得</option>
+                        <option value="2">モード2: 日付・期間指定</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="statements-start">開始日</label>
+                    <input type="date" id="statements-start" name="start">
+                </div>
+                <div class="form-group">
+                    <label for="statements-end">終了日</label>
+                    <input type="date" id="statements-end" name="end">
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="runCommand('statements')">データ取得開始</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- 上場情報取得 -->
+            <div class="form-content" id="form-fetch-listed">
+                <p>上場企業の基本情報を取得します。</p>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="runCommand('listed_info')">情報取得開始</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- ファンダメンタル分析 -->
+            <div class="form-content" id="form-screen-fundamental">
+                <div class="form-group">
+                    <label for="fund-lookback">分析期間 (日)</label>
+                    <input type="number" id="fund-lookback" name="lookback" value="30" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="fund-recent">最新期間 (日)</label>
+                    <input type="number" id="fund-recent" name="recent" value="7" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="fund-asof">基準日</label>
+                    <input type="date" id="fund-asof" name="as_of">
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="runCommand('screen_fund')">分析開始</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- テクニカル分析 -->
+            <div class="form-content" id="form-screen-technical">
+                <div class="form-group">
+                    <label for="tech-mode">実行モード</label>
+                    <select id="tech-mode" name="mode">
+                        <option value="indicators">指標計算のみ</option>
+                        <option value="screen">スクリーニング実行</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="tech-asof">基準日</label>
+                    <input type="date" id="tech-asof" name="as_of">
+                </div>
+                <div class="form-group">
+                    <label for="tech-lookback">分析期間 (日)</label>
+                    <input type="number" id="tech-lookback" name="lookback" value="252" min="1">
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="runCommand('screen_tech')">分析開始</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- 機械学習分析 -->
+            <div class="form-content" id="form-screen-ml">
+                <div class="form-group">
+                    <label for="ml-mode">実行モード</label>
+                    <select id="ml-mode" name="mode">
+                        <option value="train">モデル学習</option>
+                        <option value="screen">スクリーニング</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="ml-top">上位選択数</label>
+                    <input type="number" id="ml-top" name="top" value="50" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="ml-lookback">学習期間 (日)</label>
+                    <input type="number" id="ml-lookback" name="lookback" value="252" min="1">
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="runCommand('screen_ml')">分析開始</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- ファンダメンタル戦略バックテスト -->
+            <div class="form-content" id="form-backtest-fundamental">
+                <div class="form-group">
+                    <label for="backtest-fund-hold">保有期間 (日)</label>
+                    <input type="number" id="backtest-fund-hold" name="hold" value="5" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="backtest-fund-capital">初期資本 (万円)</label>
+                    <input type="number" id="backtest-fund-capital" name="capital" value="1000" min="100">
+                </div>
+                <div class="form-group">
+                    <label for="backtest-fund-start">開始日</label>
+                    <input type="date" id="backtest-fund-start" name="start">
+                </div>
+                <div class="form-group">
+                    <label for="backtest-fund-end">終了日</label>
+                    <input type="date" id="backtest-fund-end" name="end">
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="runCommand('backtest_stmt')">バックテスト開始</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- テクニカル戦略バックテスト -->
+            <div class="form-content" id="form-backtest-technical">
+                <div class="form-group">
+                    <label for="backtest-tech-hold">保有期間 (日)</label>
+                    <input type="number" id="backtest-tech-hold" name="hold_days" value="5" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="backtest-tech-stoploss">損切り率 (%)</label>
+                    <input type="number" id="backtest-tech-stoploss" name="stop_loss" value="5" min="1" max="20" step="0.5">
+                </div>
+                <div class="form-group">
+                    <label for="backtest-tech-capital">初期資本 (万円)</label>
+                    <input type="number" id="backtest-tech-capital" name="capital" value="1000" min="100">
+                </div>
+                <div class="form-group">
+                    <label for="backtest-tech-start">開始日</label>
+                    <input type="date" id="backtest-tech-start" name="start">
+                </div>
+                <div class="form-group">
+                    <label for="backtest-tech-end">終了日</label>
+                    <input type="date" id="backtest-tech-end" name="end">
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="runCommand('backtest_tech')">バックテスト開始</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- 結果分析 -->
+            <div class="form-content" id="form-analyze-results">
+                <div class="form-group">
+                    <label for="analyze-file">結果ファイル選択 (複数選択可能)</label>
+                    <select id="analyze-file" name="files" multiple size="5" style="height: auto;">
+                        <option disabled>ファイルを選択してください</option>
+                    </select>
+                    <small style="color: #6b7280; margin-top: 0.25rem; display: block;">
+                        Ctrl+クリックまたはShift+クリックで複数選択
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="analyze-side">分析対象</label>
+                    <select id="analyze-side" name="side">
+                        <option value="long">ロング (買い)</option>
+                        <option value="short">ショート (売り)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="show-trades" name="show_trades" style="margin-right: 0.5rem;">
+                        詳細取引情報を表示
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="runCommand('analyze_json')">分析開始</button>
+                    <button class="btn btn-secondary" onclick="loadResultFiles()">ファイル一覧更新</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- APIトークン更新 -->
+            <div class="form-content" id="form-update-token">
+                <p>J-Quants API のIDトークンを更新します。</p>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="runCommand('update_token')">トークン更新</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- データベース管理 -->
+            <div class="form-content" id="form-db-management">
+                <div class="form-group">
+                    <label for="db-action">実行アクション</label>
+                    <select id="db-action" name="action">
+                        <option value="summary">データベース概要表示</option>
+                        <option value="signals">シグナル確認</option>
+                    </select>
+                </div>
+                <div class="form-group" id="signals-options" style="display: none;">
+                    <label for="signal-type">シグナルタイプ</label>
+                    <select id="signal-type" name="signal_type">
+                        <option value="fund">ファンダメンタル</option>
+                        <option value="tech">テクニカル</option>
+                    </select>
+                </div>
+                <div class="form-group" id="signals-date" style="display: none;">
+                    <label for="signals-start">開始日</label>
+                    <input type="date" id="signals-start" name="start">
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="runDbAction()">実行</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- 閾値設定 -->
+            <div class="form-content" id="form-thresholds">
+                <p>スクリーニング閾値の詳細設定はこちらから行えます。</p>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="openThresholds()">閾値設定ページを開く</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- 結果ファイル管理 -->
+            <div class="form-content" id="form-view-results">
+                <p>分析結果やバックテスト結果のファイルを管理します。</p>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="openResults()">結果ファイル管理ページを開く</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+            <!-- ログ・監視 -->
+            <div class="form-content" id="form-view-logs">
+                <p>システムのリアルタイムログを確認します。</p>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="openLogs()">ログページを開く</button>
+                    <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // メニュー制御のJavaScript
+        let currentForm = null;
+
+        // メニューアイテムクリック時の処理
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const formId = this.getAttribute('data-form');
+                showForm(formId, this.textContent.trim());
+
+                // アクティブ状態の更新
+                document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // フォーム表示
+        function showForm(formId, title) {
+            const formArea = document.getElementById('formArea');
+            const formTitle = document.getElementById('formTitle');
+
+            // 全てのフォームコンテンツを非表示
+            document.querySelectorAll('.form-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // 指定されたフォームを表示
+            const targetForm = document.getElementById('form-' + formId);
+            if (targetForm) {
+                targetForm.classList.add('active');
+                formTitle.textContent = title;
+                formArea.classList.add('visible');
+                currentForm = formId;
+            }
+        }
+
+        // フォーム閉じる
+        function closeForm() {
+            const formArea = document.getElementById('formArea');
+            formArea.classList.remove('visible');
+            currentForm = null;
+
+            // アクティブ状態をクリア
+            document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
+        }
+
+        // コマンド実行（既存のAPIを使用）
+        function runCommand(cmdName) {
+            // フォームデータの収集
+            const formData = new FormData();
+            const activeForm = document.querySelector('.form-content.active');
+
+            if (activeForm) {
+                const inputs = activeForm.querySelectorAll('input, select, textarea');
+                inputs.forEach(input => {
+                    if (input.type === 'checkbox') {
+                        if (input.checked) {
+                            formData.append(input.name, '1');
+                        }
+                    } else if (input.type === 'select-multiple') {
+                        // 複数選択の場合、選択された値をすべて追加
+                        const selectedOptions = Array.from(input.selectedOptions);
+                        selectedOptions.forEach(option => {
+                            if (option.value) {
+                                formData.append(input.name, option.value);
+                            }
+                        });
+                    } else if (input.value) {
+                        formData.append(input.name, input.value);
+                    }
+                });
+            }
+
+            // APIリクエスト送信
+            fetch(`/run/${cmdName}`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json'
+                },
+                body: formData
+            })
+            .then(response => {
+                if (response.redirected) {
+                    // リダイレクトされた場合はその先のページを開く
+                    window.open(response.url, '_blank');
+                    return Promise.resolve({ success: true });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    if (data.task_id) {
+                        alert('タスクを開始しました。タスクID: ' + data.task_id);
+                        // タスク状況ページを新しいタブで開く
+                        window.open(`/task/${data.task_id}`, '_blank');
+                    }
+                } else {
+                    alert('エラー: ' + (data.error || '不明なエラー'));
+                }
+            })
+            .catch(error => {
+                console.error('リクエストエラー:', error);
+                alert('リクエストエラー: ' + error.message);
+            });
+        }
+
+        // ダッシュボード表示
+        function loadDashboard() {
+            // システム概要情報を表示
+            alert('ダッシュボード機能は開発中です。現在は各メニューから個別に操作してください。');
+        }
+
+        // 特定ページを開く関数群
+        function openThresholds() {
+            window.open('/thresholds', '_blank');
+        }
+
+        function openResults() {
+            window.open('/results', '_blank');
+        }
+
+        function openLogs() {
+            window.open('/logs', '_blank');
+        }
+
+        // データベースアクション実行
+        function runDbAction() {
+            const action = document.getElementById('db-action').value;
+            if (action === 'summary') {
+                runCommand('db_summary');
+            } else if (action === 'signals') {
+                const signalType = document.getElementById('signal-type').value;
+                const formData = new FormData();
+                formData.append('signal_type', signalType);
+
+                const startDate = document.getElementById('signals-start').value;
+                if (startDate) {
+                    formData.append('start', startDate);
+                }
+
+                fetch('/run/list_signals', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                })
+                .then(response => {
+                    if (response.redirected) {
+                        window.open(response.url, '_blank');
+                        return Promise.resolve({ success: true });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        if (data.task_id) {
+                            alert('シグナル確認タスクを開始しました。タスクID: ' + data.task_id);
+                            window.open(`/task/${data.task_id}`, '_blank');
+                        }
+                    } else {
+                        alert('エラー: ' + (data.error || '不明なエラー'));
+                    }
+                })
+                .catch(error => {
+                    console.error('リクエストエラー:', error);
+                    alert('リクエストエラー: ' + error.message);
+                });
+            }
+        }
+
+        // 結果ファイル一覧を読み込み
+        function loadResultFiles() {
+            fetch('/api/results')
+            .then(response => response.json())
+            .then(data => {
+                const select = document.getElementById('analyze-file');
+                select.innerHTML = '<option disabled>ファイルを選択してください</option>';
+
+                if (data.success && data.json_files) {
+                    data.json_files.forEach(file => {
+                        const option = document.createElement('option');
+                        option.value = file;
+                        option.textContent = file;
+                        select.appendChild(option);
+                    });
+
+                    if (data.json_files.length === 0) {
+                        const option = document.createElement('option');
+                        option.disabled = true;
+                        option.textContent = 'JSONファイルが見つかりません';
+                        select.appendChild(option);
+                    }
+                } else {
+                    const option = document.createElement('option');
+                    option.disabled = true;
+                    option.textContent = 'ファイル取得に失敗しました';
+                    select.appendChild(option);
+                    console.error('ファイル一覧の取得に失敗:', data.error || '不明なエラー');
+                }
+            })
+            .catch(error => {
+                console.error('ファイル一覧の取得に失敗しました:', error);
+                const select = document.getElementById('analyze-file');
+                select.innerHTML = '<option disabled>エラー: ファイル取得に失敗</option>';
+            });
+        }
+
+        // フォーム初期化時の処理
+        document.addEventListener('DOMContentLoaded', function() {
+            // データベースアクション選択時の表示制御
+            document.getElementById('db-action').addEventListener('change', function() {
+                const signalsOptions = document.getElementById('signals-options');
+                const signalsDate = document.getElementById('signals-date');
+
+                if (this.value === 'signals') {
+                    signalsOptions.style.display = 'block';
+                    signalsDate.style.display = 'block';
+                } else {
+                    signalsOptions.style.display = 'none';
+                    signalsDate.style.display = 'none';
+                }
+            });
+
+            // 今日の日付をデフォルトとして設定
+            const today = new Date().toISOString().split('T')[0];
+            document.querySelectorAll('input[type="date"]').forEach(input => {
+                if (!input.value) {
+                    input.value = today;
+                }
+            });
+        });
+
+        // ESCキーでフォームを閉じる
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && currentForm) {
+                closeForm();
+            }
+        });
+    </script>
+</body>
+</html>

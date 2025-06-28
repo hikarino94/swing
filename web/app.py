@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from app_terminal_logger import TerminalLogger, terminal_logger, terminal_print
 from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 
 app = Flask(__name__)
@@ -35,8 +36,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Werkzeugのログレベルを上げて、アクセスログを抑制
+logging.getLogger("werkzeug").setLevel(logging.WARNING)
+
 # ログメッセージのキュー
-log_queue = queue.Queue(maxsize=1000)
+log_queue: queue.Queue = queue.Queue(maxsize=1000)
 
 # 実行中のタスク管理
 running_tasks = {}
@@ -44,13 +48,34 @@ task_outputs = {}
 
 
 class LogHandler(logging.Handler):
-    """ログをキューに保存するハンドラー"""
+    """ログをキューに保存するハンドラー（Web表示用）"""
 
     def emit(self, record):
+        # Webには簡潔なメッセージのみ表示
+        # デバッグ情報や詳細なログはスキップ
+        message = self.format(record)
+
+        # 特定のキーワードを含むログはWebに表示しない
+        skip_keywords = [
+            "form data:",
+            "processed kind:",
+            "final command:",
+            "Invalid kind value:",
+            "📊 プロセス開始 PID:",
+            "task_outputs",
+        ]
+
+        if any(keyword in message for keyword in skip_keywords):
+            return
+
+        # 長すぎるログは要約
+        if len(message) > 200:
+            message = message[:197] + "..."
+
         log_entry = {
             "timestamp": datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S"),
             "level": record.levelname,
-            "message": self.format(record),
+            "message": message,
         }
         try:
             log_queue.put_nowait(log_entry)
@@ -73,7 +98,12 @@ logging.getLogger().addHandler(log_handler)
 
 def run_command_async(cmd: str, task_id: str) -> None:
     """Run a shell command asynchronously and store results."""
-    logger.info(f"🚀 コマンド実行開始: {cmd} (ID: {task_id})")
+    # ターミナルには詳細情報を表示
+    TerminalLogger.log_command_start(task_id, cmd)
+    terminal_logger.info(f"タスク開始: {task_id} - {cmd}")
+
+    # Webには簡潔なメッセージ
+    logger.info(f"🚀 コマンド実行開始: {cmd.split()[3] if len(cmd.split()) > 3 else 'タスク'}")
 
     # タスク開始を記録
     running_tasks[task_id] = {"command": cmd, "status": "running", "start_time": datetime.now(), "pid": None}
@@ -99,20 +129,34 @@ def run_command_async(cmd: str, task_id: str) -> None:
 
         # PIDを記録
         running_tasks[task_id]["pid"] = proc.pid
-        logger.info(f"📊 プロセス開始 PID: {proc.pid}")
+        TerminalLogger.log_process_start(proc.pid)
+        terminal_logger.info(f"プロセス起動 PID: {proc.pid}")
 
         output_lines = []
+        line_count = 0
 
         # リアルタイムで出力を読み取り
         if proc.stdout:
             for line in iter(proc.stdout.readline, ""):
                 if line:
-                    output_lines.append(line.rstrip())
-                    logger.info(f"[{task_id[:8]}] {line.rstrip()}")
+                    stripped_line = line.rstrip()
+                    output_lines.append(stripped_line)
+                    line_count += 1
+
+                    # ターミナルには全ての出力を表示
+                    TerminalLogger.log_output_line(task_id, stripped_line)
+
+                    # Webには重要な行のみ表示（10行ごとに進捗表示）
+                    if line_count % 10 == 0:
+                        logger.info(f"処理中... ({line_count}行処理済み)")
 
         proc.wait()
 
         full_output = "\n".join(output_lines)
+
+        # ターミナルに完了情報を表示
+        TerminalLogger.log_command_end(proc.returncode == 0, proc.returncode, line_count)
+        terminal_logger.info(f"タスク完了: {task_id} - 終了コード: {proc.returncode}")
 
         # タスク完了を記録
         running_tasks[task_id].update(
@@ -126,19 +170,27 @@ def run_command_async(cmd: str, task_id: str) -> None:
         task_outputs[task_id] = {"output": full_output, "return_code": proc.returncode, "command": cmd}
 
         if proc.returncode == 0:
-            logger.info(f"✅ コマンド実行完了: {cmd} (ID: {task_id})")
+            logger.info("✅ タスク完了")
         else:
-            logger.error(f"❌ コマンド実行失敗: {cmd} (ID: {task_id}, Code: {proc.returncode})")
+            logger.error(f"❌ タスク失敗 (終了コード: {proc.returncode})")
 
     except Exception as e:
-        logger.error(f"💥 コマンド実行エラー: {e} (ID: {task_id})")
+        TerminalLogger.log_error(e)
+        terminal_logger.error(f"タスクエラー: {task_id} - {e}")
+        logger.error("💥 タスクエラー")
         running_tasks[task_id].update({"status": "error", "end_time": datetime.now(), "error": str(e)})
         task_outputs[task_id] = {"output": f"エラーが発生しました: {e}", "return_code": -1, "command": cmd}
 
 
 @app.route("/")
 def index():
-    """Render the main page with all forms."""
+    """Redirect to menu interface."""
+    return redirect(url_for("menu"))
+
+
+@app.route("/classic")
+def classic():
+    """Render the classic interface with all forms."""
     # List Excel and JSON files for results and analysis tabs
     xlsx_files = sorted(Path(".").glob("*.xlsx"))
     json_files = sorted(Path(".").glob("*.json"))
@@ -158,6 +210,12 @@ def index():
     )
 
 
+@app.route("/menu")
+def menu():
+    """Render the menu-driven interface."""
+    return render_template("index_menu_new.html")
+
+
 @app.post("/run/<cmd_name>")
 def run(cmd_name: str):
     """Handle form submission and execute commands."""
@@ -168,7 +226,7 @@ def run(cmd_name: str):
     task_id = str(uuid.uuid4())
 
     if cmd_name == "fetch_quotes":
-        cmd = "python3 fetch/daily_quotes.py"
+        cmd = "python3 -m src.api.daily_quotes"
         if form.get("start"):
             cmd += f" --start {form['start']}"
         if form.get("end"):
@@ -176,29 +234,29 @@ def run(cmd_name: str):
         if form.get("workers"):
             cmd += f" --workers {form['workers']}"
     elif cmd_name == "listed_info":
-        cmd = "python3 fetch/listed_info.py"
+        cmd = "python3 -m src.api.listed_info"
     elif cmd_name == "statements":
-        cmd = f"python3 fetch/statements.py {form.get('mode', '1')}"
+        cmd = f"python3 -m src.api.statements {form.get('mode', '1')}"
         if form.get("start"):
             cmd += f" --start {form['start']}"
         if form.get("end"):
             cmd += f" --end {form['end']}"
     elif cmd_name == "screen_fund":
         cmd = (
-            f"python3 screening/screen_statements.py --lookback {form.get('lookback')} "
+            f"python3 -m src.analysis.screen_statements --lookback {form.get('lookback')} "
             f"--recent {form.get('recent')}"
         )
         if form.get("as_of"):
             cmd += f" --as-of {form['as_of']}"
     elif cmd_name == "screen_tech":
-        cmd = f"python3 screening/screen_technical.py {form.get('cmd', 'indicators')}"
+        cmd = f"python3 -m src.analysis.screen_technical {form.get('cmd', 'indicators')}"
         if form.get("as_of"):
             cmd += f" --as-of {form['as_of']}"
         if form.get("lookback"):
             cmd += f" --lookback {form['lookback']}"
     elif cmd_name == "screen_ml":
         cmd = (
-            f"python3 screening/screen_ml.py screen --top {form.get('top', '30')} "
+            f"python3 -m src.analysis.screen_ml screen --top {form.get('top', '30')} "
             f"--lookback {form.get('lookback', '1095')}"
         )
         if form.get("retrain"):
@@ -206,7 +264,7 @@ def run(cmd_name: str):
     elif cmd_name == "backtest_stmt":
         out = form.get("xlsx", "trades.xlsx")
         cmd = (
-            f"python3 backtest/backtest_statements.py --hold {form.get('hold')} "
+            f"python3 -m src.backtest.backtest_statements --hold {form.get('hold')} "
             f"--offset {form.get('offset')} --capital {form.get('capital')} "
             f"--xlsx {out}"
         )
@@ -216,28 +274,66 @@ def run(cmd_name: str):
             cmd += f" --end {form['end']}"
     elif cmd_name == "backtest_tech":
         cmd = (
-            f"python3 backtest/backtest_technical.py --start {form.get('start')} "
+            f"python3 -m src.backtest.backtest_technical --start {form.get('start')} "
             f"--hold-days {form.get('hold')} --stop-loss {form.get('stop')} "
             f"--capital {form.get('capital')} --outfile {form.get('outfile')}"
         )
         if form.get("end"):
             cmd += f" --end {form['end']}"
     elif cmd_name == "update_token":
-        cmd = "python3 update_idtoken.py"
+        cmd = "python3 -m tools.update_idtoken"
         if form.get("mail"):
             cmd += f" --mail {form['mail']}"
         if form.get("password"):
             cmd += f" --password {form['password']}"
     elif cmd_name == "db_summary":
-        cmd = "python3 db/db_summary.py"
+        cmd = "python3 -m data.db.db_summary"
     elif cmd_name == "list_signals":
-        cmd = f"python3 db/list_signals.py {form.get('kind')} --limit {form.get('limit')}"
-        if form.get("start"):
-            cmd += f" --start {form['start']}"
-        if form.get("end"):
-            cmd += f" --end {form['end']}"
+        # フォームデータのデバッグ出力（ターミナルにも表示）
+        form_dict = dict(form)
+        terminal_print(f"[DEBUG] list_signals - form data: {form_dict}")
+        logger.info(f"list_signals - form data: {form_dict}")
+
+        kind = form.get("kind")
+        limit = form.get("limit", "100")
+
+        # kindが取得できない、None、'None'文字列の場合はデフォルト値を使用
+        if not kind or str(kind).strip() in ["", "None", "null", "undefined"]:
+            terminal_print(f"[DEBUG] kind value is empty or invalid: '{kind}', using default 'fund'")
+            kind = "fund"
+
+        # limitも同様に処理
+        if not limit or str(limit).strip() in ["", "None", "null", "undefined"]:
+            terminal_print(f"[DEBUG] limit value is empty or invalid: '{limit}', using default '100'")
+            limit = "100"
+
+        # 値を文字列として確実に処理
+        kind = str(kind).strip()
+        limit = str(limit).strip()
+
+        # 有効な値かチェック
+        if kind not in ["fund", "tech"]:
+            terminal_print(f"[WARNING] Invalid kind value: '{kind}', using default 'fund'")
+            logger.warning(f"Invalid kind value: '{kind}', using default 'fund'")
+            kind = "fund"
+
+        terminal_print(f"[DEBUG] list_signals - processed kind: '{kind}', limit: '{limit}'")
+        logger.info(f"list_signals - processed kind: '{kind}', limit: '{limit}'")
+
+        cmd = f"python3 -m data.db.list_signals {kind} --limit {limit}"
+
+        start_date = form.get("start")
+        end_date = form.get("end")
+
+        if start_date and str(start_date).strip():
+            cmd += f" --start {start_date}"
+        if end_date and str(end_date).strip():
+            cmd += f" --end {end_date}"
+
+        terminal_print(f"[DEBUG] list_signals - final command: {cmd}")
+        logger.info(f"list_signals - final command: {cmd}")
     elif cmd_name == "analyze_json":
-        cmd = "python3 backtest/analyze_backtest_json.py"
+        cmd = "python3 -m src.backtest.analyze_backtest_json"
         for fname in request.form.getlist("files"):
             cmd += f" {fname}"
         if form.get("side"):
@@ -253,7 +349,11 @@ def run(cmd_name: str):
     thread.daemon = True
     thread.start()
 
-    # 実行中ページにリダイレクト
+    # Ajaxリクエストの場合はJSONレスポンスを返す
+    if request.headers.get("Content-Type") == "application/json" or request.headers.get("Accept") == "application/json":
+        return jsonify({"success": True, "task_id": task_id, "command": cmd, "message": f"タスクを開始しました (ID: {task_id})"})
+
+    # 通常のフォーム送信の場合は実行中ページにリダイレクト
     return redirect(url_for("task_status", task_id=task_id))
 
 
@@ -313,7 +413,7 @@ def results():
 @app.route("/logs")
 def logs():
     """ログ表示ページ"""
-    return render_template("logs_new.html")
+    return render_template("logs.html")
 
 
 @app.route("/api/logs")
@@ -329,6 +429,40 @@ def api_logs():
 
     # 最新100件に制限
     return jsonify(logs[-100:])
+
+
+@app.route("/api/results")
+def api_results():
+    """結果ファイル一覧をJSON形式で返すAPI"""
+    try:
+        # プロジェクトルートディレクトリを取得
+        project_root = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+        # Excel and JSON files in project root
+        xlsx_files = [f.name for f in sorted(project_root.glob("*.xlsx"))]
+        json_files = [f.name for f in sorted(project_root.glob("*.json"))]
+
+        # data/exports ディレクトリからもファイルを取得
+        exports_dir = project_root / "data" / "exports"
+        if exports_dir.exists():
+            xlsx_files.extend([f"data/exports/{f.name}" for f in sorted(exports_dir.glob("*.xlsx"))])
+            json_files.extend([f"data/exports/{f.name}" for f in sorted(exports_dir.glob("*.json"))])
+
+        all_files = xlsx_files + json_files
+
+        return jsonify(
+            {
+                "success": True,
+                "files": all_files,
+                "xlsx_files": xlsx_files,
+                "json_files": json_files,
+                "count": len(all_files),
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"結果ファイル一覧取得エラー: {e}")
+        return jsonify({"success": False, "error": str(e), "files": []}), 500
 
 
 @app.route("/status")
@@ -352,7 +486,7 @@ def task_status(task_id: str):
         return redirect(url_for("index"))
 
     task_info = running_tasks[task_id]
-    return render_template("task_status_new.html", task_id=task_id, task_info=task_info)
+    return render_template("task_status.html", task_id=task_id, task_info=task_info)
 
 
 @app.route("/api/task/<task_id>")
@@ -365,9 +499,13 @@ def api_task_status(task_id: str):
 
     # 時刻を文字列に変換
     if "start_time" in task_info:
-        task_info["start_time"] = task_info["start_time"].strftime("%Y-%m-%d %H:%M:%S")
+        start_time = task_info["start_time"]
+        if isinstance(start_time, datetime):
+            task_info["start_time"] = start_time.strftime("%Y-%m-%d %H:%M:%S")
     if "end_time" in task_info:
-        task_info["end_time"] = task_info["end_time"].strftime("%Y-%m-%d %H:%M:%S")
+        end_time = task_info["end_time"]
+        if isinstance(end_time, datetime):
+            task_info["end_time"] = end_time.strftime("%Y-%m-%d %H:%M:%S")
 
     # 結果がある場合は追加
     if task_id in task_outputs:
@@ -383,9 +521,13 @@ def api_all_tasks():
     for task_id, task_info in running_tasks.items():
         task_copy = task_info.copy()
         if "start_time" in task_copy:
-            task_copy["start_time"] = task_copy["start_time"].strftime("%Y-%m-%d %H:%M:%S")
+            start_time = task_copy["start_time"]
+            if isinstance(start_time, datetime):
+                task_copy["start_time"] = start_time.strftime("%Y-%m-%d %H:%M:%S")
         if "end_time" in task_copy:
-            task_copy["end_time"] = task_copy["end_time"].strftime("%Y-%m-%d %H:%M:%S")
+            end_time = task_copy["end_time"]
+            if isinstance(end_time, datetime):
+                task_copy["end_time"] = end_time.strftime("%Y-%m-%d %H:%M:%S")
         tasks[task_id] = task_copy
 
     return jsonify(tasks)
@@ -405,7 +547,7 @@ def api_system_info():
     disk_usage = psutil.disk_usage(project_root)
 
     # データベースファイルサイズ
-    db_path = Path(project_root) / "db" / "stock.db"
+    db_path = Path(project_root) / "data" / "db" / "stock.db"
     db_size = db_path.stat().st_size if db_path.exists() else 0
 
     return jsonify(
@@ -435,42 +577,33 @@ def api_system_info():
 def log_startup_info():
     """起動情報をログに出力"""
     port = int(os.environ.get("PORT", 8080))
-    logger.info("=" * 60)
-    logger.info("🚀 Swing Trading Web App 起動中...")
-    logger.info(f"📅 起動時刻: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    logger.info("")
-    logger.info("🌐 アクセスURL:")
-    logger.info(f"   メイン: http://localhost:{port}")
-    logger.info(f"   ログ: http://localhost:{port}/logs")
-    logger.info(f"   ステータス: http://localhost:{port}/status")
-    logger.info(f"   閾値設定: http://localhost:{port}/thresholds")
-    logger.info(f"   結果一覧: http://localhost:{port}/results")
-    logger.info("")
-    logger.info("🛠️ 機能:")
-    logger.info("   ・ リアルタイムログ監視")
-    logger.info("   ・ 非同期タスク実行")
-    logger.info("   ・ 進捗状況確認")
-    logger.info("   ・ 閾値設定管理")
-    logger.info("   ・ 結果ファイル管理")
-    logger.info("=" * 60)
-    logger.info("✅ アプリケーションが正常に起動しました")
-    logger.info("💬 コマンド実行時はリアルタイムで進捗状況を表示します")
+    # ターミナルへの直接出力
     print("\n" + "=" * 60)
     print("🚀 Swing Trading Web App 起動完了!")
     print(f"🌐 ブラウザでアクセス: http://localhost:{port}")
     print(f"📊 リアルタイムログ: http://localhost:{port}/logs")
     print(f"⚙️ 閾値設定: http://localhost:{port}/thresholds")
+    print("=" * 60)
+    print("📝 コマンド実行時の詳細ログはこのターミナルに表示されます")
     print("=" * 60 + "\n")
+
+    # Webアプリ用のログ
+    logger.info("✅ アプリケーションが正常に起動しました")
 
 
 if __name__ == "__main__":
     # 起動情報をログ出力
     log_startup_info()
 
+    # ターミナルログの初期テスト
+    terminal_logger.info("ターミナルログシステム起動確認")
+    print("📝 ターミナルログ出力テスト - この行が見えていればログは正常に動作しています")
+
     try:
         print("🔄 サーバー開始中... (Ctrl+C で終了)")
         port = int(os.environ.get("PORT", 8080))
-        app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+        # threaded=Trueを追加して、スレッドでのログ出力を確実にする
+        app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False, threaded=True)
     except KeyboardInterrupt:
         logger.info("🛑 アプリケーションを終了しています...")
         print("\n🛑 アプリケーションを終了しました")

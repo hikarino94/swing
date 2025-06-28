@@ -23,7 +23,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -77,9 +77,7 @@ def _daterange(start_date: date, end_date: date) -> list[date]:
     return dates
 
 
-def _fetch_all_pages(
-    client: JQuantsClient, target_date: Optional[date] = None, code: Optional[str] = None
-) -> pd.DataFrame:
+def _fetch_all_pages(client: JQuantsClient, target_date: date | None = None, code: str | None = None) -> pd.DataFrame:
     """ページネーションを考慮して全データを取得
 
     Args:
@@ -244,8 +242,8 @@ class DailyQuotesFetcher:
 
     def __init__(
         self,
-        client: Optional[JQuantsClient] = None,
-        db_manager: Optional[DatabaseManager] = None,
+        client: JQuantsClient | None = None,
+        db_manager: DatabaseManager | None = None,
         max_workers: int = 3,  # API rate limit (3 req/sec) を考慮
     ):
         """
@@ -348,7 +346,7 @@ class DailyQuotesFetcher:
             if "adj_factor" in normalized_df.columns:
                 # adj_factorが1.0でない銘柄を効率的に抽出
                 mask = normalized_df["adj_factor"].fillna(1.0) != 1.0
-                split_codes = normalized_df.loc[mask, "code"].unique()
+                split_codes = normalized_df.loc[mask, "code"].unique()  # type: ignore[operator]
 
                 if len(split_codes) > 0:
                     logger.info(f"{len(split_codes)} 件の株式分割を検出")

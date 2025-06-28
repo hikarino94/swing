@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 from pathlib import Path
 
@@ -77,6 +78,13 @@ def _cli() -> None:
         m, p, _ = _load_account(a.account)
         mail = mail or m
         pwd = pwd or p
+
+    # 対話的に入力を求める
+    if not mail:
+        mail = input("メールアドレスを入力してください: ").strip()
+    if not pwd:
+        pwd = getpass.getpass("パスワードを入力してください: ")
+
     if not mail or not pwd:
         ap.error("mail and password are required")
     update(mail, pwd, a.out)

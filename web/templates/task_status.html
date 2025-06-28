@@ -300,6 +300,7 @@
                 <a href="/status" class="log-link">🔍 システム状況を見る</a>
                 <button class="btn btn-primary" onclick="refreshStatus()">🔄 手動更新</button>
                 <button class="btn btn-secondary" onclick="toggleOutput()">👁️ 出力表示切替</button>
+                <button class="btn btn-secondary" onclick="copyOutput()">📋 出力をコピー</button>
                 <button class="btn btn-secondary" onclick="showOtherTasks()">📋 他のタスク</button>
                 <a href="/" class="btn btn-success">🏠 メインに戻る</a>
             </div>
@@ -361,7 +362,16 @@
                     // 時刻情報更新
                     if (data.start_time) {
                         document.getElementById('start-time').textContent = data.start_time;
-                        taskStartTime = new Date(data.start_time);
+                        // 日付文字列を確実にパースするため、ISO 8601形式に変換
+                        const isoDateString = data.start_time.replace(' ', 'T');
+                        taskStartTime = new Date(isoDateString);
+                        // 日付がInvalidの場合は手動でパース
+                        if (isNaN(taskStartTime.getTime())) {
+                            const [datePart, timePart] = data.start_time.split(' ');
+                            const [year, month, day] = datePart.split('-');
+                            const [hour, minute, second] = timePart.split(':');
+                            taskStartTime = new Date(year, month - 1, day, hour, minute, second);
+                        }
                     }
 
                     if (data.end_time) {
@@ -414,6 +424,46 @@
             const outputContainer = document.getElementById('output-container');
             outputVisible = !outputVisible;
             outputContainer.style.display = outputVisible ? 'block' : 'none';
+        }
+
+        function copyOutput() {
+            const outputContent = document.getElementById('output-content');
+            if (!outputContent || !outputContent.textContent) {
+                alert('コピーする出力がありません。');
+                return;
+            }
+
+            const textToCopy = outputContent.textContent;
+
+            // クリップボードにコピー
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => {
+                        alert('✅ 出力をクリップボードにコピーしました！');
+                    })
+                    .catch(err => {
+                        console.error('コピーに失敗しました:', err);
+                        fallbackCopy(textToCopy);
+                    });
+            } else {
+                fallbackCopy(textToCopy);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                alert('✅ 出力をクリップボードにコピーしました！');
+            } catch (err) {
+                alert('コピーに失敗しました。手動でコピーしてください。');
+            }
+            document.body.removeChild(textarea);
         }
 
         function showOtherTasks() {

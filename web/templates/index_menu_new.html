@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swing Trading System - メニュー型インターフェース</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f3f4f6;
+            color: #1f2937;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* ヘッダー */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 0 2rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 400;
+        }
+
+        /* サイドバーメニュー */
+        .sidebar {
+            position: fixed;
+            top: 60px;
+            left: 0;
+            width: 280px;
+            height: calc(100vh - 60px);
+            background: white;
+            box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+            overflow-y: auto;
+            z-index: 50;
+        }
+
+        .menu-category {
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .menu-category-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+            padding: 1rem 1.5rem 0.5rem;
+        }
+
+        .menu-item {
+            display: block;
+            padding: 0.75rem 1.5rem;
+            color: #374151;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            font-size: 0.875rem;
+        }
+
+        .menu-item:hover {
+            background: #f9fafb;
+            color: #667eea;
+            border-left-color: #667eea;
+        }
+
+        .menu-item.active {
+            background: #ede9fe;
+            color: #667eea;
+            border-left-color: #667eea;
+            font-weight: 500;
+        }
+
+        .menu-icon {
+            display: inline-block;
+            width: 20px;
+            margin-right: 0.75rem;
+            text-align: center;
+        }
+
+        /* メインコンテンツ */
+        .main-content {
+            margin-left: 280px;
+            margin-top: 60px;
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+            background: #f3f4f6;
+            padding: 2rem;
+        }
+
+        /* コンテンツパネル */
+        .content-panel {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            min-height: calc(100vh - 140px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* フォームコンテナ */
+        .form-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-container form {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-fields {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .panel-header {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .panel-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .panel-description {
+            color: #6b7280;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        /* フォーム要素 */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 0.375rem;
+            color: #374151;
+            font-size: 0.875rem;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 0.25rem;
+            color: #6b7280;
+            font-size: 0.75rem;
+        }
+
+        /* ボタン */
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #d1d5db;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        /* 実行結果表示エリア */
+        .result-panel {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+            display: none;
+            min-height: 300px;
+        }
+
+        .result-panel.show {
+            display: block;
+        }
+
+        /* 分割レイアウト用 */
+        .split-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            height: 100%;
+        }
+
+        .split-layout .form-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .split-layout .result-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .result-title {
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .result-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .result-status.running {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .result-status.completed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .result-status.failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .result-content {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            padding: 1rem;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.75rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* ローディングスピナー */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 50%;
+            border-top-color: #667eea;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ウェルカムスクリーン */
+        .welcome-screen {
+            text-align: center;
+            padding: 4rem 2rem;
+        }
+
+        .welcome-screen h2 {
+            font-size: 2rem;
+            color: #1f2937;
+            margin-bottom: 1rem;
+        }
+
+        .welcome-screen p {
+            color: #6b7280;
+            font-size: 1.125rem;
+            line-height: 1.75;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+            text-align: left;
+        }
+
+        .feature-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-title {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-description {
+            color: #6b7280;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        /* アラート */
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        /* レスポンシブ対応 */
+        @media (max-width: 1024px) {
+            .split-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .form-fields {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .header {
+                padding: 0 1rem;
+            }
+
+            .main-content {
+                padding: 1rem;
+            }
+
+            .content-panel {
+                padding: 1rem;
+            }
+        }
+
+        /* 非表示クラス */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- ヘッダー -->
+        <div class="header">
+            <h1>📈 Swing Trading System</h1>
+        </div>
+
+        <!-- サイドバーメニュー -->
+        <div class="sidebar">
+            <!-- ダッシュボード -->
+            <div class="menu-category">
+                <div class="menu-category-title">ダッシュボード</div>
+                <a class="menu-item" data-page="dashboard">
+                    <span class="menu-icon">🏠</span>システム概要
+                </a>
+            </div>
+
+            <!-- データ管理 -->
+            <div class="menu-category">
+                <div class="menu-category-title">データ管理</div>
+                <a class="menu-item" data-page="fetch-quotes">
+                    <span class="menu-icon">📥</span>株価データ取得
+                </a>
+                <a class="menu-item" data-page="fetch-statements">
+                    <span class="menu-icon">📊</span>財務諸表取得
+                </a>
+                <a class="menu-item" data-page="fetch-listed">
+                    <span class="menu-icon">📋</span>上場情報取得
+                </a>
+            </div>
+
+            <!-- 分析・スクリーニング -->
+            <div class="menu-category">
+                <div class="menu-category-title">分析・スクリーニング</div>
+                <a class="menu-item" data-page="screen-fundamental">
+                    <span class="menu-icon">💹</span>ファンダメンタル分析
+                </a>
+                <a class="menu-item" data-page="screen-technical">
+                    <span class="menu-icon">📉</span>テクニカル分析
+                </a>
+                <a class="menu-item" data-page="screen-ml">
+                    <span class="menu-icon">🤖</span>機械学習分析
+                </a>
+            </div>
+
+            <!-- バックテスト -->
+            <div class="menu-category">
+                <div class="menu-category-title">バックテスト</div>
+                <a class="menu-item" data-page="backtest-fundamental">
+                    <span class="menu-icon">💰</span>ファンダメンタル戦略
+                </a>
+                <a class="menu-item" data-page="backtest-technical">
+                    <span class="menu-icon">📈</span>テクニカル戦略
+                </a>
+                <a class="menu-item" data-page="analyze-results">
+                    <span class="menu-icon">🔍</span>結果分析
+                </a>
+            </div>
+
+            <!-- システム管理 -->
+            <div class="menu-category">
+                <div class="menu-category-title">システム管理</div>
+                <a class="menu-item" data-page="update-token">
+                    <span class="menu-icon">🔑</span>APIトークン更新
+                </a>
+                <a class="menu-item" data-page="db-management">
+                    <span class="menu-icon">💾</span>データベース管理
+                </a>
+                <a class="menu-item" data-page="thresholds">
+                    <span class="menu-icon">⚙️</span>閾値設定
+                </a>
+            </div>
+
+            <!-- 結果・レポート -->
+            <div class="menu-category">
+                <div class="menu-category-title">結果・レポート</div>
+                <a class="menu-item" data-page="view-results">
+                    <span class="menu-icon">📁</span>結果ファイル管理
+                </a>
+                <a class="menu-item" data-page="view-logs">
+                    <span class="menu-icon">📝</span>ログ・監視
+                </a>
+            </div>
+        </div>
+
+        <!-- メインコンテンツ -->
+        <div class="main-content" id="mainContent">
+            <!-- ウェルカムスクリーン -->
+            <div id="page-welcome" class="page-content">
+                <div class="welcome-screen">
+                    <h2>Swing Trading System へようこそ</h2>
+                    <p>左のメニューから操作したい機能を選択してください。<br>
+                    各機能の実行フォームと結果が画面に表示されます。</p>
+
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon">📥</div>
+                            <div class="feature-title">データ管理</div>
+                            <div class="feature-description">J-Quants APIから株価・財務データを取得し、データベースに保存します。</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🔍</div>
+                            <div class="feature-title">分析・スクリーニング</div>
+                            <div class="feature-description">ファンダメンタル・テクニカル・機械学習による銘柄分析を実行します。</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">📊</div>
+                            <div class="feature-title">バックテスト</div>
+                            <div class="feature-description">投資戦略の過去パフォーマンスを検証し、結果を分析します。</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">⚙️</div>
+                            <div class="feature-title">システム管理</div>
+                            <div class="feature-description">APIトークンの更新、データベース管理、各種設定を行います。</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 各ページのコンテンツはJavaScriptで動的に生成 -->
+        </div>
+    </div>
+
+    <script>
+        // グローバル変数
+        let currentPage = 'welcome';
+        let currentTaskId = null;
+        let taskCheckInterval = null;
+
+        // ページ定義
+        const pages = {
+            'dashboard': {
+                title: 'システム概要',
+                description: 'システム全体の状態を確認します。',
+                content: `
+                    <div class="alert alert-info">
+                        <span class="menu-icon">ℹ️</span>
+                        <span>システム情報を取得中...</span>
+                    </div>
+                    <div id="dashboard-content"></div>
+                `
+            },
+            'fetch-quotes': {
+                title: '株価データ取得',
+                description: '指定期間の日次株価データを取得します。',
+                form: {
+                    command: 'fetch_quotes',
+                    fields: [
+                        { name: 'start', label: '開始日', type: 'date' },
+                        { name: 'end', label: '終了日', type: 'date' },
+                        { name: 'workers', label: '並列処理数', type: 'number', value: '4', min: '1', max: '10' }
+                    ]
+                }
+            },
+            'fetch-statements': {
+                title: '財務諸表取得',
+                description: '企業の財務諸表データを取得します。',
+                form: {
+                    command: 'statements',
+                    fields: [
+                        {
+                            name: 'mode',
+                            label: '取得モード',
+                            type: 'select',
+                            options: [
+                                { value: '1', text: 'モード1: 企業別一括取得' },
+                                { value: '2', text: 'モード2: 日付・期間指定' }
+                            ]
+                        },
+                        { name: 'start', label: '開始日', type: 'date' },
+                        { name: 'end', label: '終了日', type: 'date' }
+                    ]
+                }
+            },
+            'fetch-listed': {
+                title: '上場情報取得',
+                description: '上場企業の基本情報を取得します。',
+                form: {
+                    command: 'listed_info',
+                    fields: []
+                }
+            },
+            'screen-fundamental': {
+                title: 'ファンダメンタル分析',
+                description: '財務データに基づいて銘柄をスクリーニングします。',
+                form: {
+                    command: 'screen_fund',
+                    fields: [
+                        { name: 'lookback', label: '分析期間 (日)', type: 'number', value: '30', min: '1' },
+                        { name: 'recent', label: '最新期間 (日)', type: 'number', value: '7', min: '1' },
+                        { name: 'as_of', label: '基準日', type: 'date' }
+                    ]
+                }
+            },
+            'screen-technical': {
+                title: 'テクニカル分析',
+                description: 'テクニカル指標を計算してスクリーニングを実行します。',
+                form: {
+                    command: 'screen_tech',
+                    fields: [
+                        {
+                            name: 'cmd',
+                            label: '実行モード',
+                            type: 'select',
+                            options: [
+                                { value: 'indicators', text: '指標計算のみ' },
+                                { value: 'screen', text: 'スクリーニング実行' }
+                            ]
+                        },
+                        { name: 'as_of', label: '基準日', type: 'date' },
+                        { name: 'lookback', label: '分析期間 (日)', type: 'number', value: '252', min: '1' }
+                    ]
+                }
+            },
+            'screen-ml': {
+                title: '機械学習分析',
+                description: '機械学習モデルを使用して銘柄を分析します。',
+                form: {
+                    command: 'screen_ml',
+                    fields: [
+                        { name: 'top', label: '上位選択数', type: 'number', value: '50', min: '1' },
+                        { name: 'lookback', label: '学習期間 (日)', type: 'number', value: '1095', min: '1' },
+                        { name: 'retrain', label: 'モデル再学習', type: 'checkbox' }
+                    ]
+                }
+            },
+            'backtest-fundamental': {
+                title: 'ファンダメンタル戦略バックテスト',
+                description: 'ファンダメンタル分析に基づく投資戦略をバックテストします。',
+                form: {
+                    command: 'backtest_stmt',
+                    fields: [
+                        { name: 'hold', label: '保有期間 (日)', type: 'number', value: '5', min: '1' },
+                        { name: 'offset', label: 'オフセット (日)', type: 'number', value: '0', min: '0' },
+                        { name: 'capital', label: '初期資本 (万円)', type: 'number', value: '10000000', min: '1000000' },
+                        { name: 'xlsx', label: '出力ファイル名', type: 'text', value: 'trades.xlsx' },
+                        { name: 'start', label: '開始日', type: 'date' },
+                        { name: 'end', label: '終了日', type: 'date' }
+                    ]
+                }
+            },
+            'backtest-technical': {
+                title: 'テクニカル戦略バックテスト',
+                description: 'テクニカル分析に基づく投資戦略をバックテストします。',
+                form: {
+                    command: 'backtest_tech',
+                    fields: [
+                        { name: 'hold_days', label: '保有期間 (日)', type: 'number', value: '5', min: '1' },
+                        { name: 'stop_loss', label: '損切り率 (%)', type: 'number', value: '5', min: '1', max: '20', step: '0.5' },
+                        { name: 'capital', label: '初期資本 (万円)', type: 'number', value: '10000000', min: '1000000' },
+                        { name: 'outfile', label: '出力ファイル名', type: 'text', value: 'backtest_tech.json' },
+                        { name: 'start', label: '開始日', type: 'date' },
+                        { name: 'end', label: '終了日', type: 'date' }
+                    ]
+                }
+            },
+            'analyze-results': {
+                title: '結果分析',
+                description: 'バックテスト結果を詳細に分析します。',
+                form: {
+                    command: 'analyze_json',
+                    fields: [
+                        {
+                            name: 'files',
+                            label: '結果ファイル選択',
+                            type: 'select',
+                            multiple: true,
+                            size: 5,
+                            options: []  // 動的に読み込み
+                        },
+                        {
+                            name: 'side',
+                            label: '分析対象',
+                            type: 'select',
+                            options: [
+                                { value: 'long', text: 'ロング (買い)' },
+                                { value: 'short', text: 'ショート (売り)' }
+                            ]
+                        },
+                        { name: 'show_trades', label: '詳細取引情報を表示', type: 'checkbox' }
+                    ]
+                }
+            },
+            'update-token': {
+                title: 'APIトークン更新',
+                description: 'J-Quants APIのIDトークンを更新します。',
+                form: {
+                    command: 'update_token',
+                    fields: [
+                        { name: 'mail', label: 'メールアドレス（オプション）', type: 'email', required: false },
+                        { name: 'password', label: 'パスワード（オプション）', type: 'password', required: false }
+                    ]
+                }
+            },
+            'db-management': {
+                title: 'データベース管理',
+                description: 'データベースの状態確認とメンテナンスを行います。',
+                content: `
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="runDbCommand('summary')">
+                            <span class="menu-icon">📊</span>データベース概要表示
+                        </button>
+                        <button class="btn btn-primary" onclick="showSignalsForm()">
+                            <span class="menu-icon">🔍</span>シグナル確認
+                        </button>
+                    </div>
+                    <div id="signals-form" style="display: none; margin-top: 1.5rem;">
+                        <div class="form-group">
+                            <label for="signal-type">シグナルタイプ</label>
+                            <select id="signal-type">
+                                <option value="fund">ファンダメンタル</option>
+                                <option value="tech">テクニカル</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="signal-start">開始日</label>
+                            <input type="date" id="signal-start">
+                        </div>
+                        <div class="form-group">
+                            <label for="signal-end">終了日</label>
+                            <input type="date" id="signal-end">
+                        </div>
+                        <div class="form-group">
+                            <label for="signal-limit">表示件数</label>
+                            <input type="number" id="signal-limit" value="100" min="1" max="1000">
+                        </div>
+                        <button class="btn btn-primary" onclick="runSignalsCheck()">
+                            シグナル確認実行
+                        </button>
+                    </div>
+                `
+            },
+            'thresholds': {
+                title: '閾値設定',
+                description: 'スクリーニング閾値の詳細設定を行います。',
+                content: `
+                    <div class="alert alert-info">
+                        <span class="menu-icon">ℹ️</span>
+                        <span>閾値設定ページに移動します。</span>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="window.open('/thresholds', '_blank')">
+                            <span class="menu-icon">⚙️</span>閾値設定ページを開く
+                        </button>
+                    </div>
+                `
+            },
+            'view-results': {
+                title: '結果ファイル管理',
+                description: '分析結果やバックテスト結果のファイルを管理します。',
+                content: `
+                    <div class="alert alert-info">
+                        <span class="menu-icon">ℹ️</span>
+                        <span>結果ファイル管理ページに移動します。</span>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="window.open('/results', '_blank')">
+                            <span class="menu-icon">📁</span>結果ファイル管理ページを開く
+                        </button>
+                    </div>
+                `
+            },
+            'view-logs': {
+                title: 'ログ・監視',
+                description: 'システムのリアルタイムログを確認します。',
+                content: `
+                    <div class="alert alert-info">
+                        <span class="menu-icon">ℹ️</span>
+                        <span>ログページに移動します。</span>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="window.open('/logs', '_blank')">
+                            <span class="menu-icon">📝</span>ログページを開く
+                        </button>
+                    </div>
+                `
+            }
+        };
+
+        // メニュークリックイベントの設定
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                const page = this.getAttribute('data-page');
+                if (page) {
+                    showPage(page);
+                }
+            });
+        });
+
+        // ページ表示関数
+        function showPage(pageId) {
+            // アクティブメニューの更新
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.querySelector(`[data-page="${pageId}"]`)?.classList.add('active');
+
+            // ページコンテンツの表示
+            const mainContent = document.getElementById('mainContent');
+            const pageConfig = pages[pageId];
+
+            if (!pageConfig) {
+                mainContent.innerHTML = '<div class="content-panel"><p>ページが見つかりません。</p></div>';
+                return;
+            }
+
+            currentPage = pageId;
+
+            // ページコンテンツの生成
+            let html = '';
+
+            // フォームがある場合は分割レイアウトを使用
+            if (pageConfig.form) {
+                html = `
+                    <div class="split-layout">
+                        <div class="form-section">
+                            <div class="content-panel">
+                                <div class="panel-header">
+                                    <h2 class="panel-title">${pageConfig.title}</h2>
+                                    <p class="panel-description">${pageConfig.description}</p>
+                                </div>
+                                ${generateForm(pageConfig.form)}
+                            </div>
+                        </div>
+                        <div class="result-section">
+                            <div id="result-area"></div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // フォームがない場合は通常のレイアウト
+                html = `
+                    <div class="content-panel">
+                        <div class="panel-header">
+                            <h2 class="panel-title">${pageConfig.title}</h2>
+                            <p class="panel-description">${pageConfig.description}</p>
+                        </div>
+                        ${pageConfig.content || ''}
+                    </div>
+                `;
+
+                if (!pageConfig.content || pageConfig.content.includes('runDbCommand')) {
+                    html += '<div id="result-area"></div>';
+                }
+            }
+
+            mainContent.innerHTML = html;
+
+            // ページ固有の初期化処理
+            if (pageId === 'dashboard') {
+                loadDashboard();
+            } else if (pageId === 'analyze-results') {
+                loadResultFiles();
+            }
+
+            // 日付フィールドのデフォルト値設定
+            const today = new Date().toISOString().split('T')[0];
+            document.querySelectorAll('input[type="date"]').forEach(input => {
+                if (!input.value) {
+                    input.value = today;
+                }
+            });
+        }
+
+        // フォーム生成関数
+        function generateForm(formConfig) {
+            let html = '<div class="form-container"><form onsubmit="executeCommand(event, \'' + formConfig.command + '\')">';
+            html += '<div class="form-fields">';
+
+            formConfig.fields.forEach(field => {
+                html += '<div class="form-group">';
+
+                if (field.type !== 'checkbox') {
+                    html += `<label for="${field.name}">${field.label}</label>`;
+                }
+
+                if (field.type === 'select') {
+                    html += `<select id="${field.name}" name="${field.name}"`;
+                    if (field.multiple) {
+                        html += ' multiple';
+                        if (field.size) html += ` size="${field.size}"`;
+                    }
+                    html += '>';
+
+                    if (field.options) {
+                        field.options.forEach(option => {
+                            html += `<option value="${option.value}">${option.text}</option>`;
+                        });
+                    }
+                    html += '</select>';
+
+                    if (field.multiple) {
+                        html += '<small>Ctrl+クリックまたはShift+クリックで複数選択</small>';
+                    }
+                } else if (field.type === 'checkbox') {
+                    html += `<label><input type="checkbox" id="${field.name}" name="${field.name}"> ${field.label}</label>`;
+                } else if (field.type === 'textarea') {
+                    html += `<textarea id="${field.name}" name="${field.name}"`;
+                    if (field.rows) html += ` rows="${field.rows}"`;
+                    html += '></textarea>';
+                } else {
+                    html += `<input type="${field.type || 'text'}" id="${field.name}" name="${field.name}"`;
+                    if (field.value) html += ` value="${field.value}"`;
+                    if (field.min) html += ` min="${field.min}"`;
+                    if (field.max) html += ` max="${field.max}"`;
+                    if (field.step) html += ` step="${field.step}"`;
+                    if (field.required !== false) html += ' required';
+                    html += '>';
+                }
+
+                html += '</div>';
+            });
+
+            html += '</div>'; // form-fields終了
+
+            html += `
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary">
+                        <span class="menu-icon">▶️</span>実行
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="clearForm()">
+                        <span class="menu-icon">🔄</span>クリア
+                    </button>
+                </div>
+            `;
+
+            html += '</form></div>';
+            return html;
+        }
+
+        // コマンド実行関数
+        function executeCommand(event, command) {
+            event.preventDefault();
+
+            const form = event.target;
+            const formData = new FormData(form);
+
+            // 結果表示エリアを準備
+            showResult('running', 'コマンドを実行中...');
+
+            // APIリクエスト送信
+            fetch(`/run/${command}`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json'
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.task_id) {
+                    currentTaskId = data.task_id;
+                    showResult('running', `タスクを開始しました (ID: ${data.task_id.substring(0, 8)}...)`);
+                    startTaskMonitoring(data.task_id);
+                } else {
+                    showResult('failed', 'エラー: ' + (data.error || '不明なエラー'));
+                }
+            })
+            .catch(error => {
+                showResult('failed', 'リクエストエラー: ' + error.message);
+            });
+        }
+
+        // タスク監視開始
+        function startTaskMonitoring(taskId) {
+            // 既存の監視を停止
+            if (taskCheckInterval) {
+                clearInterval(taskCheckInterval);
+            }
+
+            // 定期的にタスク状態を確認
+            taskCheckInterval = setInterval(() => {
+                fetch(`/api/task/${taskId}`)
+                    .then(response => response.json())
+                    .then(taskInfo => {
+                        if (taskInfo.status === 'completed' || taskInfo.status === 'failed' || taskInfo.status === 'error') {
+                            clearInterval(taskCheckInterval);
+                            taskCheckInterval = null;
+
+                            const status = taskInfo.status === 'completed' ? 'completed' : 'failed';
+                            let content = `コマンド: ${taskInfo.command}\n`;
+                            content += `開始時刻: ${taskInfo.start_time}\n`;
+                            content += `終了時刻: ${taskInfo.end_time || '実行中'}\n\n`;
+
+                            if (taskInfo.output) {
+                                content += '実行結果:\n' + taskInfo.output.output;
+                            }
+
+                            showResult(status, content);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('タスク状態確認エラー:', error);
+                    });
+            }, 2000);  // 2秒ごとに確認
+        }
+
+        // 結果表示関数
+        function showResult(status, content) {
+            const resultArea = document.getElementById('result-area');
+
+            let statusClass = '';
+            let statusText = '';
+            let statusIcon = '';
+
+            switch (status) {
+                case 'running':
+                    statusClass = 'running';
+                    statusText = '実行中';
+                    statusIcon = '<span class="spinner"></span>';
+                    break;
+                case 'completed':
+                    statusClass = 'completed';
+                    statusText = '完了';
+                    statusIcon = '✅';
+                    break;
+                case 'failed':
+                    statusClass = 'failed';
+                    statusText = '失敗';
+                    statusIcon = '❌';
+                    break;
+            }
+
+            // 分割レイアウトの場合はcontent-panelでラップ
+            const isInSplitLayout = resultArea.closest('.split-layout') !== null;
+
+            if (isInSplitLayout) {
+                resultArea.innerHTML = `
+                    <div class="content-panel">
+                        <div class="panel-header">
+                            <h2 class="panel-title">実行結果</h2>
+                        </div>
+                        <div class="result-panel show">
+                            <div class="result-header">
+                                <span class="result-title">ステータス</span>
+                                <span class="result-status ${statusClass}">
+                                    ${statusIcon} ${statusText}
+                                </span>
+                            </div>
+                            <div class="result-content">${escapeHtml(content)}</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                resultArea.innerHTML = `
+                    <div class="result-panel show">
+                        <div class="result-header">
+                            <span class="result-title">実行結果</span>
+                            <span class="result-status ${statusClass}">
+                                ${statusIcon} ${statusText}
+                            </span>
+                        </div>
+                        <div class="result-content">${escapeHtml(content)}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // HTMLエスケープ関数
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // フォームクリア関数
+        function clearForm() {
+            const form = document.querySelector('form');
+            if (form) {
+                form.reset();
+                // 日付フィールドは今日の日付に戻す
+                const today = new Date().toISOString().split('T')[0];
+                form.querySelectorAll('input[type="date"]').forEach(input => {
+                    input.value = today;
+                });
+            }
+        }
+
+        // ダッシュボード読み込み
+        function loadDashboard() {
+            fetch('/api/system-info')
+                .then(response => response.json())
+                .then(data => {
+                    const content = document.getElementById('dashboard-content');
+
+                    // バイト数を読みやすい形式に変換
+                    const formatBytes = (bytes) => {
+                        if (bytes === 0) return '0 Bytes';
+                        const k = 1024;
+                        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                        const i = Math.floor(Math.log(bytes) / Math.log(k));
+                        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                    };
+
+                    content.innerHTML = `
+                        <div class="feature-grid">
+                            <div class="feature-card">
+                                <div class="feature-icon">💻</div>
+                                <div class="feature-title">システム情報</div>
+                                <div class="feature-description">
+                                    <p>OS: ${data.system.platform}</p>
+                                    <p>Python: ${data.system.python_version}</p>
+                                    <p>CPU: ${data.system.cpu_count} コア</p>
+                                    <p>メモリ: ${formatBytes(data.system.memory_available)} / ${formatBytes(data.system.memory_total)}</p>
+                                </div>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon">💾</div>
+                                <div class="feature-title">ストレージ</div>
+                                <div class="feature-description">
+                                    <p>ディスク使用量: ${formatBytes(data.storage.disk_used)} / ${formatBytes(data.storage.disk_total)}</p>
+                                    <p>空き容量: ${formatBytes(data.storage.disk_free)}</p>
+                                    <p>データベース: ${formatBytes(data.storage.db_size)}</p>
+                                </div>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon">📊</div>
+                                <div class="feature-title">アプリケーション状態</div>
+                                <div class="feature-description">
+                                    <p>実行中のタスク: ${data.app.tasks_running}</p>
+                                    <p>総タスク数: ${data.app.tasks_total}</p>
+                                    <p>ログキューサイズ: ${data.app.log_queue_size}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    document.getElementById('dashboard-content').innerHTML =
+                        '<div class="alert alert-error">システム情報の取得に失敗しました: ' + error.message + '</div>';
+                });
+        }
+
+        // 結果ファイル一覧読み込み
+        function loadResultFiles() {
+            fetch('/api/results')
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.querySelector('select[name="files"]');
+                    if (!select) return;
+
+                    select.innerHTML = '';
+
+                    if (data.success && data.json_files && data.json_files.length > 0) {
+                        data.json_files.forEach(file => {
+                            const option = document.createElement('option');
+                            option.value = file;
+                            option.textContent = file;
+                            select.appendChild(option);
+                        });
+                    } else {
+                        const option = document.createElement('option');
+                        option.disabled = true;
+                        option.textContent = 'JSONファイルが見つかりません';
+                        select.appendChild(option);
+                    }
+                })
+                .catch(error => {
+                    console.error('ファイル一覧の取得に失敗しました:', error);
+                });
+        }
+
+        // データベース管理関数
+        function runDbCommand(action) {
+            if (action === 'summary') {
+                executeCommand({ preventDefault: () => {} }, 'db_summary');
+            }
+        }
+
+        function showSignalsForm() {
+            const form = document.getElementById('signals-form');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function runSignalsCheck() {
+            const formData = new FormData();
+            const signalType = document.getElementById('signal-type').value;
+            const limit = document.getElementById('signal-limit').value;
+
+            formData.append('kind', signalType);
+            formData.append('limit', limit);
+
+            const start = document.getElementById('signal-start').value;
+            const end = document.getElementById('signal-end').value;
+
+            if (start) formData.append('start', start);
+            if (end) formData.append('end', end);
+
+            showResult('running', 'シグナルを確認中...');
+
+            fetch('/run/list_signals', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json'
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.task_id) {
+                    currentTaskId = data.task_id;
+                    showResult('running', `タスクを開始しました (ID: ${data.task_id.substring(0, 8)}...)`);
+                    startTaskMonitoring(data.task_id);
+                } else {
+                    showResult('failed', 'エラー: ' + (data.error || '不明なエラー'));
+                }
+            })
+            .catch(error => {
+                showResult('failed', 'リクエストエラー: ' + error.message);
+            });
+        }
+
+        // 初期表示
+        window.addEventListener('DOMContentLoaded', () => {
+            // URLにページパラメータがある場合はそのページを表示
+            const urlParams = new URLSearchParams(window.location.search);
+            const page = urlParams.get('page');
+            if (page && pages[page]) {
+                showPage(page);
+            }
+        });
+    </script>
+</body>
+</html>
