@@ -286,10 +286,23 @@ def run(cmd_name: str):
             cmd += f" --end {form['end']}"
     elif cmd_name == "update_token":
         cmd = "python3 -m tools.update_idtoken"
-        if form.get("mail"):
-            cmd += f" --mail {form['mail']}"
-        if form.get("password"):
-            cmd += f" --password {form['password']}"
+        mail = form.get("mail")
+        pwd = form.get("password")
+        if not mail or not pwd:
+            try:
+                from src.utils.config import get_config_manager
+
+                account = get_config_manager().get_account_info()
+                mail = mail or account.get("mailaddress")
+                pwd = pwd or account.get("password")
+            except Exception as e:  # pylint: disable=broad-except
+                logger.warning("account.jsonの読み込みに失敗: %s", e)
+                terminal_print(f"account.json load failed: {e}")
+
+        if mail:
+            cmd += f" --mail {mail}"
+        if pwd:
+            cmd += f" --password {pwd}"
     elif cmd_name == "db_summary":
         cmd = "python3 -m data.db.db_summary"
     elif cmd_name == "list_signals":
