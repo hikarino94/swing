@@ -6,6 +6,7 @@ import os
 import queue
 import shlex
 import subprocess
+import sys
 import threading
 import uuid
 from datetime import datetime
@@ -32,7 +33,10 @@ def datetime_format(timestamp):
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("web_app.log"), logging.StreamHandler()],
+    handlers=[
+        logging.FileHandler("web_app.log", encoding="utf-8"),
+        logging.StreamHandler(stream=sys.stdout),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -351,7 +355,9 @@ def run(cmd_name: str):
 
     # Ajaxリクエストの場合はJSONレスポンスを返す
     if request.headers.get("Content-Type") == "application/json" or request.headers.get("Accept") == "application/json":
-        return jsonify({"success": True, "task_id": task_id, "command": cmd, "message": f"タスクを開始しました (ID: {task_id})"})
+        return jsonify(
+            {"success": True, "task_id": task_id, "command": cmd, "message": f"タスクを開始しました (ID: {task_id})"}
+        )
 
     # 通常のフォーム送信の場合は実行中ページにリダイレクト
     return redirect(url_for("task_status", task_id=task_id))
