@@ -30,9 +30,8 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
 sys.path.append(str(SCREENING_DIR))
 
-from thresholds import log_thresholds  # noqa: E402
-
 from config import DB_PATH  # noqa: E402
+from screening.thresholds import log_thresholds  # noqa: E402
 
 TD_FMT = "%Y-%m-%d"
 DEFAULT_CAPITAL = 1_000_000  # JPY
@@ -108,7 +107,8 @@ def add_n_trading_days(s: pd.Series, n: int, calendar: pd.DatetimeIndex) -> pd.S
 
     idx = calendar.searchsorted(s) + n
     idx[idx >= len(calendar)] = len(calendar) - 1
-    return calendar[idx]
+    result = pd.Series(calendar[idx].to_numpy(), index=s.index)
+    return result  # type: ignore[no-any-return]
 
 
 # ---------------------------------------------------------------------------
@@ -142,27 +142,27 @@ def run_backtest(
     entry_idx = signals.set_index(["LocalCode", "entry_date"]).index
     exit_idx = signals.set_index(["LocalCode", "exit_date"]).index
 
-    entry_px = prices.reindex(entry_idx)["adj_close"].values
-    exit_px = prices.reindex(exit_idx)["adj_close"].values
+    entry_px = prices.reindex(entry_idx)["adj_close"].to_numpy()
+    exit_px = prices.reindex(exit_idx)["adj_close"].to_numpy()
 
     mask = entry_px >= min_price
-    entry_px = entry_px[mask]
-    exit_px = exit_px[mask]
-    signals = signals[mask].reset_index(drop=True)
+    entry_px_filtered = entry_px[mask]
+    exit_px_filtered = exit_px[mask]
+    signals_filtered = signals.loc[mask].reset_index(drop=True)
 
-    shares = (capital // entry_px).astype(int)
-    invest = shares * entry_px
-    proceed = shares * exit_px
+    shares = (capital // entry_px_filtered).astype(int)
+    invest = shares * entry_px_filtered
+    proceed = shares * exit_px_filtered
     profit = proceed - invest
 
     trades = pd.DataFrame(
         {
-            "code": signals["LocalCode"],
-            "DisclosedAt": signals["DisclosedAt"].dt.date,
-            "entry_date": signals["entry_date"].dt.date,
-            "exit_date": signals["exit_date"].dt.date,
-            "entry_px": entry_px,
-            "exit_px": exit_px,
+            "code": signals_filtered["LocalCode"],
+            "DisclosedAt": signals_filtered["DisclosedAt"].dt.date,
+            "entry_date": signals_filtered["entry_date"].dt.date,
+            "exit_date": signals_filtered["exit_date"].dt.date,
+            "entry_px": entry_px_filtered,
+            "exit_px": exit_px_filtered,
             "shares": shares,
             "invest": invest,
             "proceed": proceed,

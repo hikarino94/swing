@@ -38,7 +38,7 @@ import requests
 from requests import Response, Session
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH, config
+from config import DB_PATH, config  # noqa: E402
 
 API_URL = config.get_api_endpoint("daily_quotes")
 RATE_SLEEP = config.api_rate_limit_sleep
@@ -110,6 +110,7 @@ def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
         logger.warning("HTTP %s → %ss 後に再試行", r.status_code, wait)
         time.sleep(wait)
     r.raise_for_status()
+    raise RuntimeError("Unexpected end of function")  # 型チェッカー用
 
 
 def _fetch_all(session: Session, base_params: dict, token: str) -> pd.DataFrame:

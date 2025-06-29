@@ -11,9 +11,10 @@ import json
 import logging
 import sys
 from pathlib import Path
+from typing import cast
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import config
+from config import config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,8 @@ def _load_from_json(path: Path) -> dict[str, float]:
         return {}
     try:
         with path.open("r", encoding="utf-8") as fh:
-            return json.load(fh)
+            data = json.load(fh)
+            return cast(dict[str, float], data)
     except Exception as exc:  # pragma: no cover - just in case
         logger.warning("Failed to load %s: %s", path, exc)
         return {}

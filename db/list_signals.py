@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH
+from config import DB_PATH  # noqa: E402
 
 TABLES = {
     "fund": ("fundamental_signals", "DisclosedAt"),
@@ -65,7 +65,7 @@ def main() -> None:
         if filters:
             where = " WHERE " + " AND ".join(filters)
             sql = f"SELECT * FROM {table}{where} ORDER BY {date_col}"
-            df = pd.read_sql(sql, conn, params=params)
+            df = pd.read_sql(sql, conn, params=tuple(params))
         else:
             sql = f"SELECT * FROM {table} ORDER BY {date_col} DESC LIMIT ?"
             df = pd.read_sql(sql, conn, params=(args.limit,))
