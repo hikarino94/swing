@@ -16,7 +16,7 @@ pre-commit install
 
 ## セットアップ
 
-Python 3.9 以上を想定しています。必要なライブラリは
+Python 3.12 以上を想定しています。必要なライブラリは
 `requirements.txt` にまとめています。
 
 ```bash

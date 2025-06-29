@@ -23,7 +23,7 @@ help:
 
 # 環境構築
 setup:
-	python setup_environment.py
+	python3 setup_environment.py
 
 # 依存関係のインストール
 install:
@@ -61,46 +61,46 @@ docs:
 	cd docs && sphinx-build -b html . _build/html
 
 serve-docs: docs
-	cd docs/_build/html && python -m http.server 8000
+	cd docs/_build/html && python3 -m http.server 8000
 
 # データベース操作
 db-init:
-	python db/db_schema.py
+	python3 db/db_schema.py
 
 db-summary:
-	python db/db_summary.py
+	python3 db/db_summary.py
 
 # データ取得
 fetch-quotes:
-	python fetch/daily_quotes.py
+	python3 fetch/daily_quotes.py
 
 fetch-listed:
-	python fetch/listed_info.py
+	python3 fetch/listed_info.py
 
 fetch-statements:
-	python fetch/statements.py 2
+	python3 fetch/statements.py 2
 
 fetch-all: fetch-listed fetch-quotes fetch-statements
 
 # スクリーニング
 screen-fundamental:
-	python screening/screen_statements.py
+	python3 screening/screen_statements.py
 
 screen-technical:
-	python screening/screen_technical.py screen
+	python3 screening/screen_technical.py screen
 
 screen-ml:
-	python screening/screen_ml.py screen
+	python3 screening/screen_ml.py screen
 
 # バックテスト
 backtest-fundamental:
-	python backtest/backtest_statements.py
+	python3 backtest/backtest_statements.py
 
 backtest-technical:
-	python backtest/backtest_technical.py
+	python3 backtest/backtest_technical.py
 
 backtest-ml:
-	python backtest/backtest_ml.py
+	python3 backtest/backtest_ml.py
 
 backtest-all: backtest-fundamental backtest-technical backtest-ml
 
@@ -110,16 +110,16 @@ pre-commit:
 
 # トークン更新
 update-token:
-	python update_idtoken.py
+	python3 update_idtoken.py
 
 # スケジューラー起動
 run-scheduler:
-	python scheduler.py
+	python3 scheduler.py
 
 # GUI起動
 run-gui:
-	python gui.py
+	python3 gui.py
 
 # Webサーバー起動
 run-web:
-	python web.py
+	python3 web.py

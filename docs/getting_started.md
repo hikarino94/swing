@@ -6,7 +6,7 @@ Swing Trade Analysis Toolは、日本株のスイングトレード戦略を開�
 
 ## 必要な環境
 
-- Python 3.9以上
+- Python 3.12以上
 - J-Quantsアカウント（無料登録可能）
 - SQLite（Pythonに標準で含まれています）
 
