@@ -153,6 +153,9 @@ def _by_code(sess: Session, tok: str, code: str) -> pd.DataFrame:
 
 def _norm(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize API columns and types for the database."""
+    if df.empty:
+        return df
+
     rename = {
         "Code": "code",
         "Date": "date",
@@ -245,13 +248,16 @@ def fetch_and_load(start: str | None, end: str | None) -> None:
             logger.info("本日 %s", today)
             df_today = _norm(_by_date(sess, tok, today))
             _upsert(conn, df_today)
-            splits = df_today.loc[
-                df_today["adj_factor"].fillna(1.0) != 1.0,
-                "code",
-            ].unique()
-            for c in splits:
-                logger.info("株式分割検出 %s → 全履歴取得", c)
-                _upsert(conn, _norm(_by_code(sess, tok, c)))
+
+            # 空のDataFrameの場合は株式分割チェックをスキップ
+            if not df_today.empty:
+                splits = df_today.loc[
+                    df_today["adj_factor"].fillna(1.0) != 1.0,
+                    "code",
+                ].unique()
+                for c in splits:
+                    logger.info("株式分割検出 %s → 全履歴取得", c)
+                    _upsert(conn, _norm(_by_code(sess, tok, c)))
     except requests.HTTPError as exc:
         conn.commit()
         logger.error("API error: %s", exc)
