@@ -190,7 +190,7 @@ def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
         g.drop(columns="q_num", inplace=True)
         return g
 
-    return df.groupby("LocalCode", group_keys=False).apply(_add)
+    return df.groupby("LocalCode", group_keys=False).apply(_add, include_groups=False)
 
 
 # ---------------------------------------------------------------------------

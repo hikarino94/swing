@@ -138,12 +138,13 @@ def _make_price_features(df_price: pd.DataFrame) -> pd.DataFrame:
 def _merge_features(price_feat: pd.DataFrame, stmt: pd.DataFrame) -> pd.DataFrame:
     """Forward‑fill latest statement per code & asof‑merge to price."""
     # ----- forward fill statements per code -----
-    stmt_filled = (
-        stmt.sort_values(["code", "DisclosedDate"])
-        .groupby("code", group_keys=False)
-        .apply(lambda g: g.ffill())  # 日次で穴埋め
-        .reset_index(drop=True)
-    )
+    # 各codeごとに財務データを前方補完
+    stmt_sorted = stmt.sort_values(["code", "DisclosedDate"])
+    stmt_filled_list = []
+    for _, group in stmt_sorted.groupby("code"):
+        filled_group = group.ffill()
+        stmt_filled_list.append(filled_group)
+    stmt_filled = pd.concat(stmt_filled_list, ignore_index=True)
 
     # ----- asof merge (nearest past disclosure) -----
     merged = pd.merge_asof(
@@ -164,27 +165,58 @@ def _merge_features(price_feat: pd.DataFrame, stmt: pd.DataFrame) -> pd.DataFram
     return merged
 
 
-def _add_label(df: pd.DataFrame) -> pd.DataFrame:
-    """Add binary label whether price rises ≥THRESH_PCT within FUTURE_WINDOW."""
+def _add_label(
+    df: pd.DataFrame, future_window: int = FUTURE_WINDOW, thresh_pct: float = THRESH_PCT
+) -> pd.DataFrame:
+    """Add binary label whether price rises ≥thresh_pct within future_window."""
     dfs = []
     for _code, g in df.groupby("code"):
         g = g.sort_values("date").copy()
-        g["future_close"] = g["adj_close"].shift(-FUTURE_WINDOW)
-        g["future_ret"] = (g["future_close"] - g["adj_close"]) / g["adj_close"]
-        g["label"] = (g["future_ret"] >= THRESH_PCT).astype(int)
+        g["future_close"] = g["adj_close"].shift(-future_window)
+        # ベクトル化された操作でfuture_retを計算
+        # ゼロ除算を防ぐため、adj_closeが0の場合はNaNにする
+        adj_close_safe = g["adj_close"].replace(0, pd.NA)
+        g["future_ret"] = (g["future_close"] - g["adj_close"]) / adj_close_safe
+        # 無限大や異常値をNaNに置換
+        g["future_ret"] = g["future_ret"].replace([float("inf"), -float("inf")], pd.NA)
+        g["label"] = (g["future_ret"] >= thresh_pct).astype(int)
         dfs.append(g)
     return pd.concat(dfs, ignore_index=True)
 
 
-def _build_dataset(con: sqlite3.Connection, lookback: int) -> pd.DataFrame:
+def _build_dataset(
+    con: sqlite3.Connection,
+    lookback: int,
+    future_window: int = FUTURE_WINDOW,
+    thresh_pct: float = THRESH_PCT,
+) -> pd.DataFrame:
     price = _fetch_price(con, lookback)
+    logger.info(
+        f"Fetched {len(price)} price records for {price['code'].nunique()} stocks"
+    )
+
     price_feat = _make_price_features(price)
+    logger.info(f"Created price features: {len(price_feat)} records")
+
     stmt = _fetch_stmt(con)
+    logger.info(f"Fetched {len(stmt)} statement records")
+
     merged = _merge_features(price_feat, stmt)
-    merged = _add_label(merged)
+    logger.info(f"Merged data: {len(merged)} records")
+
+    merged = _add_label(merged, future_window=future_window, thresh_pct=thresh_pct)
+
     # 学習用データとして必要カラムが欠損していない行のみ残す
     req_cols = PRICE_FEATURES + NUMERIC_STMT_COLS + ["label"]
-    return merged.dropna(subset=req_cols)
+    result = merged.dropna(subset=req_cols)
+    logger.info(f"Final dataset after dropna: {len(result)} records")
+
+    # future_retの分布を確認
+    if "future_ret" in result.columns:
+        ret_stats = result["future_ret"].describe()
+        logger.info(f"future_ret stats:\n{ret_stats}")
+
+    return result
 
 
 # -----------------------------------------------------------------------------
@@ -195,15 +227,62 @@ def _build_dataset(con: sqlite3.Connection, lookback: int) -> pd.DataFrame:
 def _train_model(df: pd.DataFrame):
     X = df[PRICE_FEATURES + NUMERIC_STMT_COLS].astype(float)
     y = df["label"].astype(int)
+
+    # デバッグ: ラベルの分布を確認
+    label_counts = y.value_counts()
+    logger.info(f"Label distribution: {label_counts.to_dict()}")
+    logger.info(f"Total samples: {len(y)}")
+
+    # 少なくとも2つのクラスが必要
+    if len(label_counts) < 2:
+        logger.error(
+            "Not enough classes in the target variable. Need at least 2 classes."
+        )
+        logger.info(
+            f"All samples belong to class: {label_counts.index[0] if len(label_counts) > 0 else 'none'}"
+        )
+        # より小さい閾値で再度ラベルを作成してみる
+        if "future_ret" in df.columns:
+            df_copy = df.copy()
+            for thresh in [0.03, 0.02, 0.01, 0.0]:
+                df_copy["label"] = (df_copy["future_ret"] >= thresh).astype(int)
+                new_counts = df_copy["label"].value_counts()
+                if len(new_counts) >= 2:
+                    logger.info(
+                        f"Using threshold {thresh} instead, which gives distribution: {new_counts.to_dict()}"
+                    )
+                    y = df_copy["label"].astype(int)
+                    X = df_copy[PRICE_FEATURES + NUMERIC_STMT_COLS].astype(
+                        float
+                    )  # Xも更新
+                    break
+            else:
+                raise ValueError(
+                    "Cannot find suitable threshold for binary classification"
+                )
+        else:
+            raise ValueError("future_ret column not found in DataFrame")
+
+    # 各クラスに最低限のサンプル数があることを確認
+    min_samples_per_class = 10
+    if (label_counts < min_samples_per_class).any():
+        logger.warning(f"Some classes have fewer than {min_samples_per_class} samples")
+
     pipe = Pipeline(
         [
             ("scaler", StandardScaler()),
-            ("gb", GradientBoostingClassifier()),
+            ("gb", GradientBoostingClassifier(random_state=42)),
         ]
     )
     pipe.fit(X, y)
-    auc = roc_auc_score(y, pipe.predict_proba(X)[:, 1])
-    logger.info("Training done — in‑sample AUC: %.3f", auc)
+
+    # AUC計算（2クラスの場合のみ）
+    if len(label_counts) == 2:
+        auc = roc_auc_score(y, pipe.predict_proba(X)[:, 1])
+        logger.info("Training done — in‑sample AUC: %.3f", auc)
+    else:
+        logger.info("Training done — multi-class classification")
+
     return pipe
 
 
@@ -221,6 +300,15 @@ def cli():
     )
     p.add_argument("--top", type=int, default=30, help="Rows to output when screening")
     p.add_argument("--retrain", action="store_true", help="Force retrain before screen")
+    p.add_argument(
+        "--future-window", type=int, default=FUTURE_WINDOW, help="Days ahead to predict"
+    )
+    p.add_argument(
+        "--thresh-pct",
+        type=float,
+        default=THRESH_PCT,
+        help="Threshold percentage for positive label",
+    )
     args = p.parse_args()
     logger.info("screen_ml.py running with command '%s'", args.cmd)
     db_path = Path(args.db)
@@ -230,7 +318,12 @@ def cli():
 
     # ───────────────────────── TRAIN ──────────────────────────
     if args.cmd == "train":
-        df = _build_dataset(con, args.lookback)
+        df = _build_dataset(
+            con,
+            args.lookback,
+            future_window=args.future_window,
+            thresh_pct=args.thresh_pct,
+        )
         model = _train_model(df)
         with open(model_path, "wb") as fh:
             pickle.dump(model, fh)
@@ -240,7 +333,12 @@ def cli():
     # ───────────────────────── SCREEN ─────────────────────────
     if args.retrain or not model_path.exists():
         logger.info("Retraining because --retrain or model not found…")
-        df = _build_dataset(con, args.lookback)
+        df = _build_dataset(
+            con,
+            args.lookback,
+            future_window=args.future_window,
+            thresh_pct=args.thresh_pct,
+        )
         model = _train_model(df)
         with open(model_path, "wb") as fh:
             pickle.dump(model, fh)
