@@ -29,7 +29,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH
+from config import DB_PATH  # noqa: E402
 
 # -----------------------------------------------------------------------------
 # pandas future‑proof settings & logger
@@ -167,7 +167,7 @@ def _merge_features(price_feat: pd.DataFrame, stmt: pd.DataFrame) -> pd.DataFram
 def _add_label(df: pd.DataFrame) -> pd.DataFrame:
     """Add binary label whether price rises ≥THRESH_PCT within FUTURE_WINDOW."""
     dfs = []
-    for code, g in df.groupby("code"):
+    for _code, g in df.groupby("code"):
         g = g.sort_values("date").copy()
         g["future_close"] = g["adj_close"].shift(-FUTURE_WINDOW)
         g["future_ret"] = (g["future_close"] - g["adj_close"]) / g["adj_close"]

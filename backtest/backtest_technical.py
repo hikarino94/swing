@@ -40,12 +40,18 @@ from pathlib import Path
 
 import pandas as pd
 
+# プロジェクトのパスを追加
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
 sys.path.append(str(SCREENING_DIR))
-from thresholds import SHORT_SIGNAL_COUNT_MIN, SIGNAL_COUNT_MIN, log_thresholds
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH
+from thresholds import (  # noqa: E402
+    SHORT_SIGNAL_COUNT_MIN,
+    SIGNAL_COUNT_MIN,
+    log_thresholds,
+)
+
+from config import DB_PATH  # noqa: E402
 
 CAPITAL_DEFAULT = 1_000_000
 HOLD_DAYS_DEFAULT = 60

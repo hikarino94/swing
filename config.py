@@ -72,12 +72,12 @@ class Config:
         TODO: 将来的にはPath型を返すように変更することを検討
               現在は後方互換性のためstr型を維持
         """
-        return self._config["database"]["path"]
+        return str(self._config["database"]["path"])
 
     @property
     def api_base_url(self) -> str:
         """APIベースURLを返します"""
-        return self._config["api"]["base_url"]
+        return str(self._config["api"]["base_url"])
 
     def get_api_endpoint(self, endpoint_name: str) -> str:
         """
@@ -92,12 +92,12 @@ class Config:
         endpoint = self._config["api"]["endpoints"].get(endpoint_name)
         if not endpoint:
             raise ValueError(f"Unknown endpoint: {endpoint_name}")
-        return self.api_base_url + endpoint
+        return str(self.api_base_url + endpoint)
 
     @property
     def api_rate_limit_sleep(self) -> float:
         """APIレート制限のスリープ時間を返します"""
-        return self._config["api"]["rate_limit"]["sleep_seconds"]
+        return float(self._config["api"]["rate_limit"]["sleep_seconds"])
 
     def get_scheduler_config(self, task_name: str) -> dict[str, str]:
         """
@@ -109,7 +109,8 @@ class Config:
         Returns:
             タスク設定（time, frequency）
         """
-        return self._config["scheduler"]["tasks"].get(task_name, {})
+        result = self._config["scheduler"]["tasks"].get(task_name, {})
+        return {str(k): str(v) for k, v in result.items()}
 
     def get_file_path(self, file_type: str) -> Path:
         """
@@ -124,17 +125,17 @@ class Config:
         filename = self._config["files"].get(file_type)
         if not filename:
             raise ValueError(f"Unknown file type: {file_type}")
-        return self.base_dir / filename
+        return Path(self.base_dir / filename)
 
     @property
     def log_level(self) -> str:
         """ログレベルを返します"""
-        return self._config["logging"]["level"]
+        return str(self._config["logging"]["level"])
 
     @property
     def log_format(self) -> str:
         """ログフォーマットを返します"""
-        return self._config["logging"]["format"]
+        return str(self._config["logging"]["format"])
 
     def get(self, key: str, default: Any = None) -> Any:
         """

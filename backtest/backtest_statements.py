@@ -23,14 +23,16 @@ import sqlite3
 import sys
 from pathlib import Path
 
-SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
-sys.path.append(str(SCREENING_DIR))
-from thresholds import log_thresholds
-
-sys.path.append(str(Path(__file__).resolve().parents[1]))
 import pandas as pd
 
-from config import DB_PATH
+# プロジェクトのパスを追加
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
+sys.path.append(str(SCREENING_DIR))
+
+from thresholds import log_thresholds  # noqa: E402
+
+from config import DB_PATH  # noqa: E402
 
 TD_FMT = "%Y-%m-%d"
 DEFAULT_CAPITAL = 1_000_000  # JPY

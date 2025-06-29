@@ -51,8 +51,6 @@ class TestEnvironmentSetup:
 
     def test_get_pip_command_with_venv(self, tmp_path: Path):
         """仮想環境ありの場合のpipコマンド取得テスト"""
-        setup = EnvironmentSetup(tmp_path)
-
         # 仮想環境ディレクトリを作成
         venv_dir = tmp_path / "venv"
         venv_dir.mkdir()
