@@ -34,18 +34,21 @@ from typing import List
 from concurrent.futures import ThreadPoolExecutor
 import time
 from requests import Session
+import sys
 
 import pandas as pd
 import requests
 
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import config, DB_PATH
+
 # ---------------------------------------------------------------------------
 # Config & logging
 # ---------------------------------------------------------------------------
-API_ENDPOINT = "https://api.jquants.com/v1/fins/statements"
-LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
+API_ENDPOINT = config.get_api_endpoint("statements")
+LOG_FMT = config.log_format
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("statements")
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 # ---------------------------------------------------------------------------
 # SQLite側の statements テーブルに合わせたカラム一覧
@@ -166,7 +169,7 @@ SCHEMA_COLUMNS: List[str] = [
 
 
 def _load_token() -> str:
-    path = Path(__file__).resolve().parents[1] / "idtoken.json"
+    path = config.get_file_path("idtoken")
     with path.open("r", encoding="utf-8") as f:
         tok = json.load(f).get("idToken")
     if not tok:

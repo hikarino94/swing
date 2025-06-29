@@ -1,6 +1,93 @@
+# 認証・設定ファイル
 account.json
 idtoken.json
-stock.db
-stock.db-wal
-stock.db-shm
-bk1_stock.db
+config.json
+login.json
+
+# データベースファイル
+*.db
+*.db-wal
+*.db-shm
+db/*.db
+db/*.db-wal
+db/*.db-shm
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# 配布・ビルド
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# テスト・カバレッジ
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+bandit-report.json
+
+# ドキュメント
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ログ・出力
+logs/
+output/
+*.log
+*.xlsx
+*.json
+!*.json.example
+!package.json
+!pyproject.toml
+
+# 一時ファイル
+.ipynb_checkpoints/
+*.tmp
+*.bak
+
+# 機械学習モデル
+*.pkl
+*.pickle
+*.h5
+*.model
+
+# その他
+.env
+.env.*

@@ -21,12 +21,16 @@ import logging
 import pickle
 import sqlite3
 from pathlib import Path
+import sys
 
 import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH
 
 # -----------------------------------------------------------------------------
 # pandas future‑proof settings & logger
@@ -202,7 +206,7 @@ def _train_model(df: pd.DataFrame):
 def cli():
     p = argparse.ArgumentParser(description="ML‑based swing‑trade screener")
     p.add_argument("cmd", choices=["train", "screen"], help="Command")
-    p.add_argument("--db", default="./db/stock.db", help="SQLite DB path")
+    p.add_argument("--db", default=DB_PATH, help="SQLite DB path")
     p.add_argument(
         "--lookback", type=int, default=LOOKBACK_DAYS, help="History days for training"
     )

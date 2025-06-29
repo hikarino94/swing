@@ -19,6 +19,10 @@ import pandas as pd
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
+import sys
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH
 
 # Threshold constants shared across screening modules
 from thresholds import (
@@ -31,8 +35,6 @@ from thresholds import (
     SHORT_SIGNAL_COUNT_MIN,
     log_thresholds,
 )
-
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)

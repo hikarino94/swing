@@ -5,12 +5,16 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 
 import requests
 
-API_AUTH = "https://api.jquants.com/v1/token/auth_user"
-API_REFRESH = "https://api.jquants.com/v1/token/auth_refresh"
-DEFAULT_ACCOUNT = "account.json"
+sys.path.append(str(Path(__file__).resolve().parent))
+from config import config
+
+API_AUTH = config.get_api_endpoint("auth")
+API_REFRESH = config.get_api_endpoint("refresh")
+DEFAULT_ACCOUNT = str(config.get_file_path("account"))
 
 
 def _auth_user(mail: str, password: str) -> str:
@@ -69,7 +73,7 @@ def _cli() -> None:
     ap.add_argument("--mail", help="registered email")
     ap.add_argument("--password", help="login password")
     ap.add_argument("--account", default=DEFAULT_ACCOUNT, help="credential file")
-    ap.add_argument("--out", default="idtoken.json", help="output file")
+    ap.add_argument("--out", default=str(config.get_file_path("idtoken")), help="output file")
     a = ap.parse_args()
 
     mail, pwd = a.mail, a.password

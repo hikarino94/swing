@@ -5,8 +5,9 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-
-DB_PATH = Path(__file__).resolve().parent / "stock.db"
+import sys
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH
 
 TABLES = {
     "prices": "date",

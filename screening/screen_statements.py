@@ -22,8 +22,12 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final
+import sys
 
 import pandas as pd
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH
 
 # Threshold constants shared across screening modules
 from thresholds import (
@@ -40,7 +44,7 @@ from thresholds import (
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Config:
-    db_path: Path = Path(__file__).resolve().parents[1] / "db/stock.db"
+    db_path: Path = Path(DB_PATH)
     lookback_days: int = 365 * 3  # 3 年分ロード
     recent_days: int = 7  # 開示から何日以内を対象にするか
     as_of: date = field(default_factory=date.today)  # 処理基準日

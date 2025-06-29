@@ -38,12 +38,15 @@ import pandas as pd
 import requests
 from requests import Session, Response
 
-API_URL = "https://api.jquants.com/v1/prices/daily_quotes"
-RATE_SLEEP = 0.35  # ~3 req/sec safety
-LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
+import sys
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import config, DB_PATH
+
+API_URL = config.get_api_endpoint("daily_quotes")
+RATE_SLEEP = config.api_rate_limit_sleep
+LOG_FMT = config.log_format
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("daily_quotes")
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 # SQLite prices テーブルのカラム順序を定義
 _PRICE_COLS = [
@@ -71,7 +74,7 @@ _PRICE_COLS = [
 
 def _load_token() -> str:
     """Read the JWT token stored in ``idtoken.json``."""
-    path = Path(__file__).resolve().parents[1] / "idtoken.json"
+    path = config.get_file_path("idtoken")
     with path.open("r", encoding="utf-8") as f:
         tok = json.load(f).get("idToken")
     if not tok:

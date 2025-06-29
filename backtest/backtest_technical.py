@@ -45,11 +45,13 @@ SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
 sys.path.append(str(SCREENING_DIR))
 from thresholds import SIGNAL_COUNT_MIN, SHORT_SIGNAL_COUNT_MIN, log_thresholds
 
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH
+
 CAPITAL_DEFAULT = 1_000_000
 HOLD_DAYS_DEFAULT = 60
 STOP_LOSS_PCT_DEFAULT = 0.05
 MIN_PRICE_DEFAULT = 300
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)

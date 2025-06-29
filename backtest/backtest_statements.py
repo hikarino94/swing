@@ -28,12 +28,14 @@ SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
 sys.path.append(str(SCREENING_DIR))
 from thresholds import log_thresholds
 
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH
+
 import pandas as pd
 
 TD_FMT = "%Y-%m-%d"
 DEFAULT_CAPITAL = 1_000_000  # JPY
 MIN_PRICE_DEFAULT = 300
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logger = logging.getLogger("backtest_statements")

@@ -11,6 +11,10 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+import sys
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import config
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +51,7 @@ def load_thresholds(path: Path | None = None) -> dict[str, float]:
         "FIRST_LOOKBACK_DAYS": 30,
     }
 
-    path = path or Path(__file__).with_suffix(".json")
+    path = path or config.get_file_path("thresholds")
     loaded = _load_from_json(path)
     thresholds = {**defaults, **loaded}
     logger.info("Thresholds loaded from %s: %s", path, thresholds)

@@ -17,8 +17,12 @@ import datetime as dt
 import logging
 from pathlib import Path
 from typing import Tuple
+import sys
 
 import pandas as pd
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH
 
 from screening.screen_ml import (
     PRICE_FEATURES,
@@ -30,8 +34,6 @@ from screening.screen_ml import (
     _add_label,
     _train_model,
 )
-
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)

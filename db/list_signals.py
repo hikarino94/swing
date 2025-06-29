@@ -7,10 +7,12 @@ import argparse
 import sqlite3
 from pathlib import Path
 import datetime as dt
+import sys
 
 import pandas as pd
 
-DB_PATH = Path(__file__).resolve().parent / "stock.db"
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH
 TABLES = {
     "fund": ("fundamental_signals", "DisclosedAt"),
     "tech": ("technical_indicators", "signal_date"),

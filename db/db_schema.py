@@ -13,12 +13,13 @@ This file intentionally contains **only ASCII characters** to avoid the
 import sqlite3
 import logging
 from pathlib import Path
+import sys
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("db_schema")
-
-DB_PATH = "./stock.db"
 
 DDL = """
 PRAGMA journal_mode = WAL;
