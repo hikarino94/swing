@@ -112,6 +112,9 @@ def _ascii_table(df: pd.DataFrame, heavy: bool = False) -> str:
     # characters improve readability but are not available in all encodings,
     # notably the Windows ``cp932`` encoding.  In such cases we silently
     # fall back to simple ASCII characters.
+    h: str = "-"
+    v: str = "|"
+    c: str = "+"
     if heavy:
         try:
             "═╬║".encode(sys.stdout.encoding or "utf-8")
@@ -123,7 +126,7 @@ def _ascii_table(df: pd.DataFrame, heavy: bool = False) -> str:
         h, v, c = "-", "|", "+"
 
     def border() -> str:
-        return c + c.join(h * (w + 2) for w in widths) + c
+        return c + c.join(str(h * (w + 2)) for w in widths) + c
 
     lines = [border()]
     header = (

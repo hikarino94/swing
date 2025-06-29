@@ -74,7 +74,8 @@ def _load_token() -> str:
     """Read the JWT token stored in ``idtoken.json``."""
     path = config.get_file_path("idtoken")
     with path.open("r", encoding="utf-8") as f:
-        tok = json.load(f).get("idToken")
+        data: dict[str, str] = json.load(f)
+        tok = data.get("idToken")
     if not tok:
         raise RuntimeError("idToken not found in idtoken.json")
     return tok
@@ -101,7 +102,7 @@ def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
     for i in range(retries):
         r: Response = session.get(API_URL, headers=headers, params=params, timeout=60)
         if r.status_code < 400:
-            js = r.json()
+            js: dict = r.json()
             if "message" in js:
                 logger.info("API message: %s", js["message"])
             time.sleep(RATE_SLEEP)

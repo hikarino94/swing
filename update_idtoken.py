@@ -10,7 +10,8 @@ from pathlib import Path
 import requests
 
 sys.path.append(str(Path(__file__).resolve().parent))
-from config import config
+
+from config import config  # noqa: E402
 
 API_AUTH = config.get_api_endpoint("auth")
 API_REFRESH = config.get_api_endpoint("refresh")
@@ -25,7 +26,7 @@ def _auth_user(mail: str, password: str) -> str:
         timeout=30,
     )
     resp.raise_for_status()
-    data = resp.json()
+    data: dict[str, str] = resp.json()
     if "refreshToken" not in data:
         raise RuntimeError("refreshToken not found in response")
     return data["refreshToken"]
@@ -51,7 +52,7 @@ def _get_id_token(refresh_token: str) -> str:
         timeout=30,
     )
     resp.raise_for_status()
-    data = resp.json()
+    data: dict[str, str] = resp.json()
     if "idToken" not in data:
         raise RuntimeError("idToken not found in response")
     return data["idToken"]

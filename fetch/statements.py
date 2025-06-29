@@ -39,7 +39,8 @@ import requests
 from requests import Session
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH, config
+
+from config import DB_PATH, config  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Config & logging
@@ -170,7 +171,8 @@ SCHEMA_COLUMNS: list[str] = [
 def _load_token() -> str:
     path = config.get_file_path("idtoken")
     with path.open("r", encoding="utf-8") as f:
-        tok = json.load(f).get("idToken")
+        data: dict[str, str] = json.load(f)
+        tok = data.get("idToken")
     if not tok:
         raise RuntimeError("idToken not found in idtoken.json")
     return tok
