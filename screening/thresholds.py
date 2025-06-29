@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Threshold values for screening modules.
 
 The numeric constants used when filtering fundamental and technical
@@ -10,8 +9,8 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from config import config

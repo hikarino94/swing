@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """screen_statements.py – boolean‑fix & robust screening 2025‑06‑07
 ====================================================================
 *   正規化したブール列（"true"/"false"/"1"/"0"/空/NaN → bool）で
@@ -18,17 +17,15 @@ from __future__ import annotations
 import argparse
 import logging
 import sqlite3
+import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final
-import sys
 
 import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH
-
 # Threshold constants shared across screening modules
 from thresholds import (
     CF_QUALITY_MIN,
@@ -37,6 +34,8 @@ from thresholds import (
     TREASURY_DELTA_MAX,
     log_thresholds,
 )
+
+from config import DB_PATH
 
 
 # ---------------------------------------------------------------------------
@@ -93,12 +92,12 @@ def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
     start_date = (cfg.as_of - timedelta(days=cfg.lookback_days)).strftime("%Y-%m-%d")
     sql = """
         SELECT A.LocalCode,
-            A.DisclosedDate, 
-            A.DisclosedTime, 
+            A.DisclosedDate,
+            A.DisclosedTime,
             A.TypeOfCurrentPeriod,
-            A.NetSales, 
-            A.OperatingProfit, 
-            A.Profit, 
+            A.NetSales,
+            A.OperatingProfit,
+            A.Profit,
             A.EarningsPerShare,
             A.ForecastEarningsPerShare,
             A.CashFlowsFromOperatingActivities,
@@ -110,7 +109,7 @@ def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
         FROM statements A
         join listed_info B
         on A.LocalCode = B.code
-        where  B.market_code != "0109"         
+        where  B.market_code != "0109"
         and A.DisclosedDate >= ?;
     """
     df = pd.read_sql(sql, conn, params=(start_date,))

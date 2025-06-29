@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """backtest_statements.py – Capital‑sized swing back‑tester + Excel output
 =======================================================================
 * 1 取引あたり指定資金 (default 1,000,000 JPY) で最大株数を購入
@@ -18,10 +17,10 @@ $ python backtest_statements.py \
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import logging
 import sqlite3
 import sys
-import datetime as dt
 from pathlib import Path
 
 SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
@@ -29,9 +28,9 @@ sys.path.append(str(SCREENING_DIR))
 from thresholds import log_thresholds
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH
-
 import pandas as pd
+
+from config import DB_PATH
 
 TD_FMT = "%Y-%m-%d"
 DEFAULT_CAPITAL = 1_000_000  # JPY

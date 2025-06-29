@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import shlex
+import subprocess
 from pathlib import Path
-from typing import Tuple
 
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, redirect, render_template, request, url_for
 
 app = Flask(__name__)
 
 
-def run_command(cmd: str) -> Tuple[str, int]:
+def run_command(cmd: str) -> tuple[str, int]:
     """Run a shell command and return output and exit code."""
     proc = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
     output = proc.stdout + proc.stderr

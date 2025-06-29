@@ -25,22 +25,21 @@ Usage
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import json
 import logging
 import sqlite3
-import json
-import datetime as dt
-from pathlib import Path
-from typing import List
-from concurrent.futures import ThreadPoolExecutor
-import time
-from requests import Session
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pandas as pd
 import requests
+from requests import Session
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import config, DB_PATH
+from config import DB_PATH, config
 
 # ---------------------------------------------------------------------------
 # Config & logging
@@ -53,7 +52,7 @@ logger = logging.getLogger("statements")
 # ---------------------------------------------------------------------------
 # SQLite側の statements テーブルに合わせたカラム一覧
 # ---------------------------------------------------------------------------
-SCHEMA_COLUMNS: List[str] = [
+SCHEMA_COLUMNS: list[str] = [
     "DisclosedDate",
     "DisclosedTime",
     "LocalCode",
@@ -177,11 +176,11 @@ def _load_token() -> str:
     return tok
 
 
-def _fetch_statements_by_code(session: Session, idtoken: str, code: str) -> List[dict]:
+def _fetch_statements_by_code(session: Session, idtoken: str, code: str) -> list[dict]:
     """GET /statements?code=<code> with pagination and return all statement dicts."""
     headers = {"Authorization": f"Bearer {idtoken}"}
     params = {"code": code}
-    all_statements: List[dict] = []
+    all_statements: list[dict] = []
     page = 1
     while True:
         resp = session.get(API_ENDPOINT, headers=headers, params=params, timeout=60)
@@ -206,11 +205,11 @@ def _fetch_statements_by_code(session: Session, idtoken: str, code: str) -> List
 
 def _fetch_statements_by_date(
     session: Session, idtoken: str, date_str: str
-) -> List[dict]:
+) -> list[dict]:
     """GET /statements?date=<YYYY-MM-DD> and return all rows."""
     headers = {"Authorization": f"Bearer {idtoken}"}
     params = {"date": date_str}
-    all_statements: List[dict] = []
+    all_statements: list[dict] = []
     page = 1
     while True:
         resp = session.get(API_ENDPOINT, headers=headers, params=params, timeout=60)
@@ -233,7 +232,7 @@ def _fetch_statements_by_date(
     return all_statements
 
 
-def _daterange(s: dt.date, e: dt.date) -> List[dt.date]:
+def _daterange(s: dt.date, e: dt.date) -> list[dt.date]:
     """Return list of dates from ``s`` to ``e`` inclusive."""
     d, out = s, []
     while d <= e:
@@ -244,13 +243,13 @@ def _daterange(s: dt.date, e: dt.date) -> List[dt.date]:
 
 def _fetch_statements_by_period(
     session: Session, idtoken: str, start: str, end: str
-) -> List[dict]:
+) -> list[dict]:
     """Fetch statements for each day in the range ``start``–``end``."""
     s = dt.datetime.strptime(start, "%Y-%m-%d").date()
     e = dt.datetime.strptime(end, "%Y-%m-%d").date()
     if s > e:
         s, e = e, s
-    records: List[dict] = []
+    records: list[dict] = []
     for d in _daterange(s, e):
         rec = _fetch_statements_by_date(session, idtoken, d.strftime("%Y-%m-%d"))
         if rec:
@@ -259,13 +258,13 @@ def _fetch_statements_by_period(
 
 
 def _fetch_multiple_codes(
-    idtoken: str, codes: List[str], workers: int = 5
-) -> List[dict]:
+    idtoken: str, codes: list[str], workers: int = 5
+) -> list[dict]:
     """Fetch statements for many codes concurrently."""
-    results: List[dict] = []
+    results: list[dict] = []
     logger.info("%d 件のコードのデータ取得を開始します", len(codes))
 
-    def _task(code: str) -> List[dict]:
+    def _task(code: str) -> list[dict]:
         logger.info("%s の取得を開始", code)
         with requests.Session() as sess:
             stmts = _fetch_statements_by_code(sess, idtoken, code)
@@ -288,7 +287,7 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
     return df[SCHEMA_COLUMNS]
 
 
-def _upsert(conn: sqlite3.Connection, records: List[dict]) -> None:
+def _upsert(conn: sqlite3.Connection, records: list[dict]) -> None:
     # (既存の _upsert 実装)
     if not records:
         return

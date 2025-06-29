@@ -22,18 +22,18 @@ Usage
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import json
 import logging
 import sqlite3
-import json
-import datetime as dt
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pandas as pd
 import requests
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import config, DB_PATH
+from config import DB_PATH, config
 
 # ---------------------------------------------------------------------------
 # Config & logging

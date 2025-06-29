@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 screen_technical.py
 
@@ -14,16 +13,15 @@ Usage examples:
   python screen_technical.py screen     --db ./db/stock.db --as-of 2025-06-07
 """
 import argparse
-import sqlite3
-import pandas as pd
 import logging
+import sqlite3
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-import sys
+
+import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH
-
 # Threshold constants shared across screening modules
 from thresholds import (
     ADX_THRESHOLD,
@@ -31,10 +29,12 @@ from thresholds import (
     OVERHEAT_FACTOR,
     OVERSOLD_FACTOR,
     RSI_THRESHOLD,
-    SIGNAL_COUNT_MIN,
     SHORT_SIGNAL_COUNT_MIN,
+    SIGNAL_COUNT_MIN,
     log_thresholds,
 )
+
+from config import DB_PATH
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
@@ -125,7 +125,7 @@ def compute_indicators(df):
             ).astype(int),
             "signal_rsi": (rsi14 >= RSI_THRESHOLD).astype(int),
             "signal_adx": (adx14 >= ADX_THRESHOLD).astype(int),
-            "signal_bb": ((df["adj_close"] >= bb_up1)).astype(int),
+            "signal_bb": (df["adj_close"] >= bb_up1).astype(int),
             "signal_macd": (macd > macd_signal).astype(int),
             "signal_ma_short": (
                 (sma50 > sma20)
@@ -135,7 +135,7 @@ def compute_indicators(df):
                 & (slope50 < 0)
             ).astype(int),
             "signal_rsi_short": (rsi14 <= RSI_THRESHOLD).astype(int),
-            "signal_bb_short": ((df["adj_close"] <= bb_low1)).astype(int),
+            "signal_bb_short": (df["adj_close"] <= bb_low1).astype(int),
             "signal_macd_short": (macd < macd_signal).astype(int),
             # signals_overheating: flag when close is >10% above its 10MA
             "signals_overheating": overheat,
@@ -306,9 +306,7 @@ if __name__ == "__main__":
     # • 引数を解析してコマンドを判定
     # • SQLite DB に接続
     # • indicators: run_indicators() / screen: screen_signals()
-    parser = argparse.ArgumentParser(
-        description="スイングトレード向けテクニカルシグナルツール"
-    )
+    parser = argparse.ArgumentParser(description="スイングトレード向けテクニカルシグナルツール")
     parser.add_argument("command", choices=["indicators", "screen"])
     parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
     parser.add_argument("--as-of", help="計算またはスクリーニング対象日 YYYY-MM-DD")

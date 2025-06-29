@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 screen_ml.py — Machine‑learning swing‑trade screener
 ---------------------------------------------------
@@ -20,8 +19,8 @@ import argparse
 import logging
 import pickle
 import sqlite3
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier
@@ -78,8 +77,18 @@ PRICE_FEATURES = [
 # -----------------------------------------------------------------------------
 
 
-def _connect(db_path: Path) -> sqlite3.Connection:
-    con = sqlite3.connect(db_path.as_posix())
+def _connect(db_path: str | Path) -> sqlite3.Connection:
+    """
+    Connect to SQLite database.
+
+    Args:
+        db_path: Database file path (str or Path object)
+
+    TODO: 将来的にはプロジェクト全体でPath型に統一することを検討
+    """
+    if isinstance(db_path, Path):
+        db_path = db_path.as_posix()
+    con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
     return con
 

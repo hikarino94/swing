@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """backtest_ml.py
 
 Machine-learning back-test using the screen_ml features.
@@ -12,26 +11,24 @@ simulates buying the top N symbols.
 from __future__ import annotations
 
 import argparse
-import sqlite3
 import datetime as dt
 import logging
-from pathlib import Path
-from typing import Tuple
+import sqlite3
 import sys
+from pathlib import Path
 
 import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from config import DB_PATH
-
 from screening.screen_ml import (
-    PRICE_FEATURES,
-    NUMERIC_STMT_COLS,
     FUTURE_WINDOW,
+    NUMERIC_STMT_COLS,
+    PRICE_FEATURES,
+    _add_label,
+    _fetch_stmt,
     _make_price_features,
     _merge_features,
-    _fetch_stmt,
-    _add_label,
     _train_model,
 )
 
@@ -45,7 +42,7 @@ logger = logging.getLogger("backtest_ml")
 # ---------------------------------------------------------------------------
 
 
-def _result_paths(prefix: str) -> Tuple[str, str]:
+def _result_paths(prefix: str) -> tuple[str, str]:
     ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     return f"{prefix}_{ts}.xlsx", f"{prefix}_{ts}.json"
 
@@ -58,13 +55,15 @@ def _fetch_price_range(con: sqlite3.Connection, start: str, end: str) -> pd.Data
     return pd.read_sql(q, con, params=(start, end), parse_dates=["date"])
 
 
-def _prepare_dataset(
-    con: sqlite3.Connection, start: str, end: str
-) -> pd.DataFrame:
+def _prepare_dataset(con: sqlite3.Connection, start: str, end: str) -> pd.DataFrame:
     price = _fetch_price_range(
         con,
-        (dt.datetime.strptime(start, "%Y-%m-%d") - dt.timedelta(days=365)).strftime("%Y-%m-%d"),
-        (dt.datetime.strptime(end, "%Y-%m-%d") + dt.timedelta(days=FUTURE_WINDOW)).strftime("%Y-%m-%d"),
+        (dt.datetime.strptime(start, "%Y-%m-%d") - dt.timedelta(days=365)).strftime(
+            "%Y-%m-%d"
+        ),
+        (
+            dt.datetime.strptime(end, "%Y-%m-%d") + dt.timedelta(days=FUTURE_WINDOW)
+        ).strftime("%Y-%m-%d"),
     )
     price_feat = _make_price_features(price)
     stmt = _fetch_stmt(con)
@@ -93,9 +92,9 @@ def run_backtest(
     logger.info("Preparing dataset…")
     df = _prepare_dataset(con, start, end)
 
-    train_end = (dt.datetime.strptime(start, "%Y-%m-%d") - dt.timedelta(days=1)).strftime(
-        "%Y-%m-%d"
-    )
+    train_end = (
+        dt.datetime.strptime(start, "%Y-%m-%d") - dt.timedelta(days=1)
+    ).strftime("%Y-%m-%d")
     train_df = df[df["date"] <= train_end]
     if train_df.empty:
         raise ValueError("Not enough history to train the model")
@@ -200,8 +199,12 @@ if __name__ == "__main__":
     parser.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     parser.add_argument("--end", help="End date YYYY-MM-DD")
     parser.add_argument("--top", type=int, default=10, help="Top N picks per day")
-    parser.add_argument("--capital", type=int, default=1_000_000, help="Capital per trade")
-    parser.add_argument("--lookback", type=int, default=1095, help="Lookback days for training")
+    parser.add_argument(
+        "--capital", type=int, default=1_000_000, help="Capital per trade"
+    )
+    parser.add_argument(
+        "--lookback", type=int, default=1095, help="Lookback days for training"
+    )
     default_xlsx, default_json = _result_paths("ml")
     parser.add_argument("--outfile", default=default_xlsx, help="Excel output")
     parser.add_argument("--json", default=default_json, help="JSON output")

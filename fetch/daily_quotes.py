@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 Fully‑paged downloader for **J‑Quants `/prices/daily_quotes`** that respects the
 rate‑limit & pagination notes in the official "Attention" page
@@ -30,17 +29,16 @@ import datetime as dt
 import json
 import logging
 import sqlite3
+import sys
 import time
 from pathlib import Path
-from typing import List, Optional
 
 import pandas as pd
 import requests
-from requests import Session, Response
+from requests import Response, Session
 
-import sys
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import config, DB_PATH
+from config import DB_PATH, config
 
 API_URL = config.get_api_endpoint("daily_quotes")
 RATE_SLEEP = config.api_rate_limit_sleep
@@ -82,7 +80,7 @@ def _load_token() -> str:
     return tok
 
 
-def _daterange(s: dt.date, e: dt.date) -> List[dt.date]:
+def _daterange(s: dt.date, e: dt.date) -> list[dt.date]:
     """Return all weekdays between ``s`` and ``e`` (inclusive)."""
     d, out = s, []
     while d <= e:
@@ -116,7 +114,7 @@ def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
 
 def _fetch_all(session: Session, base_params: dict, token: str) -> pd.DataFrame:
     """Retrieve all pages for the given API parameters."""
-    frames: List[pd.DataFrame] = []
+    frames: list[pd.DataFrame] = []
     params = base_params.copy()
     seen: set[str] = set()
     while True:
@@ -220,7 +218,7 @@ def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 
 
-def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
+def fetch_and_load(start: str | None, end: str | None) -> None:
     """Fetch quotes from the API and load them into SQLite."""
     tok = _load_token()
     sess = requests.Session()

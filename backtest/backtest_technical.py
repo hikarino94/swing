@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 backtest_technical.py
 
@@ -33,17 +32,17 @@ Optional parameters:
 from __future__ import annotations
 
 import argparse
-import sqlite3
-import pandas as pd
 import datetime as dt
 import logging
+import sqlite3
 import sys
 from pathlib import Path
-from typing import Tuple
+
+import pandas as pd
 
 SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
 sys.path.append(str(SCREENING_DIR))
-from thresholds import SIGNAL_COUNT_MIN, SHORT_SIGNAL_COUNT_MIN, log_thresholds
+from thresholds import SHORT_SIGNAL_COUNT_MIN, SIGNAL_COUNT_MIN, log_thresholds
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from config import DB_PATH
@@ -63,7 +62,7 @@ log_thresholds(logger)
 # ---------------------------------------------------------------------------
 
 
-def _result_paths(prefix: str) -> Tuple[str, str]:
+def _result_paths(prefix: str) -> tuple[str, str]:
     """Return Excel and JSON file paths with a timestamp."""
 
     ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -485,9 +484,7 @@ if __name__ == "__main__":
         default=CAPITAL_DEFAULT,
         help="1 トレードあたりの資金 (JPY)",
     )
-    parser.add_argument(
-        "--hold-days", type=int, default=HOLD_DAYS_DEFAULT, help="保有日数"
-    )
+    parser.add_argument("--hold-days", type=int, default=HOLD_DAYS_DEFAULT, help="保有日数")
     parser.add_argument(
         "--stop-loss", type=float, default=STOP_LOSS_PCT_DEFAULT, help="損切り率"
     )

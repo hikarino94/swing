@@ -1,17 +1,15 @@
 import logging
 import subprocess
+import sys
 import time
 from pathlib import Path
-import sys
 
 import schedule
 
 sys.path.append(str(Path(__file__).resolve().parent))
 from config import config
 
-logging.basicConfig(
-    format=config.log_format, level=logging.INFO
-)
+logging.basicConfig(format=config.log_format, level=logging.INFO)
 logger = logging.getLogger("scheduler")
 
 
@@ -44,10 +42,14 @@ if fetch_quotes_config.get("frequency") == "daily":
     schedule.every().day.at(fetch_quotes_config.get("time", "20:00")).do(fetch_quotes)
 
 if fetch_statements_config.get("frequency") == "daily":
-    schedule.every().day.at(fetch_statements_config.get("time", "20:30")).do(fetch_statements)
+    schedule.every().day.at(fetch_statements_config.get("time", "20:30")).do(
+        fetch_statements
+    )
 
 if update_listed_info_config.get("frequency") == "monday":
-    schedule.every().monday.at(update_listed_info_config.get("time", "06:00")).do(update_listed_info)
+    schedule.every().monday.at(update_listed_info_config.get("time", "06:00")).do(
+        update_listed_info
+    )
 
 
 def main() -> None:
