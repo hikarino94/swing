@@ -3,6 +3,7 @@
 
 プロジェクト全体で使用する設定値を一元管理します。
 """
+
 import json
 from pathlib import Path
 from typing import Any

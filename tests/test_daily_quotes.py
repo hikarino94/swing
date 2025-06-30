@@ -85,7 +85,10 @@ class TestAPI:
         mock_session = mock.Mock()
         mock_response = mock.Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"message": "データ取得成功", "daily_quotes": []}
+        mock_response.json.return_value = {
+            "message": "データ取得成功",
+            "daily_quotes": [],
+        }
         mock_session.get.return_value = mock_response
 
         with mock.patch("fetch.daily_quotes.logger") as mock_logger:
@@ -165,7 +168,10 @@ class TestAPI:
                 "daily_quotes": [{"Code": "1234", "Date": "2024-01-01"}],
                 "pagination_key": "key1",
             },
-            {"daily_quotes": [], "pagination_key": "key2"},  # 空のデータ  # キーはあるが無視すべき
+            {
+                "daily_quotes": [],
+                "pagination_key": "key2",
+            },  # 空のデータ  # キーはあるが無視すべき
         ]
 
         with mock.patch.object(daily_quotes, "_call", side_effect=responses):

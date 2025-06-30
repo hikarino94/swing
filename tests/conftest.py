@@ -1,4 +1,5 @@
 """共通のテストフィクスチャと設定"""
+
 import os
 import sqlite3
 import tempfile

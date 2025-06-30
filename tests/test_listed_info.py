@@ -221,8 +221,16 @@ class TestDatabase:
         # 古いデータと新しいデータ
         df = pd.DataFrame(
             [
-                {"Code": "1234", "Date": "2024-01-01", "CompanyName": "古い会社"},  # 昨日
-                {"Code": "5678", "Date": "2024-01-02", "CompanyName": "新しい会社"},  # 本日
+                {
+                    "Code": "1234",
+                    "Date": "2024-01-01",
+                    "CompanyName": "古い会社",
+                },  # 昨日
+                {
+                    "Code": "5678",
+                    "Date": "2024-01-02",
+                    "CompanyName": "新しい会社",
+                },  # 本日
             ]
         )
 
@@ -299,7 +307,7 @@ class TestDatabase:
                 {
                     "Code": "1234",
                     "Date": "2024-01-01",
-                    "CompanyName": "テスト株式会社"
+                    "CompanyName": "テスト株式会社",
                     # 他のカラムは欠落
                 }
             ]
