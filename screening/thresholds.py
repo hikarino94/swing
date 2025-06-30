@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Threshold values for screening modules.
 
 The numeric constants used when filtering fundamental and technical
@@ -10,7 +9,12 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from pathlib import Path
+from typing import cast
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +24,8 @@ def _load_from_json(path: Path) -> dict[str, float]:
         return {}
     try:
         with path.open("r", encoding="utf-8") as fh:
-            return json.load(fh)
+            data = json.load(fh)
+            return cast(dict[str, float], data)
     except Exception as exc:  # pragma: no cover - just in case
         logger.warning("Failed to load %s: %s", path, exc)
         return {}
@@ -47,7 +52,7 @@ def load_thresholds(path: Path | None = None) -> dict[str, float]:
         "FIRST_LOOKBACK_DAYS": 30,
     }
 
-    path = path or Path(__file__).with_suffix(".json")
+    path = path or config.get_file_path("thresholds")
     loaded = _load_from_json(path)
     thresholds = {**defaults, **loaded}
     logger.info("Thresholds loaded from %s: %s", path, thresholds)

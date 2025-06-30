@@ -1,0 +1,1 @@
+"""Test package for Swing Trade Analysis Tool."""

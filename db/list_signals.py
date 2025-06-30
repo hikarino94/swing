@@ -4,13 +4,16 @@
 from __future__ import annotations
 
 import argparse
-import sqlite3
-from pathlib import Path
 import datetime as dt
+import sqlite3
+import sys
+from pathlib import Path
 
 import pandas as pd
 
-DB_PATH = Path(__file__).resolve().parent / "stock.db"
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH  # noqa: E402
+
 TABLES = {
     "fund": ("fundamental_signals", "DisclosedAt"),
     "tech": ("technical_indicators", "signal_date"),
@@ -62,7 +65,7 @@ def main() -> None:
         if filters:
             where = " WHERE " + " AND ".join(filters)
             sql = f"SELECT * FROM {table}{where} ORDER BY {date_col}"
-            df = pd.read_sql(sql, conn, params=params)
+            df = pd.read_sql(sql, conn, params=tuple(params))
         else:
             sql = f"SELECT * FROM {table} ORDER BY {date_col} DESC LIMIT ?"
             df = pd.read_sql(sql, conn, params=(args.limit,))

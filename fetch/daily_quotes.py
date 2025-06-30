@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 Fully‑paged downloader for **J‑Quants `/prices/daily_quotes`** that respects the
 rate‑limit & pagination notes in the official "Attention" page
@@ -30,20 +29,22 @@ import datetime as dt
 import json
 import logging
 import sqlite3
+import sys
 import time
 from pathlib import Path
-from typing import List, Optional
 
 import pandas as pd
 import requests
-from requests import Session, Response
+from requests import Response, Session
 
-API_URL = "https://api.jquants.com/v1/prices/daily_quotes"
-RATE_SLEEP = 0.35  # ~3 req/sec safety
-LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH, config  # noqa: E402
+
+API_URL = config.get_api_endpoint("daily_quotes")
+RATE_SLEEP = config.api_rate_limit_sleep
+LOG_FMT = config.log_format
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("daily_quotes")
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 # SQLite prices テーブルのカラム順序を定義
 _PRICE_COLS = [
@@ -71,15 +72,16 @@ _PRICE_COLS = [
 
 def _load_token() -> str:
     """Read the JWT token stored in ``idtoken.json``."""
-    path = Path(__file__).resolve().parents[1] / "idtoken.json"
+    path = config.get_file_path("idtoken")
     with path.open("r", encoding="utf-8") as f:
-        tok = json.load(f).get("idToken")
+        data: dict[str, str] = json.load(f)
+        tok = data.get("idToken")
     if not tok:
         raise RuntimeError("idToken not found in idtoken.json")
     return tok
 
 
-def _daterange(s: dt.date, e: dt.date) -> List[dt.date]:
+def _daterange(s: dt.date, e: dt.date) -> list[dt.date]:
     """Return all weekdays between ``s`` and ``e`` (inclusive)."""
     d, out = s, []
     while d <= e:
@@ -100,7 +102,7 @@ def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
     for i in range(retries):
         r: Response = session.get(API_URL, headers=headers, params=params, timeout=60)
         if r.status_code < 400:
-            js = r.json()
+            js: dict = r.json()
             if "message" in js:
                 logger.info("API message: %s", js["message"])
             time.sleep(RATE_SLEEP)
@@ -109,11 +111,12 @@ def _call(session: Session, params: dict, token: str, retries: int = 3) -> dict:
         logger.warning("HTTP %s → %ss 後に再試行", r.status_code, wait)
         time.sleep(wait)
     r.raise_for_status()
+    raise RuntimeError("Unexpected end of function")  # 型チェッカー用
 
 
 def _fetch_all(session: Session, base_params: dict, token: str) -> pd.DataFrame:
     """Retrieve all pages for the given API parameters."""
-    frames: List[pd.DataFrame] = []
+    frames: list[pd.DataFrame] = []
     params = base_params.copy()
     seen: set[str] = set()
     while True:
@@ -150,6 +153,9 @@ def _by_code(sess: Session, tok: str, code: str) -> pd.DataFrame:
 
 def _norm(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize API columns and types for the database."""
+    if df.empty:
+        return df
+
     rename = {
         "Code": "code",
         "Date": "date",
@@ -217,7 +223,7 @@ def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 
 
-def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
+def fetch_and_load(start: str | None, end: str | None) -> None:
     """Fetch quotes from the API and load them into SQLite."""
     tok = _load_token()
     sess = requests.Session()
@@ -242,13 +248,16 @@ def fetch_and_load(start: Optional[str], end: Optional[str]) -> None:
             logger.info("本日 %s", today)
             df_today = _norm(_by_date(sess, tok, today))
             _upsert(conn, df_today)
-            splits = df_today.loc[
-                df_today["adj_factor"].fillna(1.0) != 1.0,
-                "code",
-            ].unique()
-            for c in splits:
-                logger.info("株式分割検出 %s → 全履歴取得", c)
-                _upsert(conn, _norm(_by_code(sess, tok, c)))
+
+            # 空のDataFrameの場合は株式分割チェックをスキップ
+            if not df_today.empty:
+                splits = df_today.loc[
+                    df_today["adj_factor"].fillna(1.0) != 1.0,
+                    "code",
+                ].unique()
+                for c in splits:
+                    logger.info("株式分割検出 %s → 全履歴取得", c)
+                    _upsert(conn, _norm(_by_code(sess, tok, c)))
     except requests.HTTPError as exc:
         conn.commit()
         logger.error("API error: %s", exc)

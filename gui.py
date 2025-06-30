@@ -1,13 +1,13 @@
-import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
-import subprocess
-import os
-import sys
-import shlex
-import threading
-import json
 import datetime as dt
+import json
+import os
+import shlex
+import subprocess
+import sys
+import threading
+import tkinter as tk
 from pathlib import Path
+from tkinter import messagebox, scrolledtext, ttk
 
 from screening import thresholds
 

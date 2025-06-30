@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """backtest_ml.py
 
 Machine-learning back-test using the screen_ml features.
@@ -12,26 +11,26 @@ simulates buying the top N symbols.
 from __future__ import annotations
 
 import argparse
-import sqlite3
 import datetime as dt
 import logging
+import sqlite3
+import sys
 from pathlib import Path
-from typing import Tuple
 
 import pandas as pd
 
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH
 from screening.screen_ml import (
-    PRICE_FEATURES,
-    NUMERIC_STMT_COLS,
     FUTURE_WINDOW,
+    NUMERIC_STMT_COLS,
+    PRICE_FEATURES,
+    _add_label,
+    _fetch_stmt,
     _make_price_features,
     _merge_features,
-    _fetch_stmt,
-    _add_label,
     _train_model,
 )
-
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
@@ -43,7 +42,7 @@ logger = logging.getLogger("backtest_ml")
 # ---------------------------------------------------------------------------
 
 
-def _result_paths(prefix: str) -> Tuple[str, str]:
+def _result_paths(prefix: str) -> tuple[str, str]:
     ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     return f"{prefix}_{ts}.xlsx", f"{prefix}_{ts}.json"
 
@@ -56,13 +55,15 @@ def _fetch_price_range(con: sqlite3.Connection, start: str, end: str) -> pd.Data
     return pd.read_sql(q, con, params=(start, end), parse_dates=["date"])
 
 
-def _prepare_dataset(
-    con: sqlite3.Connection, start: str, end: str
-) -> pd.DataFrame:
+def _prepare_dataset(con: sqlite3.Connection, start: str, end: str) -> pd.DataFrame:
     price = _fetch_price_range(
         con,
-        (dt.datetime.strptime(start, "%Y-%m-%d") - dt.timedelta(days=365)).strftime("%Y-%m-%d"),
-        (dt.datetime.strptime(end, "%Y-%m-%d") + dt.timedelta(days=FUTURE_WINDOW)).strftime("%Y-%m-%d"),
+        (dt.datetime.strptime(start, "%Y-%m-%d") - dt.timedelta(days=365)).strftime(
+            "%Y-%m-%d"
+        ),
+        (
+            dt.datetime.strptime(end, "%Y-%m-%d") + dt.timedelta(days=FUTURE_WINDOW)
+        ).strftime("%Y-%m-%d"),
     )
     price_feat = _make_price_features(price)
     stmt = _fetch_stmt(con)
@@ -91,9 +92,9 @@ def run_backtest(
     logger.info("Preparing dataset…")
     df = _prepare_dataset(con, start, end)
 
-    train_end = (dt.datetime.strptime(start, "%Y-%m-%d") - dt.timedelta(days=1)).strftime(
-        "%Y-%m-%d"
-    )
+    train_end = (
+        dt.datetime.strptime(start, "%Y-%m-%d") - dt.timedelta(days=1)
+    ).strftime("%Y-%m-%d")
     train_df = df[df["date"] <= train_end]
     if train_df.empty:
         raise ValueError("Not enough history to train the model")
@@ -124,7 +125,11 @@ def run_backtest(
             if shares <= 0:
                 continue
             pnl_yen = (exit_price - entry_price) * shares
-            pnl_pct = (exit_price - entry_price) / entry_price * 100
+            # ゼロ除算を防ぐためentry_priceが0でないことを確認
+            if entry_price != 0:
+                pnl_pct = (exit_price - entry_price) / entry_price * 100
+            else:
+                pnl_pct = 0.0
             trades.append(
                 {
                     "code": row["code"],
@@ -147,7 +152,12 @@ def summarize(trades: pd.DataFrame) -> pd.DataFrame:
     total_profit = trades["pnl_yen"].sum()
     win_rate = (trades["pnl_yen"] > 0).mean()
     mean_ret_pct = trades["pnl_pct"].mean()
-    sharpe = trades["pnl_pct"].mean() / trades["pnl_pct"].std(ddof=0)
+    # ゼロ除算を防ぐためstdが0でないことを確認
+    pnl_std = trades["pnl_pct"].std(ddof=0)
+    if pnl_std != 0 and not pd.isna(pnl_std):
+        sharpe = trades["pnl_pct"].mean() / pnl_std
+    else:
+        sharpe = 0.0
     return pd.DataFrame(
         {
             "metric": ["trades", "total_profit", "win_rate", "avg_ret_pct", "sharpe"],
@@ -192,19 +202,29 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-if __name__ == "__main__":
+def parse_args(args=None):
+    """コマンドライン引数をパース"""
     parser = argparse.ArgumentParser(description="ML back-test")
     parser.add_argument("--db", default=DB_PATH, help="SQLite DB path")
     parser.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     parser.add_argument("--end", help="End date YYYY-MM-DD")
     parser.add_argument("--top", type=int, default=10, help="Top N picks per day")
-    parser.add_argument("--capital", type=int, default=1_000_000, help="Capital per trade")
-    parser.add_argument("--lookback", type=int, default=1095, help="Lookback days for training")
+    parser.add_argument(
+        "--capital", type=int, default=1_000_000, help="Capital per trade"
+    )
+    parser.add_argument(
+        "--lookback", type=int, default=1095, help="Lookback days for training"
+    )
     default_xlsx, default_json = _result_paths("ml")
     parser.add_argument("--outfile", default=default_xlsx, help="Excel output")
     parser.add_argument("--json", default=default_json, help="JSON output")
     parser.add_argument("--show", action="store_true", help="Show summary on stdout")
-    args = parser.parse_args()
+    return parser.parse_args(args)
+
+
+def main():
+    """メイン関数"""
+    args = parse_args()
 
     conn = sqlite3.connect(args.db)
     trades = run_backtest(
@@ -222,3 +242,8 @@ if __name__ == "__main__":
     logger.info("JSON exported → %s", args.json)
     if args.show:
         show_results(trades, summary)
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()

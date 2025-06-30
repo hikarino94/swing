@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 screen_technical.py
 
@@ -14,25 +13,27 @@ Usage examples:
   python screen_technical.py screen     --db ./db/stock.db --as-of 2025-06-07
 """
 import argparse
-import sqlite3
-import pandas as pd
 import logging
+import sqlite3
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# Threshold constants shared across screening modules
-from thresholds import (
+import pandas as pd
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from config import DB_PATH  # noqa: E402
+from screening.thresholds import (  # noqa: E402
     ADX_THRESHOLD,
     FIRST_LOOKBACK_DAYS,
     OVERHEAT_FACTOR,
     OVERSOLD_FACTOR,
     RSI_THRESHOLD,
-    SIGNAL_COUNT_MIN,
     SHORT_SIGNAL_COUNT_MIN,
+    SIGNAL_COUNT_MIN,
     log_thresholds,
 )
-
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
@@ -123,7 +124,7 @@ def compute_indicators(df):
             ).astype(int),
             "signal_rsi": (rsi14 >= RSI_THRESHOLD).astype(int),
             "signal_adx": (adx14 >= ADX_THRESHOLD).astype(int),
-            "signal_bb": ((df["adj_close"] >= bb_up1)).astype(int),
+            "signal_bb": (df["adj_close"] >= bb_up1).astype(int),
             "signal_macd": (macd > macd_signal).astype(int),
             "signal_ma_short": (
                 (sma50 > sma20)
@@ -133,7 +134,7 @@ def compute_indicators(df):
                 & (slope50 < 0)
             ).astype(int),
             "signal_rsi_short": (rsi14 <= RSI_THRESHOLD).astype(int),
-            "signal_bb_short": ((df["adj_close"] <= bb_low1)).astype(int),
+            "signal_bb_short": (df["adj_close"] <= bb_low1).astype(int),
             "signal_macd_short": (macd < macd_signal).astype(int),
             # signals_overheating: flag when close is >10% above its 10MA
             "signals_overheating": overheat,
@@ -201,18 +202,44 @@ def run_indicators(conn, as_of=None):
     logger.info("開始: %d 銘柄を処理します (as_of=%s)", total, as_of)
     records = []
 
-    def _calc(group):
-        out = compute_indicators(group)
-        if out.empty:
-            return out
-        out["code"] = group["code"].iloc[0]
-        return out
+    # 各銘柄ごとにインジケーターを計算
+    results = []
+    processed_count = 0
+    for code, group in df_price.groupby("code"):
+        result = compute_indicators(group)
+        if not result.empty:
+            result["code"] = code
+            results.append(result)
+            processed_count += 1
 
-    all_flags = (
-        df_price.groupby("code", group_keys=False).apply(_calc).reset_index(drop=True)
-    )
+        # 進捗状況のログ出力（100銘柄ごと）
+        if len(results) % 100 == 0 and len(results) > 0:
+            logger.info("  処理中: %d/%d 銘柄完了", len(results), total)
+
+    if not results:
+        logger.info("全ての銘柄で計算結果が空でした (処理銘柄数: %d)", total)
+        return
+
+    logger.info("インジケーター計算完了: %d/%d 銘柄で結果取得", processed_count, total)
+
+    all_flags = pd.concat(results, ignore_index=True)
 
     today = pd.to_datetime(as_of)
+    # デバッグ用：データフレームの構造を確認
+    if all_flags.empty:
+        logger.info("計算結果が空です")
+        return
+
+    logger.debug("all_flags columns: %s", list(all_flags.columns))
+
+    # signal_dateカラムが存在することを確認
+    if "signal_date" not in all_flags.columns:
+        logger.error(
+            "signal_dateカラムが見つかりません。利用可能なカラム: %s",
+            list(all_flags.columns),
+        )
+        return
+
     today_flags = all_flags[all_flags["signal_date"] == today]
     if today_flags.empty:
         logger.info("当日シグナルなし")

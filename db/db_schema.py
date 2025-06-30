@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 SQLite schema initializer for the swing‑trade project.
 
@@ -10,15 +9,17 @@ This file intentionally contains **only ASCII characters** to avoid the
 `unicodeescape` issue on Windows.
 """
 
-import sqlite3
 import logging
+import sqlite3
+import sys
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from config import DB_PATH
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("db_schema")
-
-DB_PATH = "./stock.db"
 
 DDL = """
 PRAGMA journal_mode = WAL;
@@ -244,8 +245,15 @@ CREATE INDEX IF NOT EXISTS idx_tindicators_date ON technical_indicators(signal_d
 """
 
 
-def init_schema(db_path: Path) -> None:
-    """Create tables and indexes if they do not exist."""
+def init_schema(db_path: str | Path) -> None:
+    """Create tables and indexes if they do not exist.
+
+    Args:
+        db_path: Database file path (str or Path object)
+
+    TODO: 将来的にはプロジェクト全体でPath型に統一することを検討
+          現在はconfig.pyがstr型を返すため、互換性のために両方を受け入れる
+    """
     with sqlite3.connect(db_path) as conn:
         conn.executescript(DDL)
 

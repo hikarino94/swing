@@ -22,33 +22,37 @@ Usage
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import json
 import logging
 import sqlite3
-import json
-import datetime as dt
+import sys
 from pathlib import Path
-
 
 import pandas as pd
 import requests
 
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from config import DB_PATH, config  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Config & logging
 # ---------------------------------------------------------------------------
-API_ENDPOINT = "https://api.jquants.com/v1/listed/info"
-LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
+API_ENDPOINT = config.get_api_endpoint("listed_info")
+LOG_FMT = config.log_format
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("listed_info")
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
 def _load_token() -> str:
-    path = Path(__file__).resolve().parents[1] / "idtoken.json"
+    path = config.get_file_path("idtoken")
     with path.open("r", encoding="utf-8") as f:
-        tok = json.load(f).get("idToken")
+        data: dict[str, str] = json.load(f)
+        tok = data.get("idToken")
     if not tok:
         raise RuntimeError("idToken not found in idtoken.json")
     return tok

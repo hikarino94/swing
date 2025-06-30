@@ -1,12 +1,15 @@
 import logging
 import subprocess
+import sys
 import time
+from pathlib import Path
 
 import schedule
 
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(message)s", level=logging.INFO
-)
+sys.path.append(str(Path(__file__).resolve().parent))
+from config import config
+
+logging.basicConfig(format=config.log_format, level=logging.INFO)
 logger = logging.getLogger("scheduler")
 
 
@@ -30,9 +33,23 @@ def update_listed_info() -> None:
     _run("python fetch/listed_info.py")
 
 
-schedule.every().day.at("20:00").do(fetch_quotes)
-schedule.every().day.at("20:30").do(fetch_statements)
-schedule.every().monday.at("06:00").do(update_listed_info)
+# スケジュール設定を設定ファイルから読み込み
+fetch_quotes_config = config.get_scheduler_config("fetch_quotes")
+fetch_statements_config = config.get_scheduler_config("fetch_statements")
+update_listed_info_config = config.get_scheduler_config("update_listed_info")
+
+if fetch_quotes_config.get("frequency") == "daily":
+    schedule.every().day.at(fetch_quotes_config.get("time", "20:00")).do(fetch_quotes)
+
+if fetch_statements_config.get("frequency") == "daily":
+    schedule.every().day.at(fetch_statements_config.get("time", "20:30")).do(
+        fetch_statements
+    )
+
+if update_listed_info_config.get("frequency") == "monday":
+    schedule.every().monday.at(update_listed_info_config.get("time", "06:00")).do(
+        update_listed_info
+    )
 
 
 def main() -> None:

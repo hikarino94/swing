@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """backtest_statements.py – Capital‑sized swing back‑tester + Excel output
 =======================================================================
 * 1 取引あたり指定資金 (default 1,000,000 JPY) で最大株数を購入
@@ -18,22 +17,25 @@ $ python backtest_statements.py \
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import logging
 import sqlite3
 import sys
-import datetime as dt
 from pathlib import Path
 
+import pandas as pd
+
+# プロジェクトのパスを追加
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
 sys.path.append(str(SCREENING_DIR))
-from thresholds import log_thresholds
 
-import pandas as pd
+from config import DB_PATH  # noqa: E402
+from screening.thresholds import log_thresholds  # noqa: E402
 
 TD_FMT = "%Y-%m-%d"
 DEFAULT_CAPITAL = 1_000_000  # JPY
 MIN_PRICE_DEFAULT = 300
-DB_PATH = (Path(__file__).resolve().parents[1] / "db/stock.db").as_posix()
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logger = logging.getLogger("backtest_statements")
@@ -105,7 +107,8 @@ def add_n_trading_days(s: pd.Series, n: int, calendar: pd.DatetimeIndex) -> pd.S
 
     idx = calendar.searchsorted(s) + n
     idx[idx >= len(calendar)] = len(calendar) - 1
-    return calendar[idx]
+    result = pd.Series(calendar[idx].to_numpy(), index=s.index)
+    return result  # type: ignore[no-any-return]
 
 
 # ---------------------------------------------------------------------------
@@ -139,27 +142,27 @@ def run_backtest(
     entry_idx = signals.set_index(["LocalCode", "entry_date"]).index
     exit_idx = signals.set_index(["LocalCode", "exit_date"]).index
 
-    entry_px = prices.reindex(entry_idx)["adj_close"].values
-    exit_px = prices.reindex(exit_idx)["adj_close"].values
+    entry_px = prices.reindex(entry_idx)["adj_close"].to_numpy()
+    exit_px = prices.reindex(exit_idx)["adj_close"].to_numpy()
 
     mask = entry_px >= min_price
-    entry_px = entry_px[mask]
-    exit_px = exit_px[mask]
-    signals = signals[mask].reset_index(drop=True)
+    entry_px_filtered = entry_px[mask]
+    exit_px_filtered = exit_px[mask]
+    signals_filtered = signals.loc[mask].reset_index(drop=True)
 
-    shares = (capital // entry_px).astype(int)
-    invest = shares * entry_px
-    proceed = shares * exit_px
+    shares = (capital // entry_px_filtered).astype(int)
+    invest = shares * entry_px_filtered
+    proceed = shares * exit_px_filtered
     profit = proceed - invest
 
     trades = pd.DataFrame(
         {
-            "code": signals["LocalCode"],
-            "DisclosedAt": signals["DisclosedAt"].dt.date,
-            "entry_date": signals["entry_date"].dt.date,
-            "exit_date": signals["exit_date"].dt.date,
-            "entry_px": entry_px,
-            "exit_px": exit_px,
+            "code": signals_filtered["LocalCode"],
+            "DisclosedAt": signals_filtered["DisclosedAt"].dt.date,
+            "entry_date": signals_filtered["entry_date"].dt.date,
+            "exit_date": signals_filtered["exit_date"].dt.date,
+            "entry_px": entry_px_filtered,
+            "exit_px": exit_px_filtered,
             "shares": shares,
             "invest": invest,
             "proceed": proceed,
@@ -250,7 +253,9 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument("--db", default=DB_PATH, help="SQLite DB ファイル")
     p.add_argument("--hold", type=int, default=40, help="保有期間（日数）")
-    p.add_argument("--entry-offset", type=int, default=1, help="エントリー日のオフセット")
+    p.add_argument(
+        "--entry-offset", type=int, default=1, help="エントリー日のオフセット"
+    )
     p.add_argument(
         "--capital",
         type=int,
@@ -267,7 +272,9 @@ def parse_args(argv=None):
     p.add_argument("--end", type=str, default=None, help="終了日 YYYY-MM-DD")
     default_xlsx, default_json = _result_paths("fundamental")
     p.add_argument("--xlsx", type=str, default=default_xlsx, help="Excel 出力ファイル")
-    p.add_argument("--json", type=str, default=default_json, help="結果を保存するJSONファイル")
+    p.add_argument(
+        "--json", type=str, default=default_json, help="結果を保存するJSONファイル"
+    )
     p.add_argument(
         "--show",
         action="store_true",

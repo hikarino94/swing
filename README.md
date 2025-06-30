@@ -5,18 +5,30 @@ J-Quants の株価・財務データを取得し、
 
 ## 開発手順
 
+### 自動セットアップ（推奨）
+
+```bash
+python setup_environment.py
+```
+
+このスクリプトは環境構築に必要な全ての手順を自動化します。
+
+### 手動セットアップ
+
 開発用ツールをインストールし、`pre-commit` フックを設定します。
 
 ```bash
+pip install -r requirements-dev.txt
 pip install pre-commit
 pre-commit install
 ```
 
 コミット時に `black` と `ruff` が自動で実行されます。
+詳細は [DEVELOPMENT.md](DEVELOPMENT.md) を参照してください。
 
 ## セットアップ
 
-Python 3.9 以上を想定しています。必要なライブラリは
+Python 3.12 以上を想定しています。必要なライブラリは
 `requirements.txt` にまとめています。
 
 ```bash
@@ -41,6 +53,7 @@ Web アプリ用の認証情報を分けたい場合は `login.json` を用意�
 ```json
 {"id": "YOUR_ID", "password": "YOUR_PASSWORD", "password_hash": "<hash>"}
 ```
+
 `password_hash` は次のように生成できます。
 
 ```bash
@@ -57,21 +70,35 @@ EOF
 ```bash
 python db/db_schema.py
 ```
+
 `db/stock.db` が生成されれば準備完了です。
+
+## テスト
+
+```bash
+# 全テスト実行
+pytest
+
+# カバレッジ付きテスト
+pytest --cov=. --cov-report=html --cov-report=term
+
+# 特定のテスト実行
+pytest tests/test_config.py
+```
 
 ## 主なスクリプトと起動引数
 
-* `fetch/daily_quotes.py`  
-  日足株価を取得して `prices` テーブルへ保存します。  
+* `fetch/daily_quotes.py`
+  日足株価を取得して `prices` テーブルへ保存します。
   `--start` と `--end` を指定すると期間を取得します（省略時は当日分）。
 
-* `fetch/listed_info.py`  
-  上場銘柄情報を取得して `listed_info` テーブルを更新します。  
+* `fetch/listed_info.py`
+  上場銘柄情報を取得して `listed_info` テーブルを更新します。
   引数はありません。
 
-* `fetch/statements.py`  
-  決算データを取得して `statements` テーブルに保存します。  
-  `mode` に `1` を指定すると銘柄単位で一括取得、`2` を指定すると日付または期間を取得します。  
+* `fetch/statements.py`
+  決算データを取得して `statements` テーブルに保存します。
+  `mode` に `1` を指定すると銘柄単位で一括取得、`2` を指定すると日付または期間を取得します。
   `--start` と `--end` を併用することで期間を指定できます。
 * `screening/screen_statements.py`
   財務データをスクリーニングし、シグナルを `fundamental_signals` に保存します。
@@ -144,15 +171,26 @@ python db/db_schema.py
   `--start` `--end` で期間を指定できます。開始日と終了日をどちらも
   指定しない場合は当日の日付が自動的に使われます。テクニカルの場合は
   バックテストと同じ条件（`signals_count>=3` など）が自動で適用されます。
+* `setup_environment.py`
+  開発環境を自動構築するヘルパースクリプトです。仮想環境の作成、
+  依存関係のインストール、設定ファイルの初期化、データベースのセットアップ、
+  pre-commitフックの設定などを一括で行います。
 * `web.py`
   Flask を使った簡易 Web インターフェイスを起動します。
   フォームから各種スクリプトを実行でき、結果もブラウザ上で確認できます。
 
 ## 利用の流れ
-1. `fetch` スクリプトでデータベースを更新
-2. `screening` スクリプトで売買シグナルを生成
-3. `backtest` スクリプトでシグナルを検証
+
+1. **データ取得**: `fetch` スクリプトでデータベースを更新
+2. **シグナル生成**: `screening` スクリプトで売買シグナルを生成
+   * ファンダメンタル分析（財務データ）
+   * テクニカル分析（チャート指標）
+   * 機械学習（ML予測モデル）
+3. **検証**: `backtest` スクリプトでシグナルを検証
+4. **分析**: 結果の詳細分析とパフォーマンス評価
+
 操作をまとめた簡易 GUI (`gui.py`) に加え、Web 版 (`web.py`) も用意しており、バックテスト結果の Excel は「結果閲覧」タブから確認できます。
+
 ## 定期実行
 
 `scheduler.py` を起動しておくと株価や決算情報の取得を自動化できます。
@@ -165,3 +203,24 @@ python scheduler.py
 デフォルトでは毎日 20:00 に日足株価、20:30 に決算情報を取得し、
 月曜 6:00 に上場銘柄情報を更新します。
 
+## プロジェクト構造
+
+```text
+swing/
+├── fetch/          # データ取得モジュール
+├── screening/      # スクリーニングアルゴリズム
+├── backtest/       # バックテストエンジン
+├── db/             # データベース管理
+├── templates/      # Webインターフェイステンプレート
+├── tests/          # テストスイート
+├── gui.py          # デスクトップGUI
+├── web.py          # WebインターフェイスUI
+├── scheduler.py    # 自動実行スケジューラ
+└── config.py       # 設定管理
+```
+
+## 貢献
+
+プルリクエストを歓迎します。大きな変更の場合は、まずissueを開いて変更内容について議論してください。
+
+詳細な開発ガイドラインは [DEVELOPMENT.md](DEVELOPMENT.md) を参照してください。
