@@ -331,7 +331,9 @@ if __name__ == "__main__":
     # • 引数を解析してコマンドを判定
     # • SQLite DB に接続
     # • indicators: run_indicators() / screen: screen_signals()
-    parser = argparse.ArgumentParser(description="スイングトレード向けテクニカルシグナルツール")
+    parser = argparse.ArgumentParser(
+        description="スイングトレード向けテクニカルシグナルツール"
+    )
     parser.add_argument("command", choices=["indicators", "screen"])
     parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
     parser.add_argument("--as-of", help="計算またはスクリーニング対象日 YYYY-MM-DD")

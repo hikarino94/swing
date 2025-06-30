@@ -72,7 +72,9 @@ class EnvironmentSetup:
         print("\n📦 仮想環境を作成しています...")
 
         if self.venv_dir.exists():
-            response = input("既存の仮想環境が見つかりました。削除して再作成しますか？ (y/N): ")
+            response = input(
+                "既存の仮想環境が見つかりました。削除して再作成しますか？ (y/N): "
+            )
             if response.lower() == "y":
                 shutil.rmtree(self.venv_dir)
             else:
@@ -193,7 +195,9 @@ class EnvironmentSetup:
             subprocess.run([python_cmd, str(db_schema_path)], check=True)
             print("✓ データベースの初期化が完了しました")
         else:
-            print("⚠️  db_schema.py が見つかりません。データベースの初期化をスキップします")
+            print(
+                "⚠️  db_schema.py が見つかりません。データベースの初期化をスキップします"
+            )
 
     def setup_precommit(self) -> None:
         """pre-commitフックを設定します"""
@@ -279,8 +283,12 @@ class EnvironmentSetup:
 def main():
     """メイン関数"""
     parser = argparse.ArgumentParser(description="開発環境を自動的にセットアップします")
-    parser.add_argument("--skip-venv", action="store_true", help="仮想環境の作成をスキップ")
-    parser.add_argument("--skip-db", action="store_true", help="データベースの初期化をスキップ")
+    parser.add_argument(
+        "--skip-venv", action="store_true", help="仮想環境の作成をスキップ"
+    )
+    parser.add_argument(
+        "--skip-db", action="store_true", help="データベースの初期化をスキップ"
+    )
 
     args = parser.parse_args()
 

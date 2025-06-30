@@ -211,7 +211,9 @@ class TestRunIndicators:
         with mock.patch("screening.screen_technical.logger") as mock_logger:
             screen_technical.run_indicators(conn, "2024-06-01")
 
-            mock_logger.info.assert_called_with("%s の価格データがないためスキップ", "2024-06-01")
+            mock_logger.info.assert_called_with(
+                "%s の価格データがないためスキップ", "2024-06-01"
+            )
 
         conn.close()
 
@@ -378,7 +380,9 @@ class TestCLI:
                 "30",
             ],
         ):
-            parser = argparse.ArgumentParser(description="スイングトレード向けテクニカルシグナルツール")
+            parser = argparse.ArgumentParser(
+                description="スイングトレード向けテクニカルシグナルツール"
+            )
             parser.add_argument("command", choices=["indicators", "screen"])
             parser.add_argument("--db", default="stock.db")
             parser.add_argument("--as-of")
@@ -396,7 +400,9 @@ class TestCLI:
         with mock.patch(
             "sys.argv", ["screen_technical.py", "screen", "--as-of", "2024-06-01"]
         ):
-            parser = argparse.ArgumentParser(description="スイングトレード向けテクニカルシグナルツール")
+            parser = argparse.ArgumentParser(
+                description="スイングトレード向けテクニカルシグナルツール"
+            )
             parser.add_argument("command", choices=["indicators", "screen"])
             parser.add_argument("--db", default="stock.db")
             parser.add_argument("--as-of")
