@@ -25,6 +25,7 @@ A Python-based Japanese stock market analysis toolkit using J-Quants API data. T
 ```bash
 # Install dependencies
 pip install -r requirements.txt
+pip install -r requirements-dev.txt  # 開発用ツール（pytest, coverage等）
 
 # Setup pre-commit hooks for code quality
 pip install pre-commit
@@ -39,6 +40,12 @@ python db/db_schema.py
 # Run linting (automatically runs on commit)
 ruff check --fix .
 black .
+
+# Run tests
+pytest
+
+# Run tests with coverage
+pytest --cov=. --cov-report=html --cov-report=term
 ```
 
 ### Key Operations
@@ -61,6 +68,10 @@ python screening/screen_technical.py screen [--as-of YYYY-MM-DD] [--lookback DAY
 # Run ML screening
 python screening/screen_ml.py train
 python screening/screen_ml.py screen [--top N] [--lookback DAYS]
+
+# List screening signals
+python db/list_signals.py fund [--start YYYY-MM-DD] [--end YYYY-MM-DD]
+python db/list_signals.py tech [--start YYYY-MM-DD] [--end YYYY-MM-DD]
 
 # Run backtests
 python backtest/backtest_statements.py [--hold DAYS] [--capital AMOUNT] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--show]
@@ -91,16 +102,18 @@ python scheduler.py
 
 ### Database Tables
 - `prices`: Daily stock quotes
-- `listed_info`: Company information
+- `listed_info`: Company information (delete_flag付き)
 - `statements`: Financial statements
 - `fundamental_signals`: Fundamental screening results
-- `technical_indicators`: Technical analysis signals
+- `technical_indicators`: Technical analysis signals (複数指標のフラグ付き)
 
 ### Configuration Files
 - `account.json`: J-Quants API credentials (mail/password)
 - `login.json`: Web app authentication (optional, falls back to account.json)
 - `idtoken.json`: J-Quants API token (auto-generated)
 - `screening/thresholds.json`: Screening parameter configuration
+- `config.json`: General application configuration
+- `pyproject.toml`: Project metadata and tool configuration
 
 ### Typical Workflow
 1. **Data Collection**: Run fetch scripts to populate database
@@ -112,19 +125,28 @@ python scheduler.py
 - **Ruff**: Linting with automatic fixes
 - **Black**: Code formatting
 - **Pre-commit hooks**: Enforced on every commit
-- No formal testing framework - validation through backtesting
+- **Testing**: Comprehensive test suite using pytest (tests/ directory)
+- **Coverage**: テストカバレッジレポート生成 (htmlcov/)
 
 ### Key Dependencies
 - pandas: Data manipulation
 - requests: API communication
-- Flask: Web interface
+- Flask: Web interface with Werkzeug security
 - schedule: Automated tasks
 - XlsxWriter: Excel output generation
+- scikit-learn: Machine learning models
+- tkinter: Desktop GUI interface
+- pytest: Testing framework
+- coverage: Test coverage analysis
 
 ## Important Notes
 
-- All sensitive files (*.json credentials, *.db) are in .gitignore
+- All sensitive files (\*.json credentials, \*.db) are in .gitignore
 - Scheduler runs daily at 20:00 (quotes), 20:30 (statements), Monday 6:00 (listed info)
 - Results are timestamped and saved as both Excel and JSON formats
 - Database uses SQLite with WAL mode for concurrent access
 - Supports both long and short trading strategies in backtests
+- Test suite includes comprehensive unit and integration tests
+- ML models are saved as pickle files (db/ml_screen_model.pkl)
+- Web app supports password hashing for secure authentication
+- Backtesting supports various parameters: stop-loss, holding period, capital allocation
