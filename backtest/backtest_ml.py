@@ -193,7 +193,8 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-if __name__ == "__main__":
+def parse_args(args=None):
+    """コマンドライン引数をパース"""
     parser = argparse.ArgumentParser(description="ML back-test")
     parser.add_argument("--db", default=DB_PATH, help="SQLite DB path")
     parser.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
@@ -209,7 +210,12 @@ if __name__ == "__main__":
     parser.add_argument("--outfile", default=default_xlsx, help="Excel output")
     parser.add_argument("--json", default=default_json, help="JSON output")
     parser.add_argument("--show", action="store_true", help="Show summary on stdout")
-    args = parser.parse_args()
+    return parser.parse_args(args)
+
+
+def main():
+    """メイン関数"""
+    args = parse_args()
 
     conn = sqlite3.connect(args.db)
     trades = run_backtest(
@@ -227,3 +233,8 @@ if __name__ == "__main__":
     logger.info("JSON exported → %s", args.json)
     if args.show:
         show_results(trades, summary)
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()

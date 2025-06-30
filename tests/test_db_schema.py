@@ -21,8 +21,10 @@ class TestDBSchema:
         )
         conn.commit()
 
-        # データ取得
-        cursor = conn.execute("SELECT * FROM prices WHERE code = '1234'")
+        # データ取得（カラム名で指定）
+        cursor = conn.execute(
+            "SELECT code, date, adj_close, adj_volume FROM prices WHERE code = '1234'"
+        )
         row = cursor.fetchone()
 
         assert row[0] == "1234"  # code

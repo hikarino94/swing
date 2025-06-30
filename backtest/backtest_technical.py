@@ -464,10 +464,9 @@ def run_backtest_range(
 # CLI
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    # • コマンドライン引数を解析して各種設定を取得
-    # • 指定 DB に接続
-    # • run_backtest() を呼び出し結果を Excel へ保存
+
+def parse_args(args=None):
+    """コマンドライン引数をパース"""
     parser = argparse.ArgumentParser(description="スイングトレードのバックテストツール")
     parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
     default_xlsx, default_json = _result_paths("technical")
@@ -504,7 +503,12 @@ if __name__ == "__main__":
         action="store_true",
         help="結果を標準出力に表示",
     )
-    args = parser.parse_args()
+    return parser.parse_args(args)
+
+
+def main():
+    """メイン関数"""
+    args = parse_args()
     conn = sqlite3.connect(args.db)
     run_backtest_range(
         conn,
@@ -518,3 +522,8 @@ if __name__ == "__main__":
         jsonfile=args.json,
         show=args.show,
     )
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()

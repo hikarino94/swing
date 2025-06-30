@@ -21,6 +21,18 @@ def temp_db() -> Generator[Path, None, None]:
         CREATE TABLE IF NOT EXISTS prices (
             code TEXT NOT NULL,
             date TEXT NOT NULL,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL,
+            upper_limit REAL,
+            lower_limit REAL,
+            volume INTEGER,
+            turnover_value REAL,
+            adj_factor REAL,
+            adj_open REAL,
+            adj_high REAL,
+            adj_low REAL,
             adj_close REAL,
             adj_volume INTEGER,
             PRIMARY KEY (code, date)
@@ -93,3 +105,43 @@ def mock_idtoken(tmp_path: Path) -> Path:
     token_path = tmp_path / "idtoken.json"
     token_path.write_text('{"idToken": "test-token-12345"}')
     return token_path
+
+
+@pytest.fixture
+def test_db() -> Generator[str, None, None]:
+    """test_daily_quotes.py用のテストデータベース"""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+
+    # pricesテーブルを作成
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS prices (
+            code TEXT NOT NULL,
+            date TEXT NOT NULL,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL,
+            upper_limit REAL,
+            lower_limit REAL,
+            volume INTEGER,
+            turnover_value REAL,
+            adj_factor REAL,
+            adj_open REAL,
+            adj_high REAL,
+            adj_low REAL,
+            adj_close REAL,
+            adj_volume INTEGER,
+            PRIMARY KEY (code, date)
+        )
+    """
+    )
+    conn.commit()
+    conn.close()
+
+    yield db_path
+
+    # クリーンアップ
+    os.unlink(db_path)
