@@ -106,6 +106,10 @@ exclude = [
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 addopts = "-v --cov=. --cov-report=html --cov-report=term-missing"
+filterwarnings = [
+    "ignore::DeprecationWarning:numpy",
+    "ignore::RuntimeWarning:numpy",
+]
 
 [tool.coverage.run]
 branch = true

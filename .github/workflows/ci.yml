@@ -96,6 +96,8 @@ jobs:
 
     - name: Run tests
       run: |
+        export PYTHONPATH="${PYTHONPATH}:${PWD}"
+        export PYTHONWARNINGS="ignore::DeprecationWarning:numpy"
         pytest -v --cov=. --cov-report=xml --cov-report=term || true
 
     - name: Upload coverage to Codecov

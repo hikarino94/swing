@@ -282,10 +282,20 @@ def _fetch_multiple_codes(
 
 
 def _normalize(df: pd.DataFrame) -> pd.DataFrame:
-    # (既存の _normalize 実装)
-    for col in SCHEMA_COLUMNS:
-        if col not in df.columns:
-            df[col] = pd.NA
+    """DataFrameを正規化し、スキーマに合わせて列を調整する。
+
+    断片化警告を避けるため、不足している列を一括で追加します。
+    """
+    # 不足している列を特定
+    missing_cols = [col for col in SCHEMA_COLUMNS if col not in df.columns]
+
+    # 不足している列がある場合は一括で追加
+    if missing_cols:
+        # 新しいDataFrameを作成して不足している列を追加
+        missing_data = dict.fromkeys(missing_cols, pd.NA)
+        missing_df = pd.DataFrame(missing_data, index=df.index)
+        df = pd.concat([df, missing_df], axis=1)
+
     return df[SCHEMA_COLUMNS]
 
 

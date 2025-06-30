@@ -125,7 +125,11 @@ def run_backtest(
             if shares <= 0:
                 continue
             pnl_yen = (exit_price - entry_price) * shares
-            pnl_pct = (exit_price - entry_price) / entry_price * 100
+            # ゼロ除算を防ぐためentry_priceが0でないことを確認
+            if entry_price != 0:
+                pnl_pct = (exit_price - entry_price) / entry_price * 100
+            else:
+                pnl_pct = 0.0
             trades.append(
                 {
                     "code": row["code"],
@@ -148,7 +152,12 @@ def summarize(trades: pd.DataFrame) -> pd.DataFrame:
     total_profit = trades["pnl_yen"].sum()
     win_rate = (trades["pnl_yen"] > 0).mean()
     mean_ret_pct = trades["pnl_pct"].mean()
-    sharpe = trades["pnl_pct"].mean() / trades["pnl_pct"].std(ddof=0)
+    # ゼロ除算を防ぐためstdが0でないことを確認
+    pnl_std = trades["pnl_pct"].std(ddof=0)
+    if pnl_std != 0 and not pd.isna(pnl_std):
+        sharpe = trades["pnl_pct"].mean() / pnl_std
+    else:
+        sharpe = 0.0
     return pd.DataFrame(
         {
             "metric": ["trades", "total_profit", "win_rate", "avg_ret_pct", "sharpe"],
