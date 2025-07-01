@@ -1,131 +1,852 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>Swing Web</title>
-</head>
-<body>
-    <h1>Swing Web App</h1>
-    <h2>株価取得</h2>
-    <form action="/run/fetch_quotes" method="post">
-        開始日: <input type="text" name="start">
-        終了日: <input type="text" name="end">
-        <button type="submit">実行</button>
-    </form>
+{% extends "base.html" %}
 
-    <h2>上場情報取得</h2>
-    <form action="/run/listed_info" method="post">
-        <button type="submit">実行</button>
-    </form>
+{% block content %}
+<div x-data="swingApp()" x-cloak>
+    <!-- タブナビゲーション -->
+    <div class="border-b border-gray-200">
+        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+            <button @click="activeTab = 'data'"
+                    :class="{'tab-active': activeTab === 'data'}"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                    :class="activeTab === 'data' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                📊 データ取得
+            </button>
+            <button @click="activeTab = 'screening'"
+                    :class="{'tab-active': activeTab === 'screening'}"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                    :class="activeTab === 'screening' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                🔍 スクリーニング
+            </button>
+            <button @click="activeTab = 'backtest'"
+                    :class="{'tab-active': activeTab === 'backtest'}"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                    :class="activeTab === 'backtest' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                📈 バックテスト
+            </button>
+            <button @click="activeTab = 'utilities'"
+                    :class="{'tab-active': activeTab === 'utilities'}"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                    :class="activeTab === 'utilities' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                🛠️ ユーティリティ
+            </button>
+            <button @click="activeTab = 'results'"
+                    :class="{'tab-active': activeTab === 'results'}"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                    :class="activeTab === 'results' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                📁 結果閲覧
+            </button>
+            <button @click="activeTab = 'settings'"
+                    :class="{'tab-active': activeTab === 'settings'}"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                    :class="activeTab === 'settings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                ⚙️ 設定
+            </button>
+        </nav>
+    </div>
 
-    <h2>財務諸表取得</h2>
-    <form action="/run/statements" method="post">
-        モード: <input type="text" name="mode" value="1" size="4">
-        開始日: <input type="text" name="start">
-        終了日: <input type="text" name="end">
-        <button type="submit">実行</button>
-    </form>
+    <!-- タブコンテンツ -->
+    <div class="mt-6">
+        <!-- データ取得タブ -->
+        <div x-show="activeTab === 'data'" class="space-y-6">
+            <div class="bg-white shadow rounded-lg p-6">
+                <h2 class="text-lg font-medium text-gray-900 mb-4">データ取得</h2>
 
-    <h2>財務スクリーニング</h2>
-    <form action="/run/screen_fund" method="post">
-        参照期間: <input type="text" name="lookback" value="1095" size="6">
-        開示閾値: <input type="text" name="recent" value="7" size="4">
-        基準日: <input type="text" name="as_of">
-        <button type="submit">実行</button>
-    </form>
+                <div class="space-y-4">
+                    <!-- 株価取得 -->
+                    <div class="border rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-medium text-gray-700">株価取得</h3>
+                            <input type="checkbox" x-model="dataFetch.quotes.enabled" class="rounded">
+                        </div>
+                        <div x-show="dataFetch.quotes.enabled" class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">開始日</label>
+                                <input type="date" x-model="dataFetch.quotes.startDate"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">終了日</label>
+                                <input type="date" x-model="dataFetch.quotes.endDate"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                        </div>
+                    </div>
 
-    <h2>テクニカルスクリーニング</h2>
-    <form action="/run/screen_tech" method="post">
-        コマンド: <input type="text" name="cmd" value="indicators" size="12">
-        対象日: <input type="text" name="as_of">
-        過去参照日数: <input type="text" name="lookback" value="50" size="6">
-        <button type="submit">実行</button>
-    </form>
+                    <!-- 上場情報取得 -->
+                    <div class="border rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-medium text-gray-700">上場情報取得</h3>
+                            <input type="checkbox" x-model="dataFetch.listed.enabled" class="rounded">
+                        </div>
+                    </div>
 
-    <h2>MLスクリーニング</h2>
-    <form action="/run/screen_ml" method="post">
-        上位件数: <input type="text" name="top" value="30" size="6">
-        学習参照日数: <input type="text" name="lookback" value="1095" size="8">
-        <label><input type="checkbox" name="retrain" value="1">強制再学習</label>
-        <button type="submit">実行</button>
-    </form>
+                    <!-- 財務諸表取得 -->
+                    <div class="border rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-medium text-gray-700">財務諸表取得</h3>
+                            <input type="checkbox" x-model="dataFetch.statements.enabled" class="rounded">
+                        </div>
+                        <div x-show="dataFetch.statements.enabled" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">モード</label>
+                                <select x-model="dataFetch.statements.mode"
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                    <option value="1">1: 全銘柄・全過去開示情報取得</option>
+                                    <option value="2">2: 日次取得（期間指定可）</option>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">開始日</label>
+                                    <input type="date" x-model="dataFetch.statements.startDate"
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">終了日</label>
+                                    <input type="date" x-model="dataFetch.statements.endDate"
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-    <h2>ファンダメンタルバックテスト</h2>
-    <form action="/run/backtest_stmt" method="post">
-        保有日数: <input type="text" name="hold" value="40" size="4">
-        オフセット: <input type="text" name="offset" value="1" size="4">
-        資金: <input type="text" name="capital" value="1000000" size="8">
-        開始日: <input type="text" name="start">
-        終了日: <input type="text" name="end">
-        出力ファイル: <input type="text" name="xlsx" value="trades.xlsx" size="12">
-        <button type="submit">実行</button>
-    </form>
+                <!-- 実行ボタン -->
+                <div class="mt-6 flex justify-between">
+                    <button @click="executeDataFetch()"
+                            :disabled="isLoading"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-show="!isLoading">実行</span>
+                        <span x-show="isLoading" class="flex items-center">
+                            <div class="spinner mr-2"></div>
+                            実行中...
+                        </span>
+                    </button>
+                    <button @click="clearLog()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400">
+                        ログクリア
+                    </button>
+                </div>
+            </div>
 
-    <h2>テクニカルバックテスト</h2>
-    <form action="/run/backtest_tech" method="post">
-        開始日: <input type="text" name="start">
-        終了日: <input type="text" name="end">
-        保有日数: <input type="text" name="hold" value="60" size="4">
-        損切り率: <input type="text" name="stop" value="0.05" size="6">
-        資金: <input type="text" name="capital" value="1000000" size="8">
-        出力ファイル: <input type="text" name="outfile" value="backtest.xlsx" size="15">
-        <button type="submit">実行</button>
-    </form>
+            <!-- 実行ログ -->
+            <div class="bg-white shadow rounded-lg p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">実行ログ</h3>
+                <div id="dataLog" class="bg-gray-50 p-4 rounded-md h-64 overflow-y-auto custom-scrollbar font-mono text-sm"></div>
+            </div>
+        </div>
 
-    <h2>IDトークン更新</h2>
-    <form action="/run/update_token" method="post">
-        メール: <input type="text" name="mail">
-        パスワード: <input type="password" name="password">
-        <button type="submit">実行</button>
-    </form>
+        <!-- スクリーニングタブ -->
+        <div x-show="activeTab === 'screening'" class="space-y-6">
+            <div class="bg-white shadow rounded-lg p-6">
+                <h2 class="text-lg font-medium text-gray-900 mb-4">スクリーニング</h2>
 
-    <h2>DBサマリー</h2>
-    <form action="/run/db_summary" method="post">
-        <button type="submit">実行</button>
-    </form>
+                <!-- スクリーニングタイプ選択 -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">スクリーニングタイプ</label>
+                    <div class="grid grid-cols-3 gap-4">
+                        <button @click="screening.type = 'fundamental'"
+                                :class="screening.type === 'fundamental' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'"
+                                class="border-2 rounded-lg p-4 text-center hover:bg-gray-50 transition-colors">
+                            <div class="text-2xl mb-2">💰</div>
+                            <div class="font-medium">ファンダメンタル</div>
+                        </button>
+                        <button @click="screening.type = 'technical'"
+                                :class="screening.type === 'technical' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'"
+                                class="border-2 rounded-lg p-4 text-center hover:bg-gray-50 transition-colors">
+                            <div class="text-2xl mb-2">📉</div>
+                            <div class="font-medium">テクニカル</div>
+                        </button>
+                        <button @click="screening.type = 'ml'"
+                                :class="screening.type === 'ml' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'"
+                                class="border-2 rounded-lg p-4 text-center hover:bg-gray-50 transition-colors">
+                            <div class="text-2xl mb-2">🤖</div>
+                            <div class="font-medium">機械学習</div>
+                        </button>
+                    </div>
+                </div>
 
-    <h2>シグナル確認</h2>
-    <form action="/run/list_signals" method="post">
-        種類:
-        <select name="kind">
-            <option value="fund">ファンダメンタル</option>
-            <option value="tech">テクニカル</option>
-        </select>
-        開始日: <input type="text" name="start">
-        終了日: <input type="text" name="end">
-        表示件数: <input type="text" name="limit" value="20" size="4">
-        <button type="submit">実行</button>
-    </form>
+                <!-- ファンダメンタルスクリーニング設定 -->
+                <div x-show="screening.type === 'fundamental'" class="space-y-4">
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">参照期間（日）</label>
+                            <input type="number" x-model="screening.fundamental.lookback"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">開示閾値（日）</label>
+                            <input type="number" x-model="screening.fundamental.recent"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">基準日</label>
+                            <input type="date" x-model="screening.fundamental.asOf"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
 
-    <h2>JSON分析</h2>
-    <form action="/run/analyze_json" method="post">
-        <select name="files" multiple size="5">
-            {% for f in json_files %}
-            <option value="{{ f }}">{{ f }}</option>
-            {% endfor %}
-        </select>
-        <select name="side">
-            <option value="">両方</option>
-            <option value="long">long</option>
-            <option value="short">short</option>
-        </select>
-        <label><input type="checkbox" name="show_trades" value="1">取引表示</label>
-        <button type="submit">実行</button>
-    </form>
+                <!-- テクニカルスクリーニング設定 -->
+                <div x-show="screening.type === 'technical'" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">アクション</label>
+                        <div class="flex space-x-4">
+                            <label class="flex items-center">
+                                <input type="radio" x-model="screening.technical.action" value="indicators" class="mr-2">
+                                <span>指標計算</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" x-model="screening.technical.action" value="screen" class="mr-2">
+                                <span>スクリーニング</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div x-show="screening.technical.action === 'screen'" class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">対象日</label>
+                            <input type="date" x-model="screening.technical.asOf"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">過去参照日数</label>
+                            <input type="number" x-model="screening.technical.lookback"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
 
-    <h2>閾値設定</h2>
-    <form action="/thresholds" method="post">
-        {% for k, v in thresholds.items() %}
-        {{ k }}: <input type="text" name="{{ k }}" value="{{ v }}" size="6"><br>
-        {% endfor %}
-        <button type="submit">保存</button>
-    </form>
+                <!-- MLスクリーニング設定 -->
+                <div x-show="screening.type === 'ml'" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">アクション</label>
+                        <div class="flex space-x-4">
+                            <label class="flex items-center">
+                                <input type="radio" x-model="screening.ml.action" value="train" class="mr-2">
+                                <span>学習</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" x-model="screening.ml.action" value="screen" class="mr-2">
+                                <span>スクリーニング</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div x-show="screening.ml.action === 'train'" class="space-y-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" x-model="screening.ml.force" class="mr-2">
+                            <span>強制的に再学習</span>
+                        </label>
+                    </div>
+                    <div x-show="screening.ml.action === 'screen'" class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">上位件数</label>
+                            <input type="number" x-model="screening.ml.top"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">学習参照日数</label>
+                            <input type="number" x-model="screening.ml.lookback"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
 
-    <h2>結果閲覧</h2>
-    <ul>
-        {% for f in xlsx_files %}
-        <li><a href="{{ f }}">{{ f }}</a></li>
-        {% endfor %}
-    </ul>
-</body>
-</html>
+                <!-- 実行ボタン -->
+                <div class="mt-6">
+                    <button @click="executeScreening()"
+                            :disabled="isLoading"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-show="!isLoading">実行</span>
+                        <span x-show="isLoading" class="flex items-center">
+                            <div class="spinner mr-2"></div>
+                            実行中...
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 実行ログ -->
+            <div class="bg-white shadow rounded-lg p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">実行ログ</h3>
+                <div id="screeningLog" class="bg-gray-50 p-4 rounded-md h-64 overflow-y-auto custom-scrollbar font-mono text-sm"></div>
+            </div>
+        </div>
+
+        <!-- バックテストタブ -->
+        <div x-show="activeTab === 'backtest'" class="space-y-6">
+            <div class="bg-white shadow rounded-lg p-6">
+                <h2 class="text-lg font-medium text-gray-900 mb-4">バックテスト</h2>
+
+                <!-- バックテストタイプ選択 -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">バックテストタイプ</label>
+                    <div class="grid grid-cols-3 gap-4">
+                        <button @click="backtest.type = 'fundamental'"
+                                :class="backtest.type === 'fundamental' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'"
+                                class="border-2 rounded-lg p-4 text-center hover:bg-gray-50 transition-colors">
+                            <div class="text-2xl mb-2">💰</div>
+                            <div class="font-medium">ファンダメンタル</div>
+                        </button>
+                        <button @click="backtest.type = 'technical'"
+                                :class="backtest.type === 'technical' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'"
+                                class="border-2 rounded-lg p-4 text-center hover:bg-gray-50 transition-colors">
+                            <div class="text-2xl mb-2">📉</div>
+                            <div class="font-medium">テクニカル</div>
+                        </button>
+                        <button @click="backtest.type = 'ml'"
+                                :class="backtest.type === 'ml' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'"
+                                class="border-2 rounded-lg p-4 text-center hover:bg-gray-50 transition-colors">
+                            <div class="text-2xl mb-2">🤖</div>
+                            <div class="font-medium">機械学習</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 共通設定 -->
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">資金（円）</label>
+                        <input type="number" x-model="backtest.common.capital"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">保有日数</label>
+                        <input type="number" x-model="backtest.common.holdDays"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">開始日</label>
+                        <input type="date" x-model="backtest.common.startDate"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">終了日</label>
+                        <input type="date" x-model="backtest.common.endDate"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <!-- ファンダメンタル固有設定 -->
+                <div x-show="backtest.type === 'fundamental'" class="mt-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">エントリーオフセット（日）</label>
+                        <input type="number" x-model="backtest.fundamental.entryOffset"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <!-- テクニカル固有設定 -->
+                <div x-show="backtest.type === 'technical'" class="mt-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">損切り率（%）</label>
+                        <input type="number" x-model="backtest.technical.stopLoss" step="0.1"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <!-- ML固有設定 -->
+                <div x-show="backtest.type === 'ml'" class="mt-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">上位件数</label>
+                        <input type="number" x-model="backtest.ml.top"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <!-- 実行ボタン -->
+                <div class="mt-6">
+                    <button @click="executeBacktest()"
+                            :disabled="isLoading"
+                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-show="!isLoading">実行</span>
+                        <span x-show="isLoading" class="flex items-center">
+                            <div class="spinner mr-2"></div>
+                            実行中...
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 実行ログ -->
+            <div class="bg-white shadow rounded-lg p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">実行ログ</h3>
+                <div id="backtestLog" class="bg-gray-50 p-4 rounded-md h-64 overflow-y-auto custom-scrollbar font-mono text-sm"></div>
+            </div>
+        </div>
+
+        <!-- ユーティリティタブ -->
+        <div x-show="activeTab === 'utilities'" class="space-y-6">
+            <div class="grid grid-cols-2 gap-6">
+                <!-- IDトークン更新 -->
+                <div class="bg-white shadow rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">IDトークン更新</h3>
+                    <div class="space-y-4">
+                        <div class="text-sm text-gray-600 mb-2">
+                            ※ 空欄の場合はaccount.jsonから自動的に読み込まれます
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">メールアドレス</label>
+                            <input type="email" x-model="utilities.token.email"
+                                   placeholder="空欄の場合はaccount.jsonから読み込み"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">パスワード</label>
+                            <input type="password" x-model="utilities.token.password"
+                                   placeholder="空欄の場合はaccount.jsonから読み込み"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <button @click="updateToken()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                            更新
+                        </button>
+                    </div>
+                </div>
+
+                <!-- DBサマリー -->
+                <div class="bg-white shadow rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">DBサマリー</h3>
+                    <button @click="getDbSummary()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mb-4">
+                        サマリー取得
+                    </button>
+                    <div id="dbSummary" class="bg-gray-50 p-4 rounded-md h-48 overflow-y-auto custom-scrollbar font-mono text-sm"></div>
+                </div>
+            </div>
+
+            <!-- シグナル確認 -->
+            <div class="bg-white shadow rounded-lg p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">シグナル確認</h3>
+                <div class="grid grid-cols-4 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">タイプ</label>
+                        <select x-model="utilities.signals.type"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="fund">ファンダメンタル</option>
+                            <option value="tech">テクニカル</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">開始日</label>
+                        <input type="date" x-model="utilities.signals.startDate"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">終了日</label>
+                        <input type="date" x-model="utilities.signals.endDate"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">表示件数</label>
+                        <input type="number" x-model="utilities.signals.limit"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+                <button @click="listSignals()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                    確認
+                </button>
+                <div id="signalsList" class="mt-4 bg-gray-50 p-4 rounded-md h-64 overflow-y-auto custom-scrollbar font-mono text-sm"></div>
+            </div>
+
+            <!-- JSON分析 -->
+            <div class="bg-white shadow rounded-lg p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">JSON分析</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">JSONファイル（複数選択可）</label>
+                        <input type="file" @change="handleJsonFiles" multiple accept=".json"
+                               class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" x-model="utilities.json.showTrades" class="mr-2">
+                            <span>トレード一覧表示</span>
+                        </label>
+                        <div class="flex items-center space-x-2">
+                            <label>サイド:</label>
+                            <select x-model="utilities.json.side"
+                                    class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="">すべて</option>
+                                <option value="long">ロング</option>
+                                <option value="short">ショート</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button @click="analyzeJson()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                        分析実行
+                    </button>
+                </div>
+                <div id="jsonAnalysis" class="mt-4 bg-gray-50 p-4 rounded-md h-64 overflow-y-auto custom-scrollbar font-mono text-sm"></div>
+            </div>
+        </div>
+
+        <!-- 結果閲覧タブ -->
+        <div x-show="activeTab === 'results'" class="space-y-6">
+            <div class="bg-white shadow rounded-lg p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">結果ファイル一覧</h3>
+                <div class="mb-4">
+                    <button @click="loadResultFiles()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                        更新
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ファイル名</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">タイプ</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">サイズ</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">更新日時</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <template x-for="file in resultFiles" :key="file.name">
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="file.name"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <span x-text="file.type.toUpperCase()"
+                                              :class="file.type === 'xlsx' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'"
+                                              class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"></span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="formatFileSize(file.size)"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="formatDate(file.modified)"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button @click="downloadFile(file.name)" class="text-blue-600 hover:text-blue-900">
+                                            ダウンロード
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 設定タブ -->
+        <div x-show="activeTab === 'settings'" class="space-y-6">
+            <div class="bg-white shadow rounded-lg p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">閾値設定</h3>
+                <div class="mb-4">
+                    <button @click="loadThresholds()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 mr-2">
+                        再読込
+                    </button>
+                    <button @click="saveThresholds()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                        保存
+                    </button>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-md">
+                    <textarea x-model="settings.thresholds"
+                              class="w-full h-96 font-mono text-sm border-gray-300 rounded-md"
+                              placeholder="閾値設定を読み込んでください..."></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function swingApp() {
+    return {
+        activeTab: 'data',
+        isLoading: false,
+
+        // データ取得設定
+        dataFetch: {
+            quotes: {
+                enabled: false,
+                startDate: '',
+                endDate: ''
+            },
+            listed: {
+                enabled: false
+            },
+            statements: {
+                enabled: false,
+                mode: '2',
+                startDate: '',
+                endDate: ''
+            }
+        },
+
+        // スクリーニング設定
+        screening: {
+            type: 'fundamental',
+            fundamental: {
+                lookback: 60,
+                recent: 30,
+                asOf: ''
+            },
+            technical: {
+                action: 'screen',
+                asOf: '',
+                lookback: 100
+            },
+            ml: {
+                action: 'screen',
+                force: false,
+                top: 10,
+                lookback: 250
+            }
+        },
+
+        // バックテスト設定
+        backtest: {
+            type: 'fundamental',
+            common: {
+                capital: 1000000,
+                holdDays: 20,
+                startDate: '',
+                endDate: ''
+            },
+            fundamental: {
+                entryOffset: 1
+            },
+            technical: {
+                stopLoss: 5.0
+            },
+            ml: {
+                top: 10
+            }
+        },
+
+        // ユーティリティ設定
+        utilities: {
+            token: {
+                email: '',
+                password: ''
+            },
+            signals: {
+                type: 'fund',
+                startDate: '',
+                endDate: '',
+                limit: 100
+            },
+            json: {
+                files: [],
+                showTrades: false,
+                side: ''
+            }
+        },
+
+        // 設定
+        settings: {
+            thresholds: ''
+        },
+
+        // 結果ファイル
+        resultFiles: [],
+
+        // メソッド
+        async executeDataFetch() {
+            this.isLoading = true;
+            const logElement = document.getElementById('dataLog');
+            logElement.innerHTML = '';
+
+            if (this.dataFetch.quotes.enabled) {
+                appendLog(logElement, '株価取得を開始します...');
+                const result = await apiCall('/fetch/quotes', {
+                    start_date: this.dataFetch.quotes.startDate,
+                    end_date: this.dataFetch.quotes.endDate
+                });
+                appendLog(logElement, result.output || result.error, !result.success);
+            }
+
+            if (this.dataFetch.listed.enabled) {
+                appendLog(logElement, '上場情報取得を開始します...');
+                const result = await apiCall('/fetch/listed', {});
+                appendLog(logElement, result.output || result.error, !result.success);
+            }
+
+            if (this.dataFetch.statements.enabled) {
+                appendLog(logElement, '財務諸表取得を開始します...');
+                const result = await apiCall('/fetch/statements', {
+                    mode: this.dataFetch.statements.mode,
+                    start_date: this.dataFetch.statements.startDate,
+                    end_date: this.dataFetch.statements.endDate
+                });
+                appendLog(logElement, result.output || result.error, !result.success);
+            }
+
+            this.isLoading = false;
+        },
+
+        async executeScreening() {
+            this.isLoading = true;
+            const logElement = document.getElementById('screeningLog');
+            logElement.innerHTML = '';
+
+            let endpoint, data;
+
+            switch (this.screening.type) {
+                case 'fundamental':
+                    endpoint = '/screen/fundamental';
+                    data = {
+                        lookback: this.screening.fundamental.lookback,
+                        recent: this.screening.fundamental.recent,
+                        as_of: this.screening.fundamental.asOf
+                    };
+                    break;
+                case 'technical':
+                    endpoint = '/screen/technical';
+                    data = {
+                        action: this.screening.technical.action,
+                        as_of: this.screening.technical.asOf,
+                        lookback: this.screening.technical.lookback
+                    };
+                    break;
+                case 'ml':
+                    endpoint = '/screen/ml';
+                    data = {
+                        action: this.screening.ml.action,
+                        force: this.screening.ml.force,
+                        top: this.screening.ml.top,
+                        lookback: this.screening.ml.lookback
+                    };
+                    break;
+            }
+
+            appendLog(logElement, `${this.screening.type}スクリーニングを開始します...`);
+            const result = await apiCall(endpoint, data);
+            appendLog(logElement, result.output || result.error, !result.success);
+
+            if (result.success && result.output_file) {
+                appendLog(logElement, `結果ファイル: ${result.output_file}`);
+            }
+
+            this.isLoading = false;
+        },
+
+        async executeBacktest() {
+            this.isLoading = true;
+            const logElement = document.getElementById('backtestLog');
+            logElement.innerHTML = '';
+
+            let endpoint, data;
+
+            const commonData = {
+                capital: this.backtest.common.capital,
+                hold_days: this.backtest.common.holdDays,
+                start_date: this.backtest.common.startDate,
+                end_date: this.backtest.common.endDate
+            };
+
+            switch (this.backtest.type) {
+                case 'fundamental':
+                    endpoint = '/backtest/fundamental';
+                    data = {
+                        ...commonData,
+                        entry_offset: this.backtest.fundamental.entryOffset
+                    };
+                    break;
+                case 'technical':
+                    endpoint = '/backtest/technical';
+                    data = {
+                        ...commonData,
+                        stop_loss: this.backtest.technical.stopLoss
+                    };
+                    break;
+                case 'ml':
+                    endpoint = '/backtest/ml';
+                    data = {
+                        ...commonData,
+                        top: this.backtest.ml.top
+                    };
+                    break;
+            }
+
+            appendLog(logElement, `${this.backtest.type}バックテストを開始します...`);
+            const result = await apiCall(endpoint, data);
+            appendLog(logElement, result.output || result.error, !result.success);
+
+            if (result.success && result.output_file) {
+                appendLog(logElement, `結果ファイル: ${result.output_file}`);
+            }
+
+            this.isLoading = false;
+        },
+
+        async updateToken() {
+            const result = await apiCall('/utils/update_token', {
+                email: this.utilities.token.email,
+                password: this.utilities.token.password
+            });
+            this.utilities.token.password = '';  // セキュリティのためクリア
+        },
+
+        async getDbSummary() {
+            const result = await apiCall('/utils/db_summary', {}, 'GET');
+            const element = document.getElementById('dbSummary');
+            element.textContent = result.output || result.error;
+        },
+
+        async listSignals() {
+            const result = await apiCall('/utils/list_signals', {
+                type: this.utilities.signals.type,
+                start_date: this.utilities.signals.startDate,
+                end_date: this.utilities.signals.endDate,
+                limit: this.utilities.signals.limit
+            });
+            const element = document.getElementById('signalsList');
+            element.textContent = result.output || result.error;
+        },
+
+        handleJsonFiles(event) {
+            this.utilities.json.files = Array.from(event.target.files).map(f => f.name);
+        },
+
+        async analyzeJson() {
+            const result = await apiCall('/utils/analyze_json', {
+                files: this.utilities.json.files,
+                show_trades: this.utilities.json.showTrades,
+                side: this.utilities.json.side
+            });
+            const element = document.getElementById('jsonAnalysis');
+            element.textContent = result.output || result.error;
+        },
+
+        async loadThresholds() {
+            const result = await apiCall('/utils/thresholds', {}, 'GET');
+            if (result.success) {
+                this.settings.thresholds = JSON.stringify(result.data, null, 2);
+            }
+        },
+
+        async saveThresholds() {
+            try {
+                const data = JSON.parse(this.settings.thresholds);
+                await apiCall('/utils/thresholds', data);
+            } catch (e) {
+                showNotification('error', 'JSON形式が不正です: ' + e.message);
+            }
+        },
+
+        async loadResultFiles() {
+            const response = await fetch('/api/results/list');
+            const data = await response.json();
+            if (data.success) {
+                this.resultFiles = data.files;
+            }
+        },
+
+        clearLog() {
+            const logElements = ['dataLog', 'screeningLog', 'backtestLog'];
+            logElements.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.innerHTML = '';
+            });
+        },
+
+        formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        },
+
+        formatDate(isoString) {
+            return new Date(isoString).toLocaleString('ja-JP');
+        }
+    }
+}
+</script>
+{% endblock %}

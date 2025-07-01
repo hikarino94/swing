@@ -1,140 +1,407 @@
-from __future__ import annotations
+#!/usr/bin/env python3
+"""
+Swing Trading Tool - モダンなWeb UI版
+タブ型インターフェースでGUIアプリの機能を統合
+"""
 
 import json
-import shlex
+import os
 import subprocess
+import sys
+from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, redirect, render_template, request, url_for
+from flask import Flask, jsonify, render_template, request, send_file
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = (
+    "your-secret-key-here"  # 本番環境では環境変数から取得すること
+)
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
 
 
-def run_command(cmd: str) -> tuple[str, int]:
-    """Run a shell command and return output and exit code."""
-    proc = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
-    output = proc.stdout + proc.stderr
-    return output, proc.returncode
+def timestamped_path(filename):
+    """タイムスタンプ付きのファイル名を生成"""
+    name, ext = os.path.splitext(filename)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{name}_{timestamp}{ext}"
+
+
+def run_command(command, description="コマンド実行中"):
+    """コマンドを実行し、結果を返す"""
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            shell=True,
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        return {
+            "success": result.returncode == 0,
+            "output": result.stdout,
+            "error": result.stderr,
+            "description": description,
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "output": "",
+            "error": str(e),
+            "description": description,
+        }
 
 
 @app.route("/")
 def index():
-    """Render the main page with all forms."""
-    # List Excel and JSON files for results and analysis tabs
-    xlsx_files = sorted(Path(".").glob("*.xlsx"))
-    json_files = sorted(Path(".").glob("*.json"))
-    threshold_path = Path("screening/thresholds.json")
-    thresholds = {}
-    if threshold_path.is_file():
-        with threshold_path.open("r", encoding="utf-8") as f:
-            thresholds = json.load(f)
-    return render_template(
-        "index.html",
-        xlsx_files=xlsx_files,
-        json_files=json_files,
-        thresholds=thresholds,
+    """メインページ"""
+    return render_template("index.html")
+
+
+@app.route("/api/fetch/quotes", methods=["POST"])
+def fetch_quotes():
+    """株価データ取得"""
+    data = request.json
+    cmd = [sys.executable, "fetch/daily_quotes.py"]
+
+    if data.get("start_date"):
+        cmd.extend(["--start", data["start_date"]])
+    if data.get("end_date"):
+        cmd.extend(["--end", data["end_date"]])
+
+    return jsonify(run_command(" ".join(cmd), "株価データ取得"))
+
+
+@app.route("/api/fetch/listed", methods=["POST"])
+def fetch_listed():
+    """上場情報取得"""
+    cmd = [sys.executable, "fetch/listed_info.py"]
+    return jsonify(run_command(" ".join(cmd), "上場情報取得"))
+
+
+@app.route("/api/fetch/statements", methods=["POST"])
+def fetch_statements():
+    """財務諸表取得"""
+    data = request.json
+    cmd = [sys.executable, "fetch/statements.py"]
+
+    mode = data.get("mode", "2")  # デフォルトは日次取得モード
+    cmd.append(mode)
+
+    if data.get("start_date"):
+        cmd.extend(["--start", data["start_date"]])
+    if data.get("end_date"):
+        cmd.extend(["--end", data["end_date"]])
+
+    return jsonify(run_command(" ".join(cmd), f"財務諸表{mode}"))
+
+
+@app.route("/api/screen/fundamental", methods=["POST"])
+def screen_fundamental():
+    """ファンダメンタルスクリーニング"""
+    data = request.json
+    output_file = timestamped_path("fund_screen.xlsx")
+    cmd = [sys.executable, "screening/screen_statements.py"]
+
+    if data.get("lookback"):
+        cmd.extend(["--lookback", str(data["lookback"])])
+    if data.get("recent"):
+        cmd.extend(["--recent", str(data["recent"])])
+    if data.get("as_of"):
+        cmd.extend(["--as-of", data["as_of"]])
+
+    cmd.extend(["--output", output_file])
+
+    result = run_command(" ".join(cmd), "ファンダメンタルスクリーニング")
+    result["output_file"] = output_file if result["success"] else None
+    return jsonify(result)
+
+
+@app.route("/api/screen/technical", methods=["POST"])
+def screen_technical():
+    """テクニカルスクリーニング"""
+    data = request.json
+    output_file = timestamped_path("tech_screen.xlsx")
+    cmd = [sys.executable, "screening/screen_technical.py"]
+
+    action = data.get("action", "screen")
+    cmd.append(action)
+
+    if action == "screen":
+        if data.get("as_of"):
+            cmd.extend(["--as-of", data["as_of"]])
+        if data.get("lookback"):
+            cmd.extend(["--lookback", str(data["lookback"])])
+        cmd.extend(["--output", output_file])
+
+    result = run_command(" ".join(cmd), f"テクニカル{action}")
+    result["output_file"] = (
+        output_file if result["success"] and action == "screen" else None
     )
+    return jsonify(result)
 
 
-@app.post("/run/<cmd_name>")
-def run(cmd_name: str):
-    """Handle form submission and execute commands."""
-    form = request.form
-    cmd = ""
+@app.route("/api/screen/ml", methods=["POST"])
+def screen_ml():
+    """MLスクリーニング"""
+    data = request.json
+    cmd = [sys.executable, "screening/screen_ml.py"]
 
-    if cmd_name == "fetch_quotes":
-        cmd = "python fetch/daily_quotes.py"
-        if form.get("start"):
-            cmd += f" --start {form['start']}"
-        if form.get("end"):
-            cmd += f" --end {form['end']}"
-    elif cmd_name == "listed_info":
-        cmd = "python fetch/listed_info.py"
-    elif cmd_name == "statements":
-        cmd = f"python fetch/statements.py {form.get('mode', '1')}"
-        if form.get("start"):
-            cmd += f" --start {form['start']}"
-        if form.get("end"):
-            cmd += f" --end {form['end']}"
-    elif cmd_name == "screen_fund":
-        cmd = (
-            f"python screening/screen_statements.py --lookback {form.get('lookback')} "
-            f"--recent {form.get('recent')}"
+    action = data.get("action", "screen")
+    cmd.append(action)
+
+    if action == "train":
+        if data.get("force"):
+            cmd.append("--force")
+    elif action == "screen":
+        output_file = timestamped_path("ml_screen.xlsx")
+        if data.get("top"):
+            cmd.extend(["--top", str(data["top"])])
+        if data.get("lookback"):
+            cmd.extend(["--lookback", str(data["lookback"])])
+        cmd.extend(["--output", output_file])
+
+    result = run_command(" ".join(cmd), f"ML{action}")
+    result["output_file"] = (
+        output_file if result["success"] and action == "screen" else None
+    )
+    return jsonify(result)
+
+
+@app.route("/api/backtest/fundamental", methods=["POST"])
+def backtest_fundamental():
+    """ファンダメンタルバックテスト"""
+    data = request.json
+    output_file = timestamped_path("backtest_fund.json")
+    cmd = [sys.executable, "backtest/backtest_statements.py"]
+
+    if data.get("hold_days"):
+        cmd.extend(["--hold", str(data["hold_days"])])
+    if data.get("entry_offset"):
+        cmd.extend(["--entry-offset", str(data["entry_offset"])])
+    if data.get("capital"):
+        cmd.extend(["--capital", str(data["capital"])])
+    if data.get("start_date"):
+        cmd.extend(["--start", data["start_date"]])
+    if data.get("end_date"):
+        cmd.extend(["--end", data["end_date"]])
+
+    cmd.extend(["--output", output_file])
+
+    result = run_command(" ".join(cmd), "ファンダメンタルバックテスト")
+    result["output_file"] = output_file if result["success"] else None
+    return jsonify(result)
+
+
+@app.route("/api/backtest/technical", methods=["POST"])
+def backtest_technical():
+    """テクニカルバックテスト"""
+    data = request.json
+    output_file = timestamped_path("backtest_tech.json")
+    cmd = [sys.executable, "backtest/backtest_technical.py"]
+
+    if data.get("hold_days"):
+        cmd.extend(["--hold-days", str(data["hold_days"])])
+    if data.get("stop_loss"):
+        cmd.extend(["--stop-loss", str(data["stop_loss"])])
+    if data.get("capital"):
+        cmd.extend(["--capital", str(data["capital"])])
+    if data.get("start_date"):
+        cmd.extend(["--start", data["start_date"]])
+    if data.get("end_date"):
+        cmd.extend(["--end", data["end_date"]])
+
+    cmd.extend(["--output", output_file])
+
+    result = run_command(" ".join(cmd), "テクニカルバックテスト")
+    result["output_file"] = output_file if result["success"] else None
+    return jsonify(result)
+
+
+@app.route("/api/backtest/ml", methods=["POST"])
+def backtest_ml():
+    """MLバックテスト"""
+    data = request.json
+    output_file = timestamped_path("backtest_ml.json")
+    cmd = [sys.executable, "backtest/backtest_ml.py"]
+
+    if data.get("top"):
+        cmd.extend(["--top", str(data["top"])])
+    if data.get("capital"):
+        cmd.extend(["--capital", str(data["capital"])])
+    if data.get("start_date"):
+        cmd.extend(["--start", data["start_date"]])
+    if data.get("end_date"):
+        cmd.extend(["--end", data["end_date"]])
+
+    cmd.extend(["--output", output_file])
+
+    result = run_command(" ".join(cmd), "MLバックテスト")
+    result["output_file"] = output_file if result["success"] else None
+    return jsonify(result)
+
+
+@app.route("/api/utils/update_token", methods=["POST"])
+def update_token():
+    """IDトークン更新"""
+    data = request.json
+    email = data.get("email", "").strip()
+    password = data.get("password", "").strip()
+
+    # メールアドレスまたはパスワードが空の場合、account.jsonから読み込む
+    if not email or not password:
+        try:
+            with open("account.json") as f:
+                account_data = json.load(f)
+                if not email:
+                    email = account_data.get("mailaddress", "")
+                if not password:
+                    password = account_data.get("password", "")
+        except FileNotFoundError:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "account.jsonが見つかりません。メールアドレスとパスワードを入力してください。",
+                }
+            )
+        except json.JSONDecodeError:
+            return jsonify(
+                {"success": False, "error": "account.jsonの形式が不正です。"}
+            )
+
+    if not email or not password:
+        return jsonify(
+            {
+                "success": False,
+                "error": "メールアドレスとパスワードを入力するか、account.jsonに設定してください。",
+            }
         )
-        if form.get("as_of"):
-            cmd += f" --as-of {form['as_of']}"
-    elif cmd_name == "screen_tech":
-        cmd = f"python screening/screen_technical.py {form.get('cmd', 'indicators')}"
-        if form.get("as_of"):
-            cmd += f" --as-of {form['as_of']}"
-        if form.get("lookback"):
-            cmd += f" --lookback {form['lookback']}"
-    elif cmd_name == "screen_ml":
-        cmd = (
-            f"python screening/screen_ml.py screen --top {form.get('top', '30')} "
-            f"--lookback {form.get('lookback', '1095')}"
-        )
-        if form.get("retrain"):
-            cmd += " --retrain"
-    elif cmd_name == "backtest_stmt":
-        out = form.get("xlsx", "trades.xlsx")
-        cmd = (
-            f"python backtest/backtest_statements.py --hold {form.get('hold')} "
-            f"--entry-offset {form.get('offset')} --capital {form.get('capital')} "
-            f"--xlsx {out}"
-        )
-        if form.get("start"):
-            cmd += f" --start {form['start']}"
-        if form.get("end"):
-            cmd += f" --end {form['end']}"
-    elif cmd_name == "backtest_tech":
-        cmd = (
-            f"python backtest/backtest_technical.py --start {form.get('start')} "
-            f"--hold-days {form.get('hold')} --stop-loss {form.get('stop')} "
-            f"--capital {form.get('capital')} --outfile {form.get('outfile')}"
-        )
-        if form.get("end"):
-            cmd += f" --end {form['end']}"
-    elif cmd_name == "update_token":
-        cmd = "python update_idtoken.py"
-        if form.get("mail"):
-            cmd += f" --mail {form['mail']}"
-        if form.get("password"):
-            cmd += f" --password {form['password']}"
-    elif cmd_name == "db_summary":
-        cmd = "python db/db_summary.py"
-    elif cmd_name == "list_signals":
-        cmd = (
-            f"python db/list_signals.py {form.get('kind')} --limit {form.get('limit')}"
-        )
-        if form.get("start"):
-            cmd += f" --start {form['start']}"
-        if form.get("end"):
-            cmd += f" --end {form['end']}"
-    elif cmd_name == "analyze_json":
-        cmd = "python backtest/analyze_backtest_json.py"
-        for fname in request.form.getlist("files"):
-            cmd += f" {fname}"
-        if form.get("side"):
-            cmd += f" --side {form['side']}"
-        if form.get("show_trades"):
-            cmd += " --show-trades"
-    else:
-        return redirect(url_for("index"))
 
-    output, code = run_command(cmd)
-    return render_template("output.html", command=cmd, output=output, code=code)
+    # update_idtoken.pyにメールアドレスとパスワードを渡す
+    cmd = [
+        sys.executable,
+        "update_idtoken.py",
+        "--mail",
+        email,
+        "--password",
+        password,
+    ]
+    result = run_command(" ".join(cmd), "IDトークン更新")
+
+    # 成功時はaccount.jsonを更新（パスワードは保存しない）
+    if result["success"]:
+        try:
+            with open("account.json", "w") as f:
+                json.dump({"mailaddress": email, "password": "***"}, f, indent=2)
+        except Exception:
+            pass  # account.jsonの更新に失敗しても結果は返す
+
+    return jsonify(result)
 
 
-@app.post("/thresholds")
-def save_thresholds():
-    """Update thresholds JSON file."""
-    threshold_path = Path("screening/thresholds.json")
-    data = {k: float(v) for k, v in request.form.items()}
-    with threshold_path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    return redirect(url_for("index"))
+@app.route("/api/utils/db_summary", methods=["GET"])
+def db_summary():
+    """DBサマリー取得"""
+    cmd = [sys.executable, "db/db_summary.py"]
+    return jsonify(run_command(" ".join(cmd), "DBサマリー"))
+
+
+@app.route("/api/utils/list_signals", methods=["POST"])
+def list_signals():
+    """シグナル一覧取得"""
+    data = request.json
+    cmd = [sys.executable, "db/list_signals.py"]
+
+    signal_type = data.get("type", "fund")
+    cmd.append(signal_type)
+
+    if data.get("start_date"):
+        cmd.extend(["--start", data["start_date"]])
+    if data.get("end_date"):
+        cmd.extend(["--end", data["end_date"]])
+    if data.get("limit"):
+        cmd.extend(["--limit", str(data["limit"])])
+
+    return jsonify(run_command(" ".join(cmd), f"{signal_type}シグナル一覧"))
+
+
+@app.route("/api/utils/analyze_json", methods=["POST"])
+def analyze_json():
+    """JSON分析"""
+    data = request.json
+    files = data.get("files", [])
+
+    if not files:
+        return jsonify({"success": False, "error": "ファイルが選択されていません"})
+
+    cmd = [sys.executable, "backtest/analyze_backtest_json.py"] + files
+
+    if data.get("show_trades"):
+        cmd.append("--show-trades")
+    if data.get("side"):
+        cmd.extend(["--side", data["side"]])
+
+    return jsonify(run_command(" ".join(cmd), "JSON分析"))
+
+
+@app.route("/api/utils/thresholds", methods=["GET", "POST"])
+def thresholds():
+    """閾値設定の取得/更新"""
+    threshold_file = "screening/thresholds.json"
+
+    if request.method == "GET":
+        try:
+            with open(threshold_file) as f:
+                return jsonify({"success": True, "data": json.load(f)})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+
+    else:  # POST
+        try:
+            data = request.json
+            with open(threshold_file, "w") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            return jsonify({"success": True, "message": "閾値設定を保存しました"})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/results/list", methods=["GET"])
+def list_results():
+    """結果ファイル一覧取得"""
+    result_types = request.args.get("types", "xlsx,json").split(",")
+    files = []
+
+    for ext in result_types:
+        pattern = f"*.{ext}"
+        for file_path in Path(".").glob(pattern):
+            if not file_path.name.startswith("."):
+                files.append(
+                    {
+                        "name": file_path.name,
+                        "size": file_path.stat().st_size,
+                        "modified": datetime.fromtimestamp(
+                            file_path.stat().st_mtime
+                        ).isoformat(),
+                        "type": ext,
+                    }
+                )
+
+    files.sort(key=lambda x: x["modified"], reverse=True)
+    return jsonify({"success": True, "files": files})
+
+
+@app.route("/api/results/download/<filename>")
+def download_result(filename):
+    """結果ファイルダウンロード"""
+    try:
+        safe_filename = secure_filename(filename)
+        return send_file(safe_filename, as_attachment=True)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 404
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    # デバッグモードで起動（本番環境では無効にすること）
+    app.run(host="0.0.0.0", port=5000, debug=True)

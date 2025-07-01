@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Swing Trading Tool{% endblock %}</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Toastify for notifications -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+
+    <!-- Custom styles -->
+    <style>
+        [x-cloak] { display: none !important; }
+
+        /* スクロールバーのスタイリング */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* ローディングアニメーション */
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* タブのアクティブ状態 */
+        .tab-active {
+            border-bottom: 2px solid #3b82f6;
+            color: #3b82f6;
+        }
+    </style>
+
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <!-- ナビゲーションバー -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-semibold text-gray-900">
+                        🎯 Swing Trading Tool
+                    </h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-600" id="currentTime">
+                        <!-- 時刻はJavaScriptで更新 -->
+                    </span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- メインコンテンツ -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- グローバルスクリプト -->
+    <script>
+        // API呼び出しのヘルパー関数
+        async function apiCall(endpoint, data = {}, method = 'POST') {
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+
+                if (method !== 'GET') {
+                    options.body = JSON.stringify(data);
+                }
+
+                const response = await fetch(`/api${endpoint}`, options);
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('success', result.description + ' - 完了');
+                } else {
+                    showNotification('error', result.description + ' - エラー: ' + result.error);
+                }
+
+                return result;
+            } catch (error) {
+                showNotification('error', 'API呼び出しエラー: ' + error.message);
+                return { success: false, error: error.message };
+            }
+        }
+
+        // 通知表示関数
+        function showNotification(type, message) {
+            const bgColor = type === 'success' ? '#10b981' : '#ef4444';
+
+            Toastify({
+                text: message,
+                duration: 3000,
+                gravity: "top",
+                position: "right",
+                backgroundColor: bgColor,
+                stopOnFocus: true
+            }).showToast();
+        }
+
+        // 実行ログの表示関数
+        function appendLog(logElement, text, isError = false) {
+            const timestamp = new Date().toLocaleTimeString('ja-JP');
+            const line = document.createElement('div');
+            line.className = isError ? 'text-red-600' : 'text-gray-700';
+            line.textContent = `[${timestamp}] ${text}`;
+            logElement.appendChild(line);
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        // ファイルダウンロード関数
+        function downloadFile(filename) {
+            window.location.href = `/api/results/download/${filename}`;
+        }
+
+        // 現在時刻の更新
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleDateString('ja-JP') + ' ' + now.toLocaleTimeString('ja-JP');
+            const element = document.getElementById('currentTime');
+            if (element) {
+                element.textContent = timeString;
+            }
+        }
+
+        updateTime();
+        setInterval(updateTime, 1000);
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
