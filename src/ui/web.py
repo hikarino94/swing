@@ -5,14 +5,17 @@ Swing Trading Tool - モダンなWeb UI版
 """
 
 import json
-import os
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, send_file
-from werkzeug.utils import secure_filename
+
+# プロジェクトルートをPYTHONPATHに追加
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+
+from src.utils.file_utils import get_timestamped_output_path
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = (
@@ -21,11 +24,9 @@ app.config["SECRET_KEY"] = (
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
 
 
-def timestamped_path(filename):
-    """タイムスタンプ付きのファイル名を生成"""
-    name, ext = os.path.splitext(filename)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{name}_{timestamp}{ext}"
+def timestamped_path(category, base_name, extension):
+    """タイムスタンプ付きのファイルパスを生成"""
+    return str(get_timestamped_output_path(category, base_name, extension))
 
 
 def run_command(command, description="コマンド実行中"):
@@ -36,7 +37,7 @@ def run_command(command, description="コマンド実行中"):
             capture_output=True,
             text=True,
             shell=True,
-            cwd=os.path.dirname(os.path.abspath(__file__)),
+            cwd=Path(__file__).resolve().parent.parent.parent,  # プロジェクトルート
         )
         return {
             "success": result.returncode == 0,
@@ -101,7 +102,7 @@ def fetch_statements():
 def screen_fundamental():
     """ファンダメンタルスクリーニング"""
     data = request.json
-    output_file = timestamped_path("fund_screen.xlsx")
+    output_file = timestamped_path("screening", "fundamental", ".xlsx")
     cmd = [sys.executable, "screening/screen_statements.py"]
 
     if data.get("lookback"):
@@ -111,7 +112,7 @@ def screen_fundamental():
     if data.get("as_of"):
         cmd.extend(["--as-of", data["as_of"]])
 
-    cmd.extend(["--output", output_file])
+    cmd.extend(["--xlsx", output_file])
 
     result = run_command(" ".join(cmd), "ファンダメンタルスクリーニング")
     result["output_file"] = output_file if result["success"] else None
@@ -122,7 +123,7 @@ def screen_fundamental():
 def screen_technical():
     """テクニカルスクリーニング"""
     data = request.json
-    output_file = timestamped_path("tech_screen.xlsx")
+    output_file = timestamped_path("screening", "technical", ".xlsx")
     cmd = [sys.executable, "screening/screen_technical.py"]
 
     action = data.get("action", "screen")
@@ -133,7 +134,7 @@ def screen_technical():
             cmd.extend(["--as-of", data["as_of"]])
         if data.get("lookback"):
             cmd.extend(["--lookback", str(data["lookback"])])
-        cmd.extend(["--output", output_file])
+        cmd.extend(["--xlsx", output_file])
 
     result = run_command(" ".join(cmd), f"テクニカル{action}")
     result["output_file"] = (
@@ -155,17 +156,15 @@ def screen_ml():
         if data.get("force"):
             cmd.append("--force")
     elif action == "screen":
-        output_file = timestamped_path("ml_screen.xlsx")
         if data.get("top"):
             cmd.extend(["--top", str(data["top"])])
         if data.get("lookback"):
             cmd.extend(["--lookback", str(data["lookback"])])
-        cmd.extend(["--output", output_file])
+        # MLスクリーニングはExcel出力をサポートしていないため、結果をテキストで取得
 
     result = run_command(" ".join(cmd), f"ML{action}")
-    result["output_file"] = (
-        output_file if result["success"] and action == "screen" else None
-    )
+    # MLスクリーニングはテキスト出力のみなのでoutput_fileはNone
+    result["output_file"] = None
     return jsonify(result)
 
 
@@ -173,7 +172,7 @@ def screen_ml():
 def backtest_fundamental():
     """ファンダメンタルバックテスト"""
     data = request.json
-    output_file = timestamped_path("backtest_fund.json")
+    output_file = timestamped_path("backtest", "fundamental", ".json")
     cmd = [sys.executable, "backtest/backtest_statements.py"]
 
     if data.get("hold_days"):
@@ -187,7 +186,7 @@ def backtest_fundamental():
     if data.get("end_date"):
         cmd.extend(["--end", data["end_date"]])
 
-    cmd.extend(["--output", output_file])
+    cmd.extend(["--json", output_file])
 
     result = run_command(" ".join(cmd), "ファンダメンタルバックテスト")
     result["output_file"] = output_file if result["success"] else None
@@ -198,7 +197,7 @@ def backtest_fundamental():
 def backtest_technical():
     """テクニカルバックテスト"""
     data = request.json
-    output_file = timestamped_path("backtest_tech.json")
+    output_file = timestamped_path("backtest", "technical", ".json")
     cmd = [sys.executable, "backtest/backtest_technical.py"]
 
     if data.get("hold_days"):
@@ -212,7 +211,7 @@ def backtest_technical():
     if data.get("end_date"):
         cmd.extend(["--end", data["end_date"]])
 
-    cmd.extend(["--output", output_file])
+    cmd.extend(["--json", output_file])
 
     result = run_command(" ".join(cmd), "テクニカルバックテスト")
     result["output_file"] = output_file if result["success"] else None
@@ -223,7 +222,7 @@ def backtest_technical():
 def backtest_ml():
     """MLバックテスト"""
     data = request.json
-    output_file = timestamped_path("backtest_ml.json")
+    output_file = timestamped_path("backtest", "ml", ".json")
     cmd = [sys.executable, "backtest/backtest_ml.py"]
 
     if data.get("top"):
@@ -235,7 +234,7 @@ def backtest_ml():
     if data.get("end_date"):
         cmd.extend(["--end", data["end_date"]])
 
-    cmd.extend(["--output", output_file])
+    cmd.extend(["--json", output_file])
 
     result = run_command(" ".join(cmd), "MLバックテスト")
     result["output_file"] = output_file if result["success"] else None
@@ -371,33 +370,64 @@ def thresholds():
 def list_results():
     """結果ファイル一覧取得"""
     result_types = request.args.get("types", "xlsx,json").split(",")
+    category = request.args.get("category", "")
     files = []
 
-    for ext in result_types:
-        pattern = f"*.{ext}"
-        for file_path in Path(".").glob(pattern):
-            if not file_path.name.startswith("."):
-                files.append(
-                    {
-                        "name": file_path.name,
-                        "size": file_path.stat().st_size,
-                        "modified": datetime.fromtimestamp(
-                            file_path.stat().st_mtime
-                        ).isoformat(),
-                        "type": ext,
-                    }
-                )
+    # data/output/以下のファイルを検索
+    project_root = Path(__file__).resolve().parent.parent.parent
+    output_dir = project_root / "data" / "output"
+
+    # カテゴリが指定されている場合はそのディレクトリのみ検索
+    if category:
+        search_dirs = (
+            [output_dir / category] if (output_dir / category).exists() else []
+        )
+    else:
+        search_dirs = [
+            output_dir / cat
+            for cat in ["backtest", "screening", "reports"]
+            if (output_dir / cat).exists()
+        ]
+
+    for search_dir in search_dirs:
+        for ext in result_types:
+            pattern = f"*.{ext}"
+            for file_path in search_dir.glob(pattern):
+                if not file_path.name.startswith("."):
+                    relative_path = file_path.relative_to(output_dir)
+                    files.append(
+                        {
+                            "name": file_path.name,
+                            "path": str(relative_path),
+                            "category": relative_path.parent.name,
+                            "size": file_path.stat().st_size,
+                            "modified": datetime.fromtimestamp(
+                                file_path.stat().st_mtime
+                            ).isoformat(),
+                            "type": ext,
+                        }
+                    )
 
     files.sort(key=lambda x: x["modified"], reverse=True)
     return jsonify({"success": True, "files": files})
 
 
-@app.route("/api/results/download/<filename>")
-def download_result(filename):
+@app.route("/api/results/download/<path:filepath>")
+def download_result(filepath):
     """結果ファイルダウンロード"""
     try:
-        safe_filename = secure_filename(filename)
-        return send_file(safe_filename, as_attachment=True)
+        # パスのセキュリティチェック
+        safe_path = Path(filepath)
+        if ".." in safe_path.parts:
+            raise ValueError("Invalid file path")
+
+        project_root = Path(__file__).resolve().parent.parent.parent
+        full_path = project_root / "data" / "output" / safe_path
+
+        if not full_path.exists() or not full_path.is_file():
+            raise FileNotFoundError(f"File not found: {filepath}")
+
+        return send_file(full_path, as_attachment=True)
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 404
 

@@ -26,8 +26,8 @@ import scheduler
 class TestCommandExecution:
     """コマンド実行機能のテスト"""
 
-    @mock.patch("scheduler.subprocess.run")
-    @mock.patch("scheduler.logger")
+    @mock.patch("src.cli.scheduler.subprocess.run")
+    @mock.patch("src.cli.scheduler.logger")
     def test_run_success(self, mock_logger, mock_subprocess):
         """コマンド実行成功のテスト"""
         # モック設定
@@ -43,8 +43,8 @@ class TestCommandExecution:
         mock_logger.info.assert_called_once_with("Run: %s", "python test_command.py")
         mock_logger.error.assert_not_called()
 
-    @mock.patch("scheduler.subprocess.run")
-    @mock.patch("scheduler.logger")
+    @mock.patch("src.cli.scheduler.subprocess.run")
+    @mock.patch("src.cli.scheduler.logger")
     def test_run_failure(self, mock_logger, mock_subprocess):
         """コマンド実行失敗のテスト"""
         # モック設定
@@ -66,19 +66,19 @@ class TestCommandExecution:
 class TestFetchTasks:
     """データ取得タスクのテスト"""
 
-    @mock.patch("scheduler._run")
+    @mock.patch("src.cli.scheduler._run")
     def test_fetch_quotes(self, mock_run):
         """日次価格取得タスクのテスト"""
         scheduler.fetch_quotes()
         mock_run.assert_called_once_with("python fetch/daily_quotes.py")
 
-    @mock.patch("scheduler._run")
+    @mock.patch("src.cli.scheduler._run")
     def test_fetch_statements(self, mock_run):
         """財務諸表取得タスクのテスト"""
         scheduler.fetch_statements()
         mock_run.assert_called_once_with("python fetch/statements.py 2")
 
-    @mock.patch("scheduler._run")
+    @mock.patch("src.cli.scheduler._run")
     def test_update_listed_info(self, mock_run):
         """銘柄情報更新タスクのテスト"""
         scheduler.update_listed_info()
@@ -112,7 +112,7 @@ class TestScheduleSetup:
             assert hasattr(mock_every, "day")
             assert hasattr(mock_every, "monday")
 
-    @mock.patch("scheduler.config")
+    @mock.patch("src.cli.scheduler.config")
     def test_schedule_config_loading(self, mock_config):
         """設定ファイルからのスケジュール設定読み込みテスト"""
         # 設定値のモック
@@ -141,9 +141,9 @@ class TestScheduleSetup:
 class TestMainLoop:
     """メインループのテスト"""
 
-    @mock.patch("scheduler.time.sleep")
-    @mock.patch("scheduler.schedule.run_pending")
-    @mock.patch("scheduler.logger")
+    @mock.patch("src.cli.scheduler.time.sleep")
+    @mock.patch("src.cli.scheduler.schedule.run_pending")
+    @mock.patch("src.cli.scheduler.logger")
     def test_main_loop_execution(self, mock_logger, mock_run_pending, mock_sleep):
         """メインループ実行のテスト"""
         # 無限ループを制御するため、2回実行後に例外で終了
@@ -159,9 +159,9 @@ class TestMainLoop:
         assert mock_sleep.call_count == 2
         mock_sleep.assert_has_calls([mock.call(30), mock.call(30)])
 
-    @mock.patch("scheduler.time.sleep")
-    @mock.patch("scheduler.schedule.run_pending")
-    @mock.patch("scheduler.logger")
+    @mock.patch("src.cli.scheduler.time.sleep")
+    @mock.patch("src.cli.scheduler.schedule.run_pending")
+    @mock.patch("src.cli.scheduler.logger")
     def test_main_loop_single_iteration(
         self, mock_logger, mock_run_pending, mock_sleep
     ):
@@ -180,8 +180,8 @@ class TestMainLoop:
 class TestErrorHandling:
     """エラー処理のテスト"""
 
-    @mock.patch("scheduler.subprocess.run")
-    @mock.patch("scheduler.logger")
+    @mock.patch("src.cli.scheduler.subprocess.run")
+    @mock.patch("src.cli.scheduler.logger")
     def test_subprocess_exception(self, mock_logger, mock_subprocess):
         """subprocess実行時の例外処理テスト"""
         # subprocess.runで例外を発生させる
@@ -195,7 +195,7 @@ class TestErrorHandling:
 
         mock_logger.info.assert_called_once()
 
-    @mock.patch("scheduler._run")
+    @mock.patch("src.cli.scheduler._run")
     def test_task_exception_handling(self, mock_run):
         """タスク実行時の例外処理テスト"""
         # _run関数で例外を発生させる
@@ -209,8 +209,8 @@ class TestErrorHandling:
 class TestIntegration:
     """統合テスト"""
 
-    @mock.patch("scheduler.subprocess.run")
-    @mock.patch("scheduler.logger")
+    @mock.patch("src.cli.scheduler.subprocess.run")
+    @mock.patch("src.cli.scheduler.logger")
     def test_complete_task_execution(self, mock_logger, mock_subprocess):
         """完全なタスク実行フローのテスト"""
         # 成功ケースのモック設定
@@ -240,9 +240,9 @@ class TestIntegration:
         mock_logger.info.assert_has_calls(expected_log_calls)
         mock_logger.error.assert_not_called()
 
-    @mock.patch("scheduler.time.sleep")
-    @mock.patch("scheduler.schedule.run_pending")
-    @mock.patch("scheduler.logger")
+    @mock.patch("src.cli.scheduler.time.sleep")
+    @mock.patch("src.cli.scheduler.schedule.run_pending")
+    @mock.patch("src.cli.scheduler.logger")
     def test_scheduler_lifecycle(self, mock_logger, mock_run_pending, mock_sleep):
         """スケジューラーのライフサイクルテスト"""
         # 開始から停止までの流れをテスト
@@ -259,7 +259,7 @@ class TestIntegration:
         assert mock_run_pending.call_count == iteration_count
         assert mock_sleep.call_count == iteration_count
 
-    @mock.patch("scheduler.subprocess.run")
+    @mock.patch("src.cli.scheduler.subprocess.run")
     def test_mixed_success_failure_scenarios(self, mock_subprocess):
         """成功・失敗混在シナリオのテスト"""
         # 複数の結果を設定（成功・失敗の混在）
@@ -293,7 +293,7 @@ class TestConfiguration:
         # ここでは基本的な存在確認のみ
         assert hasattr(scheduler, "logger")
 
-    @mock.patch("scheduler.config")
+    @mock.patch("src.cli.scheduler.config")
     def test_path_configuration(self, mock_config):
         """パス設定のテスト"""
         # モジュールがconfigから適切にパスを取得できるかテスト

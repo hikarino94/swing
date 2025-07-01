@@ -9,6 +9,8 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, scrolledtext, ttk
 
+# プロジェクトルートをPYTHONPATHに追加
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 from screening import thresholds
 
 

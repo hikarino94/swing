@@ -29,7 +29,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH  # noqa: E402
+from src.config import DB_PATH  # noqa: E402
 
 # -----------------------------------------------------------------------------
 # pandas future‑proof settings & logger
@@ -48,7 +48,7 @@ STMT_TABLE = "statements"
 LOOKBACK_DAYS = 1095  # デフォルト過去 3 年
 FUTURE_WINDOW = 30  # 30 営業日後を予測
 THRESH_PCT = 0.05  # +5% 以上なら陽線ラベル
-MODEL_FNAME = "ml_screen_model.pkl"
+MODEL_FNAME = "models/ml_screen_model.pkl"
 
 NUMERIC_STMT_COLS = [
     "NetSales",
@@ -313,6 +313,8 @@ def cli():
     logger.info("screen_ml.py running with command '%s'", args.cmd)
     db_path = Path(args.db)
     model_path = db_path.parent / MODEL_FNAME
+    # モデル保存ディレクトリの作成
+    model_path.parent.mkdir(parents=True, exist_ok=True)
 
     con = _connect(db_path)
 

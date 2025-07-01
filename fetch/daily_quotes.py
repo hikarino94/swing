@@ -38,7 +38,7 @@ import requests
 from requests import Response, Session
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH, config  # noqa: E402
+from src.config import DB_PATH, config  # noqa: E402
 
 API_URL = config.get_api_endpoint("daily_quotes")
 RATE_SLEEP = config.api_rate_limit_sleep

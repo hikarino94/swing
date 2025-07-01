@@ -8,7 +8,7 @@ J-Quants の株価・財務データを取得し、
 ### 自動セットアップ（推奨）
 
 ```bash
-python setup_environment.py
+python scripts/setup_environment.py
 ```
 
 このスクリプトは環境構築に必要な全ての手順を自動化します。
@@ -35,18 +35,22 @@ Python 3.12 以上を想定しています。必要なライブラリは
 pip install -r requirements.txt
 ```
 
-J‑Quants API の `idToken` を取得し、次の内容で `idtoken.json` を作成してください。
+J‑Quants API の `idToken` を取得し、次の内容で `config/idtoken.json` を作成してください。
 
 ```json
 {"idToken": "YOUR_TOKEN"}
 ```
 
 J‑Quants の認証に使用するメールアドレスとパスワードを保存する
-`account.json` を用意しておくと、`update_idtoken.py` から自動的に参照されます。
+`config/account.json` を用意しておくと、`src/cli/update_idtoken.py` から自動的に参照されます。
 
-Web アプリ用の認証情報を分けたい場合は `login.json` を用意してください。
+```bash
+python -m src.cli.update_idtoken
+```
+
+Web アプリ用の認証情報を分けたい場合は `config/login.json` を用意してください。
 こちらには Web アプリにログインする際の **ID** とパスワード（または
-`password_hash`）を保存します。`login.json` がない場合は `account.json`
+`password_hash`）を保存します。`config/login.json` がない場合は `config/account.json`
 が使われますが、この場合はメールアドレスが ID として扱われます。
 `LOGIN_ACCOUNT` 環境変数でこのファイルの場所を変更できます。
 

@@ -19,8 +19,10 @@ class Config:
         Args:
             config_path: 設定ファイルのパス（指定しない場合はデフォルトを使用）
         """
-        self.base_dir = Path(__file__).resolve().parent
-        self.config_path = config_path or self.base_dir / "config.json"
+        self.base_dir = (
+            Path(__file__).resolve().parent.parent
+        )  # プロジェクトルートを指す
+        self.config_path = config_path or self.base_dir / "config" / "config.json"
         self._config: dict[str, Any] = {}
         self._load_config()
 
@@ -160,6 +162,21 @@ class Config:
 
         return value
 
+    @property
+    def output_base_dir(self) -> Path:
+        """出力ファイルのベースディレクトリを返します"""
+        return self.base_dir / "data" / "output"
+
+    @property
+    def log_dir(self) -> Path:
+        """ログファイルのディレクトリを返します"""
+        return self.base_dir / "data" / "logs"
+
+    @property
+    def model_dir(self) -> Path:
+        """機械学習モデルのディレクトリを返します"""
+        return self.base_dir / "db" / "models"
+
 
 # グローバル設定インスタンス
 config = Config()
@@ -168,3 +185,6 @@ config = Config()
 DB_PATH = config.db_path
 API_BASE_URL = config.api_base_url
 API_RATE_LIMIT_SLEEP = config.api_rate_limit_sleep
+OUTPUT_BASE_DIR = config.output_base_dir
+LOG_DIR = config.log_dir
+MODEL_DIR = config.model_dir

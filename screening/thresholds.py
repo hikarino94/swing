@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import cast
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import config  # noqa: E402
+from src.config import config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

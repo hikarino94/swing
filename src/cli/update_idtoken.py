@@ -9,9 +9,10 @@ from pathlib import Path
 
 import requests
 
-sys.path.append(str(Path(__file__).resolve().parent))
+# プロジェクトルートをPYTHONPATHに追加（スクリプト実行用）
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
-from config import config  # noqa: E402
+from src.config import config  # noqa: E402
 
 API_AUTH = config.get_api_endpoint("auth")
 API_REFRESH = config.get_api_endpoint("refresh")

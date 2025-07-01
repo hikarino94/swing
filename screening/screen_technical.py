@@ -23,7 +23,6 @@ import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from config import DB_PATH  # noqa: E402
 from screening.thresholds import (  # noqa: E402
     ADX_THRESHOLD,
     FIRST_LOOKBACK_DAYS,
@@ -34,6 +33,7 @@ from screening.thresholds import (  # noqa: E402
     SIGNAL_COUNT_MIN,
     log_thresholds,
 )
+from src.config import DB_PATH  # noqa: E402
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)

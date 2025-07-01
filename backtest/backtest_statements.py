@@ -17,7 +17,6 @@ $ python backtest_statements.py \
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import logging
 import sqlite3
 import sys
@@ -30,8 +29,9 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
 sys.path.append(str(SCREENING_DIR))
 
-from config import DB_PATH  # noqa: E402
 from screening.thresholds import log_thresholds  # noqa: E402
+from src.config import DB_PATH  # noqa: E402
+from src.utils.file_utils import get_timestamped_output_path  # noqa: E402
 
 TD_FMT = "%Y-%m-%d"
 DEFAULT_CAPITAL = 1_000_000  # JPY
@@ -41,11 +41,11 @@ LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logger = logging.getLogger("backtest_statements")
 
 
-def _result_paths(prefix: str) -> tuple[str, str]:
+def _result_paths(prefix: str) -> tuple[Path, Path]:
     """Return Excel and JSON file paths with a timestamp."""
-
-    ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}_{ts}.xlsx", f"{prefix}_{ts}.json"
+    excel_path = get_timestamped_output_path("backtest", prefix, ".xlsx")
+    json_path = get_timestamped_output_path("backtest", prefix, ".json")
+    return excel_path, json_path
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +224,7 @@ def show_results(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 
 
-def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
+def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: Path | str):
     """バックテスト結果を Excel ファイルに出力する。
 
     入力パラメータ: トレード表、サマリー表、保存先パス。
@@ -271,9 +271,9 @@ def parse_args(argv=None):
     p.add_argument("--start", type=str, default=None, help="開始日 YYYY-MM-DD")
     p.add_argument("--end", type=str, default=None, help="終了日 YYYY-MM-DD")
     default_xlsx, default_json = _result_paths("fundamental")
-    p.add_argument("--xlsx", type=str, default=default_xlsx, help="Excel 出力ファイル")
+    p.add_argument("--xlsx", type=Path, default=default_xlsx, help="Excel 出力ファイル")
     p.add_argument(
-        "--json", type=str, default=default_json, help="結果を保存するJSONファイル"
+        "--json", type=Path, default=default_json, help="結果を保存するJSONファイル"
     )
     p.add_argument(
         "--show",
@@ -314,9 +314,9 @@ def main():
     summary = summarize(trades)
 
     logger.info("Saving Excel → %s", args.xlsx)
-    to_excel(trades, summary, args.xlsx)
+    to_excel(trades, summary, str(args.xlsx))
 
-    trades.to_json(args.json, orient="records", force_ascii=False)
+    trades.to_json(str(args.json), orient="records", force_ascii=False)
     logger.info("JSON exported -> %s", args.json)
 
     logger.info("\n%s", summary.to_string(index=False))

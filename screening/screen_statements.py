@@ -27,7 +27,6 @@ import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # Threshold constants shared across screening modules
-from config import DB_PATH  # noqa: E402
 from screening.thresholds import (  # noqa: E402
     CF_QUALITY_MIN,
     EPS_YOY_MIN,
@@ -35,6 +34,7 @@ from screening.thresholds import (  # noqa: E402
     TREASURY_DELTA_MAX,
     log_thresholds,
 )
+from src.config import DB_PATH  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

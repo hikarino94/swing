@@ -79,16 +79,23 @@ python backtest/backtest_technical.py [--hold-days DAYS] [--capital AMOUNT] [--s
 python backtest/backtest_ml.py [--top N] [--capital AMOUNT] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--show]
 
 # Analyze backtest results
-python backtest/analyze_backtest_json.py result.json [--show-trades] [--side long|short]
+python -m backtest.analyze_backtest_json result.json [--show-trades] [--side long|short]
 
-# Start GUI
-python gui.py
+# Start GUI (Legacy)
+python -m src.ui.legacy.gui
 
 # Start web interface
-python web.py
+python -m src.ui.web
 
 # Start scheduler for automated data updates
-python scheduler.py
+python -m src.cli.scheduler
+
+# View logs (command line)
+python scripts/log_viewer.py list                         # ログファイル一覧
+python scripts/log_viewer.py view scheduler.log           # ログファイル表示
+python scripts/log_viewer.py tail scheduler.log -n 100    # 末尾100行表示
+python scripts/log_viewer.py tail scheduler.log -f        # リアルタイム追跡
+python scripts/log_viewer.py search ERROR                 # エラーログ検索
 ```
 
 ## Architecture & Data Flow
@@ -108,11 +115,11 @@ python scheduler.py
 - `technical_indicators`: Technical analysis signals (複数指標のフラグ付き)
 
 ### Configuration Files
-- `account.json`: J-Quants API credentials (mail/password)
-- `login.json`: Web app authentication (optional, falls back to account.json)
-- `idtoken.json`: J-Quants API token (auto-generated)
+- `config/account.json`: J-Quants API credentials (mail/password)
+- `config/login.json`: Web app authentication (optional, falls back to account.json)
+- `config/idtoken.json`: J-Quants API token (auto-generated)
 - `screening/thresholds.json`: Screening parameter configuration
-- `config.json`: General application configuration
+- `config/config.json`: General application configuration
 - `pyproject.toml`: Project metadata and tool configuration
 
 ### Typical Workflow
@@ -126,7 +133,7 @@ python scheduler.py
 - **Black**: Code formatting
 - **Pre-commit hooks**: Enforced on every commit
 - **Testing**: Comprehensive test suite using pytest (tests/ directory)
-- **Coverage**: テストカバレッジレポート生成 (htmlcov/)
+- **Coverage**: テストカバレッジレポート生成 (tests/reports/htmlcov/)
 
 ### Key Dependencies
 - pandas: Data manipulation
@@ -141,12 +148,12 @@ python scheduler.py
 
 ## Important Notes
 
-- All sensitive files (\*.json credentials, \*.db) are in .gitignore
+- All sensitive files (config/\*.json credentials, \*.db) are in .gitignore
 - Scheduler runs daily at 20:00 (quotes), 20:30 (statements), Monday 6:00 (listed info)
-- Results are timestamped and saved as both Excel and JSON formats
+- Results are timestamped and saved to data/output/ as both Excel and JSON formats
 - Database uses SQLite with WAL mode for concurrent access
 - Supports both long and short trading strategies in backtests
 - Test suite includes comprehensive unit and integration tests
-- ML models are saved as pickle files (db/ml_screen_model.pkl)
+- ML models are saved as pickle files (db/models/ml_screen_model.pkl)
 - Web app supports password hashing for secure authentication
 - Backtesting supports various parameters: stop-loss, holding period, capital allocation

@@ -45,12 +45,13 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
 sys.path.append(str(SCREENING_DIR))
 
-from config import DB_PATH  # noqa: E402
 from screening.thresholds import (  # noqa: E402
     SHORT_SIGNAL_COUNT_MIN,
     SIGNAL_COUNT_MIN,
     log_thresholds,
 )
+from src.config import DB_PATH  # noqa: E402
+from src.utils.file_utils import get_timestamped_output_path  # noqa: E402
 
 CAPITAL_DEFAULT = 1_000_000
 HOLD_DAYS_DEFAULT = 60
@@ -67,11 +68,11 @@ log_thresholds(logger)
 # ---------------------------------------------------------------------------
 
 
-def _result_paths(prefix: str) -> tuple[str, str]:
+def _result_paths(prefix: str) -> tuple[Path, Path]:
     """Return Excel and JSON file paths with a timestamp."""
-
-    ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}_{ts}.xlsx", f"{prefix}_{ts}.json"
+    excel_path = get_timestamped_output_path("backtest", prefix, ".xlsx")
+    json_path = get_timestamped_output_path("backtest", prefix, ".json")
+    return excel_path, json_path
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +380,7 @@ def show_results(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
         print(chart)
 
 
-def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str) -> None:
+def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: Path | str) -> None:
     """Save trades and summary to an Excel file."""
 
     with pd.ExcelWriter(path, engine="xlsxwriter") as writer:
@@ -449,11 +450,11 @@ def run_backtest_range(
     logger.info("=== Summary ===\n%s", summary)
 
     if outfile:
-        to_excel(result, summary, outfile)
+        to_excel(result, summary, str(outfile))
         logger.info("Excel exported → %s", outfile)
 
     if jsonfile:
-        result.to_json(jsonfile, orient="records", force_ascii=False)
+        result.to_json(str(jsonfile), orient="records", force_ascii=False)
         logger.info("JSON exported → %s", jsonfile)
 
     if show:
@@ -474,11 +475,13 @@ def parse_args(args=None):
     parser.add_argument("--end", help="エントリー終了日 YYYY-MM-DD")
     parser.add_argument(
         "--outfile",
+        type=Path,
         default=default_xlsx,
         help="Excel 出力ファイル",
     )
     parser.add_argument(
         "--json",
+        type=Path,
         default=default_json,
         help="結果を保存するJSONファイル",
     )

@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH  # noqa: E402
+from src.config import DB_PATH  # noqa: E402
 
 TABLES = {
     "fund": ("fundamental_signals", "DisclosedAt"),
