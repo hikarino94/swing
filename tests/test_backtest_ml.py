@@ -15,7 +15,6 @@ from __future__ import annotations
 import argparse
 import pickle
 import sqlite3
-import sys
 import tempfile
 from pathlib import Path
 from unittest import mock
@@ -26,7 +25,6 @@ import pytest
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.pipeline import Pipeline
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
 from backtest import backtest_ml
 
 

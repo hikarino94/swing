@@ -22,10 +22,6 @@ def mock_open_factory(file_contents):
 # web.pyをインポートする前に環境を設定
 os.environ["TESTING"] = "1"
 
-import sys
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from src.ui.web import app
 
 

@@ -94,14 +94,32 @@ jobs:
       run: |
         python db/db_schema.py
 
+    - name: Setup Python Path
+      run: |
+        # Pythonパスの設定を明示的に行う
+        echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
+
+    - name: Debug Import Issues
+      run: |
+        # インポートの問題をデバッグ
+        echo "Testing module imports..."
+        python -c "import sys; print('sys.path:', sys.path)"
+        python -c "from src.config import Config; print('Config import: OK')" || true
+        python -c "from src.ui.web import app; print('Web app import: OK')" || true
+        python -c "from fetch import daily_quotes; print('Fetch module import: OK')" || true
+
     - name: Run tests
       id: pytest
       run: |
         export PYTHONPATH="${PYTHONPATH}:${PWD}"
         export PYTHONWARNINGS="ignore::DeprecationWarning:numpy"
-        # NumPy警告を環境変数でも抑制
         export PYTHONWARNINGS="ignore::UserWarning"
-        pytest -v --cov=. --cov-report=xml --cov-report=term
+        # デバッグ情報を出力
+        echo "Current directory: $(pwd)"
+        echo "PYTHONPATH: $PYTHONPATH"
+        echo "Python version: $(python --version)"
+        # テスト実行（最初のエラーで停止）
+        pytest -v --tb=short --cov=. --cov-report=xml --cov-report=term -x
 
     - name: Check coverage threshold
       run: |

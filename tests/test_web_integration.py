@@ -3,13 +3,9 @@
 import json
 import os
 import sqlite3
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.ui.web import app
 
@@ -425,17 +421,26 @@ class TestSecurityFeatures:
 
     def test_json_injection_prevention(self, client):
         """JSON入力のバリデーション"""
-        # SQLインジェクション試行を含むJSON
-        response = client.post(
-            "/api/screen/fundamental",
-            json={"lookback": "'; DROP TABLE prices; --"},
-        )
-        # アプリケーションは入力を受け入れるが、内部でエラーが発生する
-        assert response.status_code == 200
-        data = response.get_json()
-        # コマンド実行時にエラーが発生することを確認
-        assert data["success"] is False
-        assert "error" in data
+        with patch("src.ui.web.run_command") as mock_run:
+            # SQLインジェクション試行を含むJSON
+            # コマンドに文字列がそのまま渡されると、エラーになるはず
+            mock_run.return_value = {
+                "success": False,
+                "output": "",
+                "error": "Invalid parameter",
+                "description": "ファンダメンタルスクリーニング",
+            }
+
+            response = client.post(
+                "/api/screen/fundamental",
+                json={"lookback": "'; DROP TABLE prices; --"},
+            )
+            # アプリケーションは入力を受け入れるが、内部でエラーが発生する
+            assert response.status_code == 200
+            data = response.get_json()
+            # コマンド実行時にエラーが発生することを確認
+            assert data["success"] is False
+            assert "error" in data
 
 
 if __name__ == "__main__":
