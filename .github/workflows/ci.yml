@@ -50,11 +50,11 @@ jobs:
 
     - name: Run MyPy
       run: |
-        mypy . || true  # Allow failures for now
+        mypy . --ignore-missing-imports || echo "::warning::Type checking failed - this will become an error in the future"
 
     - name: Run Bandit (Security)
       run: |
-        bandit -r . -f json -o bandit-report.json || true
+        bandit -r . -f json -o bandit-report.json || echo "::warning::Security scan found issues"
         if [ -f bandit-report.json ]; then
           echo "Security scan results:"
           cat bandit-report.json
@@ -95,10 +95,18 @@ jobs:
         python db/db_schema.py
 
     - name: Run tests
+      id: pytest
       run: |
         export PYTHONPATH="${PYTHONPATH}:${PWD}"
         export PYTHONWARNINGS="ignore::DeprecationWarning:numpy"
-        pytest -v --cov=. --cov-report=xml --cov-report=term || true
+        # NumPy警告を環境変数でも抑制
+        export PYTHONWARNINGS="ignore::UserWarning"
+        pytest -v --cov=. --cov-report=xml --cov-report=term
+
+    - name: Check coverage threshold
+      run: |
+        # 現在のカバレッジが低いため、段階的に上げる
+        coverage report --fail-under=5 || echo "::warning::Coverage is below 5% - please add more tests"
 
     - name: Upload coverage to Codecov
       if: matrix.python-version == '3.12'
@@ -134,8 +142,8 @@ jobs:
     - name: Check Python imports
       run: |
         # 基本的なインポートチェック
-        python -c "import config" || echo "config.py import check"
-        python -c "from setup_environment import EnvironmentSetup" || echo "setup_environment import check"
+        python -c "import sys; sys.path.append('.'); from src.config import Config" || echo "::error::Failed to import Config"
+        python -c "from scripts.setup_environment import EnvironmentSetup" || echo "::warning::setup_environment import check failed"
 
   build:
     name: Build Package

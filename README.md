@@ -211,24 +211,41 @@ python -m src.cli.scheduler
 
 ```text
 swing/
-├── fetch/          # データ取得モジュール
-├── screening/      # スクリーニングアルゴリズム
-├── backtest/       # バックテストエンジン
-├── db/             # データベース管理
-├── src/            # ソースコード
-│   ├── cli/        # コマンドラインツール
+├── src/                   # ソースコード
+│   ├── cli/              # コマンドラインツール
 │   │   ├── scheduler.py    # 自動実行スケジューラ
 │   │   └── update_idtoken.py  # トークン更新
-│   ├── ui/         # ユーザーインターフェース
-│   │   ├── web.py          # モダンWebインターフェース
+│   ├── config/           # 設定管理
+│   ├── ui/               # ユーザーインターフェース
+│   │   ├── web.py          # モダンWeb UI（Flask）
 │   │   └── legacy/         # レガシーUI
-│   │       ├── gui.py      # デスクトップGUI
-│   │       └── web.py      # 旧Webインターフェース
-│   └── utils/      # ユーティリティ
-├── templates/      # Webインターフェイステンプレート
-├── tests/          # テストスイート
-└── config.py       # 設定管理
+│   │       └── gui.py      # Tkinter GUI
+│   └── utils/            # ユーティリティ
+├── fetch/                 # J-Quants APIデータ取得
+├── db/                    # SQLiteデータベース管理
+├── screening/             # スクリーニングアルゴリズム
+│   ├── screen_statements.py  # ファンダメンタル分析
+│   ├── screen_technical.py   # テクニカル分析
+│   ├── screen_ml.py          # 機械学習分析
+│   └── thresholds.json       # スクリーニング閾値
+├── backtest/              # バックテストエンジン
+├── templates/             # Flask Web UIテンプレート
+├── tests/                 # テストスイート
+├── scripts/               # ユーティリティスクリプト
+│   ├── setup_environment.py  # 環境構築自動化
+│   └── log_viewer.py        # ログビューア
+└── data/output/           # 出力ファイル格納
+    ├── screening/         # スクリーニング結果
+    └── backtest/          # バックテスト結果
 ```
+
+## 最近の更新
+
+- **モダンなWeb UI**: Flaskベースの新しいタブ型インターフェースを実装
+- **ディレクトリ構成の最適化**: srcディレクトリ配下への整理
+- **Excel出力機能の改善**: スクリーニング結果の自動Excelエクスポート
+- **テストカバレッジの向上**: 包括的なテストスイートの整備
+- **NumPy警告の抑制**: 環境レベルでの警告抑制を実装
 
 ## 貢献
 

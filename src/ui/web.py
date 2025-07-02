@@ -19,6 +19,10 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from src.config import DB_PATH
 from src.utils.file_utils import get_timestamped_output_path
+from src.utils.logging_config import get_logger
+
+# ロガーの設定
+logger = get_logger("web")
 
 # プロジェクトルートとテンプレートディレクトリのパスを設定
 project_root = Path(__file__).resolve().parent.parent.parent
@@ -29,6 +33,12 @@ app.config["SECRET_KEY"] = (
     "your-secret-key-here"  # 本番環境では環境変数から取得すること
 )
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
+
+# Flaskのログレベルを設定（開発環境）
+if app.debug:
+    app.logger.setLevel("DEBUG")
+else:
+    app.logger.setLevel("WARNING")
 
 
 def timestamped_path(category, base_name, extension):
@@ -64,45 +74,85 @@ def run_command(command, description="コマンド実行中"):
 @app.route("/")
 def index():
     """メインページ"""
+    logger.info("メインページへのアクセス")
     return render_template("index.html")
 
 
 @app.route("/api/fetch/quotes", methods=["POST"])
 def fetch_quotes():
     """株価データ取得"""
-    data = request.json
-    cmd = [sys.executable, "fetch/daily_quotes.py"]
+    logger.info("株価データ取得APIが呼び出されました")
+    try:
+        data = request.json
+        cmd = [sys.executable, "fetch/daily_quotes.py"]
 
-    if data.get("start_date"):
-        cmd.extend(["--start", data["start_date"]])
-    if data.get("end_date"):
-        cmd.extend(["--end", data["end_date"]])
+        if data.get("start_date"):
+            cmd.extend(["--start", data["start_date"]])
+        if data.get("end_date"):
+            cmd.extend(["--end", data["end_date"]])
 
-    return jsonify(run_command(" ".join(cmd), "株価データ取得"))
+        logger.info(f"実行コマンド: {' '.join(cmd)}")
+        result = run_command(" ".join(cmd), "株価データ取得")
+
+        if result["success"]:
+            logger.info("株価データ取得が正常に完了しました")
+        else:
+            logger.error(f"株価データ取得でエラーが発生しました: {result['error']}")
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"株価データ取得APIでエラーが発生しました: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/api/fetch/listed", methods=["POST"])
 def fetch_listed():
     """上場情報取得"""
-    cmd = [sys.executable, "fetch/listed_info.py"]
-    return jsonify(run_command(" ".join(cmd), "上場情報取得"))
+    logger.info("上場情報取得APIが呼び出されました")
+    try:
+        cmd = [sys.executable, "fetch/listed_info.py"]
+        logger.info(f"実行コマンド: {' '.join(cmd)}")
+        result = run_command(" ".join(cmd), "上場情報取得")
+
+        if result["success"]:
+            logger.info("上場情報取得が正常に完了しました")
+        else:
+            logger.error(f"上場情報取得でエラーが発生しました: {result['error']}")
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"上場情報取得APIでエラーが発生しました: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/api/fetch/statements", methods=["POST"])
 def fetch_statements():
     """財務諸表取得"""
-    data = request.json
-    cmd = [sys.executable, "fetch/statements.py"]
+    logger.info("財務諸表取得APIが呼び出されました")
+    try:
+        data = request.json
+        cmd = [sys.executable, "fetch/statements.py"]
 
-    mode = data.get("mode", "2")  # デフォルトは日次取得モード
-    cmd.append(mode)
+        mode = data.get("mode", "2")  # デフォルトは日次取得モード
+        cmd.append(mode)
 
-    if data.get("start_date"):
-        cmd.extend(["--start", data["start_date"]])
-    if data.get("end_date"):
-        cmd.extend(["--end", data["end_date"]])
+        if data.get("start_date"):
+            cmd.extend(["--start", data["start_date"]])
+        if data.get("end_date"):
+            cmd.extend(["--end", data["end_date"]])
 
-    return jsonify(run_command(" ".join(cmd), f"財務諸表{mode}"))
+        logger.info(f"実行コマンド: {' '.join(cmd)}")
+        result = run_command(" ".join(cmd), f"財務諸表{mode}")
+
+        if result["success"]:
+            logger.info(f"財務諸表取得（モード{mode}）が正常に完了しました")
+        else:
+            logger.error(f"財務諸表取得でエラーが発生しました: {result['error']}")
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"財務諸表取得APIでエラーが発生しました: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/api/screen/fundamental", methods=["POST"])
@@ -152,11 +202,20 @@ def screen_fundamental():
             else:
                 result["output_file"] = None
                 result["message"] = "スクリーニング結果がありません"
+                logger.info("スクリーニング結果はありませんでした")
         except Exception as e:
+            logger.error(f"Excel出力エラー: {str(e)}")
             result["error"] += f"\nExcel出力エラー: {str(e)}"
             result["output_file"] = None
     else:
         result["output_file"] = None
+
+    if result["success"]:
+        logger.info("ファンダメンタルスクリーニングが正常に完了しました")
+    else:
+        logger.error(
+            f"ファンダメンタルスクリーニングでエラーが発生しました: {result['error']}"
+        )
 
     return jsonify(result)
 
@@ -164,30 +223,33 @@ def screen_fundamental():
 @app.route("/api/screen/technical", methods=["POST"])
 def screen_technical():
     """テクニカルスクリーニング"""
-    data = request.json
-    cmd = [sys.executable, "screening/screen_technical.py"]
+    logger.info("テクニカルスクリーニングAPIが呼び出されました")
+    try:
+        data = request.json
+        cmd = [sys.executable, "screening/screen_technical.py"]
 
-    action = data.get("action", "screen")
-    cmd.append(action)
+        action = data.get("action", "screen")
+        cmd.append(action)
 
-    if action == "screen":
-        if data.get("as_of"):
-            cmd.extend(["--as-of", data["as_of"]])
-        if data.get("lookback"):
-            cmd.extend(["--lookback", str(data["lookback"])])
+        if action == "screen":
+            if data.get("as_of"):
+                cmd.extend(["--as-of", data["as_of"]])
+            if data.get("lookback"):
+                cmd.extend(["--lookback", str(data["lookback"])])
 
-    result = run_command(" ".join(cmd), f"テクニカル{action}")
+        logger.info(f"実行コマンド: {' '.join(cmd)}")
+        result = run_command(" ".join(cmd), f"テクニカル{action}")
 
-    # screen実行成功時、DBから結果を取得してExcelファイルを生成
-    if result["success"] and action == "screen":
-        try:
-            output_file = timestamped_path("screening", "technical", ".xlsx")
-            conn = sqlite3.connect(DB_PATH)
+        # screen実行成功時、DBから結果を取得してExcelファイルを生成
+        if result["success"] and action == "screen":
+            try:
+                output_file = timestamped_path("screening", "technical", ".xlsx")
+                conn = sqlite3.connect(DB_PATH)
 
-            # 最新のシグナルを取得
-            as_of_date = data.get("as_of")
-            if as_of_date:
-                query = """
+                # 最新のシグナルを取得
+                as_of_date = data.get("as_of")
+                if as_of_date:
+                    query = """
                     SELECT ti.*, li.company_name
                     FROM technical_indicators ti
                     LEFT JOIN listed_info li ON ti.code = li.code
@@ -195,9 +257,9 @@ def screen_technical():
                     AND (ti.signals_count >= 3 OR ti.signals_short_count >= 3)
                     ORDER BY ti.signals_count DESC, ti.signals_short_count DESC
                 """
-                df = pd.read_sql(query, conn, params=[as_of_date])
-            else:
-                query = """
+                    df = pd.read_sql(query, conn, params=[as_of_date])
+                else:
+                    query = """
                     SELECT ti.*, li.company_name
                     FROM technical_indicators ti
                     LEFT JOIN listed_info li ON ti.code = li.code
@@ -205,32 +267,46 @@ def screen_technical():
                     AND (ti.signals_count >= 3 OR ti.signals_short_count >= 3)
                     ORDER BY ti.signals_count DESC, ti.signals_short_count DESC
                 """
-                df = pd.read_sql(query, conn)
+                    df = pd.read_sql(query, conn)
 
-            conn.close()
+                conn.close()
 
-            if not df.empty:
-                # Excelファイルに出力
-                with pd.ExcelWriter(output_file, engine="xlsxwriter") as writer:
-                    df.to_excel(writer, sheet_name="Signals", index=False)
+                if not df.empty:
+                    # Excelファイルに出力
+                    with pd.ExcelWriter(output_file, engine="xlsxwriter") as writer:
+                        df.to_excel(writer, sheet_name="Signals", index=False)
 
-                    # 列幅の自動調整
-                    worksheet = writer.sheets["Signals"]
-                    for i, col in enumerate(df.columns):
-                        max_len = max(df[col].astype(str).str.len().max(), len(col)) + 2
-                        worksheet.set_column(i, i, min(max_len, 50))
+                        # 列幅の自動調整
+                        worksheet = writer.sheets["Signals"]
+                        for i, col in enumerate(df.columns):
+                            max_len = (
+                                max(df[col].astype(str).str.len().max(), len(col)) + 2
+                            )
+                            worksheet.set_column(i, i, min(max_len, 50))
 
-                result["output_file"] = output_file
-            else:
+                    result["output_file"] = output_file
+                else:
+                    result["output_file"] = None
+                    result["message"] = "スクリーニング結果がありません"
+                    logger.info("スクリーニング結果はありませんでした")
+            except Exception as e:
+                logger.error(f"Excel出力エラー: {str(e)}")
+                result["error"] += f"\nExcel出力エラー: {str(e)}"
                 result["output_file"] = None
-                result["message"] = "スクリーニング結果がありません"
-        except Exception as e:
-            result["error"] += f"\nExcel出力エラー: {str(e)}"
+        else:
             result["output_file"] = None
-    else:
-        result["output_file"] = None
 
-    return jsonify(result)
+        if result["success"] and action == "screen":
+            logger.info("テクニカルスクリーニングが正常に完了しました")
+        elif not result["success"]:
+            logger.error(
+                f"テクニカルスクリーニングでエラーが発生しました: {result['error']}"
+            )
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"テクニカルスクリーニングAPIでエラーが発生しました: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/api/screen/ml", methods=["POST"])
@@ -334,96 +410,151 @@ def backtest_ml():
 @app.route("/api/utils/update_token", methods=["POST"])
 def update_token():
     """IDトークン更新"""
-    data = request.json
-    email = data.get("email", "").strip()
-    password = data.get("password", "").strip()
+    logger.info("IDトークン更新APIが呼び出されました")
+    try:
+        data = request.json
+        email = data.get("email", "").strip()
+        password = data.get("password", "").strip()
 
-    # メールアドレスまたはパスワードが空の場合、account.jsonから読み込む
-    if not email or not password:
-        try:
-            with open("config/account.json") as f:
-                account_data = json.load(f)
-                if not email:
-                    email = account_data.get("mailaddress", "")
-                if not password:
-                    password = account_data.get("password", "")
-        except FileNotFoundError:
+        # メールアドレスまたはパスワードが空の場合、account.jsonから読み込む
+        if not email or not password:
+            try:
+                with open("config/account.json") as f:
+                    account_data = json.load(f)
+                    if not email:
+                        email = account_data.get("mailaddress", "")
+                    if not password:
+                        password = account_data.get("password", "")
+            except FileNotFoundError:
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "config/account.jsonが見つかりません。メールアドレスとパスワードを入力してください。",
+                    }
+                )
+            except json.JSONDecodeError:
+                return jsonify(
+                    {"success": False, "error": "config/account.jsonの形式が不正です。"}
+                )
+
+        if not email or not password:
             return jsonify(
                 {
                     "success": False,
-                    "error": "config/account.jsonが見つかりません。メールアドレスとパスワードを入力してください。",
+                    "error": "メールアドレスとパスワードを入力するか、config/account.jsonに設定してください。",
                 }
             )
-        except json.JSONDecodeError:
-            return jsonify(
-                {"success": False, "error": "config/account.jsonの形式が不正です。"}
-            )
 
-    if not email or not password:
-        return jsonify(
-            {
-                "success": False,
-                "error": "メールアドレスとパスワードを入力するか、config/account.jsonに設定してください。",
-            }
-        )
+        # update_idtoken.pyにメールアドレスとパスワードを渡す
+        cmd = [
+            sys.executable,
+            "src/cli/update_idtoken.py",
+            "--mail",
+            email,
+            "--password",
+            password,
+        ]
+        logger.info(
+            f"実行コマンド: {' '.join(cmd[:4])} *** ***"
+        )  # パスワード部分はマスク
+        result = run_command(" ".join(cmd), "IDトークン更新")
 
-    # update_idtoken.pyにメールアドレスとパスワードを渡す
-    cmd = [
-        sys.executable,
-        "src/cli/update_idtoken.py",
-        "--mail",
-        email,
-        "--password",
-        password,
-    ]
-    result = run_command(" ".join(cmd), "IDトークン更新")
+        if result["success"]:
+            logger.info("IDトークン更新が正常に完了しました")
+        else:
+            logger.error(f"IDトークン更新でエラーが発生しました: {result['error']}")
 
-    return jsonify(result)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"IDトークン更新APIでエラーが発生しました: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/api/utils/db_summary", methods=["GET"])
 def db_summary():
     """DBサマリー取得"""
-    cmd = [sys.executable, "db/db_summary.py"]
-    return jsonify(run_command(" ".join(cmd), "DBサマリー"))
+    logger.info("DBサマリー取得APIが呼び出されました")
+    try:
+        cmd = [sys.executable, "db/db_summary.py"]
+        logger.info(f"実行コマンド: {' '.join(cmd)}")
+        result = run_command(" ".join(cmd), "DBサマリー")
+
+        if result["success"]:
+            logger.info("DBサマリー取得が正常に完了しました")
+        else:
+            logger.error(f"DBサマリー取得でエラーが発生しました: {result['error']}")
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"DBサマリー取得APIでエラーが発生しました: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/api/utils/list_signals", methods=["POST"])
 def list_signals():
     """シグナル一覧取得"""
-    data = request.json
-    cmd = [sys.executable, "db/list_signals.py"]
+    logger.info("シグナル一覧取得APIが呼び出されました")
+    try:
+        data = request.json
+        cmd = [sys.executable, "db/list_signals.py"]
 
-    signal_type = data.get("type", "fund")
-    cmd.append(signal_type)
+        signal_type = data.get("type", "fund")
+        cmd.append(signal_type)
 
-    if data.get("start_date"):
-        cmd.extend(["--start", data["start_date"]])
-    if data.get("end_date"):
-        cmd.extend(["--end", data["end_date"]])
-    if data.get("limit"):
-        cmd.extend(["--limit", str(data["limit"])])
+        if data.get("start_date"):
+            cmd.extend(["--start", data["start_date"]])
+        if data.get("end_date"):
+            cmd.extend(["--end", data["end_date"]])
+        if data.get("limit"):
+            cmd.extend(["--limit", str(data["limit"])])
 
-    return jsonify(run_command(" ".join(cmd), f"{signal_type}シグナル一覧"))
+        logger.info(f"実行コマンド: {' '.join(cmd)}")
+        result = run_command(" ".join(cmd), f"{signal_type}シグナル一覧")
+
+        if result["success"]:
+            logger.info(f"{signal_type}シグナル一覧取得が正常に完了しました")
+        else:
+            logger.error(
+                f"{signal_type}シグナル一覧取得でエラーが発生しました: {result['error']}"
+            )
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"シグナル一覧取得APIでエラーが発生しました: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/api/utils/analyze_json", methods=["POST"])
 def analyze_json():
     """JSON分析"""
-    data = request.json
-    files = data.get("files", [])
+    logger.info("JSON分析APIが呼び出されました")
+    try:
+        data = request.json
+        files = data.get("files", [])
 
-    if not files:
-        return jsonify({"success": False, "error": "ファイルが選択されていません"})
+        if not files:
+            logger.warning("JSON分析でファイルが選択されていません")
+            return jsonify({"success": False, "error": "ファイルが選択されていません"})
 
-    cmd = [sys.executable, "backtest/analyze_backtest_json.py"] + files
+        cmd = [sys.executable, "backtest/analyze_backtest_json.py"] + files
 
-    if data.get("show_trades"):
-        cmd.append("--show-trades")
-    if data.get("side"):
-        cmd.extend(["--side", data["side"]])
+        if data.get("show_trades"):
+            cmd.append("--show-trades")
+        if data.get("side"):
+            cmd.extend(["--side", data["side"]])
 
-    return jsonify(run_command(" ".join(cmd), "JSON分析"))
+        logger.info(f"実行コマンド: {' '.join(cmd)}")
+        result = run_command(" ".join(cmd), "JSON分析")
+
+        if result["success"]:
+            logger.info("JSON分析が正常に完了しました")
+        else:
+            logger.error(f"JSON分析でエラーが発生しました: {result['error']}")
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"JSON分析APIでエラーが発生しました: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/api/utils/thresholds", methods=["GET", "POST"])
@@ -497,23 +628,30 @@ def list_results():
 @app.route("/api/results/download/<path:filepath>")
 def download_result(filepath):
     """結果ファイルダウンロード"""
+    logger.info(f"結果ファイルダウンロードが要求されました: {filepath}")
     try:
         # パスのセキュリティチェック
         safe_path = Path(filepath)
         if ".." in safe_path.parts:
+            logger.warning(f"不正なファイルパスが指定されました: {filepath}")
             raise ValueError("Invalid file path")
 
         project_root = Path(__file__).resolve().parent.parent.parent
         full_path = project_root / "data" / "output" / safe_path
 
         if not full_path.exists() or not full_path.is_file():
+            logger.warning(f"ファイルが存在しません: {filepath}")
             raise FileNotFoundError(f"File not found: {filepath}")
 
+        logger.info(f"ファイルをダウンロードします: {filepath}")
         return send_file(full_path, as_attachment=True)
     except Exception as e:
+        logger.error(f"ファイルダウンロードでエラーが発生しました: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 404
 
 
 if __name__ == "__main__":
     # デバッグモードで起動（本番環境では無効にすること）
+    logger.info("Web UIサーバーを起動します")
+    logger.info("http://localhost:5000 でアクセスできます")
     app.run(host="0.0.0.0", port=5000, debug=True)
