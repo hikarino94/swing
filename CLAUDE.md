@@ -157,3 +157,15 @@ python scripts/log_viewer.py search ERROR                 # エラーログ検�
 - ML models are saved as pickle files (db/models/ml_screen_model.pkl)
 - Web app supports password hashing for secure authentication
 - Backtesting supports various parameters: stop-loss, holding period, capital allocation
+
+## 改善計画
+
+詳細な改善提案と実装計画は `IMPROVEMENT_PLAN.md` を参照してください。主な改善点：
+
+1. **テストカバレッジの向上**（現在2% → 目標80%）
+2. **セキュリティ強化**（環境変数の使用、認証情報の適切な管理）
+3. **パフォーマンス最適化**（pandas操作のベクトル化）
+4. **エラーハンドリングとログの統一化**
+5. **ドキュメントの充実**（APIリファレンス、アーキテクチャ設計書）
+
+改善作業を行う際は、必ず `IMPROVEMENT_PLAN.md` の該当セクションを確認し、実装タスクと優先順位に従って作業してください。

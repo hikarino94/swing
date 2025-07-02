@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from web import app
+from src.ui.web import app
 
 
 @pytest.fixture

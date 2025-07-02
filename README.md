@@ -193,15 +193,15 @@ pytest tests/test_config.py
 3. **検証**: `backtest` スクリプトでシグナルを検証
 4. **分析**: 結果の詳細分析とパフォーマンス評価
 
-操作をまとめた簡易 GUI (`gui.py`) に加え、Web 版 (`web.py`) も用意しており、バックテスト結果の Excel は「結果閲覧」タブから確認できます。
+操作をまとめた簡易 GUI (`src/ui/legacy/gui.py`) に加え、Web 版 (`src/ui/web.py`) も用意しており、バックテスト結果の Excel は「結果閲覧」タブから確認できます。
 
 ## 定期実行
 
-`scheduler.py` を起動しておくと株価や決算情報の取得を自動化できます。
+`src/cli/scheduler.py` を起動しておくと株価や決算情報の取得を自動化できます。
 必要なライブラリは `requirements.txt` からインストールできます。
 
 ```bash
-python scheduler.py
+python -m src.cli.scheduler
 ```
 
 デフォルトでは毎日 20:00 に日足株価、20:30 に決算情報を取得し、
@@ -215,11 +215,18 @@ swing/
 ├── screening/      # スクリーニングアルゴリズム
 ├── backtest/       # バックテストエンジン
 ├── db/             # データベース管理
+├── src/            # ソースコード
+│   ├── cli/        # コマンドラインツール
+│   │   ├── scheduler.py    # 自動実行スケジューラ
+│   │   └── update_idtoken.py  # トークン更新
+│   ├── ui/         # ユーザーインターフェース
+│   │   ├── web.py          # モダンWebインターフェース
+│   │   └── legacy/         # レガシーUI
+│   │       ├── gui.py      # デスクトップGUI
+│   │       └── web.py      # 旧Webインターフェース
+│   └── utils/      # ユーティリティ
 ├── templates/      # Webインターフェイステンプレート
 ├── tests/          # テストスイート
-├── gui.py          # デスクトップGUI
-├── web.py          # WebインターフェイスUI
-├── scheduler.py    # 自動実行スケジューラ
 └── config.py       # 設定管理
 ```
 

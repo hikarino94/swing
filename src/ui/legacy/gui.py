@@ -390,7 +390,9 @@ def build_update_token_tab(nb, output):
     arg = ttk.Frame(frame)
     arg.pack(anchor="w", padx=5)
     cred = {}
-    path = Path(__file__).resolve().parent / "account.json"
+    path = (
+        Path(__file__).resolve().parent.parent.parent.parent / "config" / "account.json"
+    )
     if path.is_file():
         try:
             with path.open("r", encoding="utf-8") as f:

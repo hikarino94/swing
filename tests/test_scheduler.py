@@ -20,7 +20,7 @@ from unittest import mock
 import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-import scheduler
+from src.cli import scheduler
 
 
 class TestCommandExecution:

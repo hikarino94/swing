@@ -17,7 +17,11 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from src.utils.file_utils import get_timestamped_output_path
 
-app = Flask(__name__)
+# プロジェクトルートとテンプレートディレクトリのパスを設定
+project_root = Path(__file__).resolve().parent.parent.parent
+template_dir = project_root / "templates"
+
+app = Flask(__name__, template_folder=str(template_dir))
 app.config["SECRET_KEY"] = (
     "your-secret-key-here"  # 本番環境では環境変数から取得すること
 )
@@ -37,7 +41,7 @@ def run_command(command, description="コマンド実行中"):
             capture_output=True,
             text=True,
             shell=True,
-            cwd=Path(__file__).resolve().parent.parent.parent,  # プロジェクトルート
+            cwd=project_root,  # プロジェクトルート
         )
         return {
             "success": result.returncode == 0,
@@ -251,7 +255,7 @@ def update_token():
     # メールアドレスまたはパスワードが空の場合、account.jsonから読み込む
     if not email or not password:
         try:
-            with open("account.json") as f:
+            with open("config/account.json") as f:
                 account_data = json.load(f)
                 if not email:
                     email = account_data.get("mailaddress", "")
@@ -261,40 +265,32 @@ def update_token():
             return jsonify(
                 {
                     "success": False,
-                    "error": "account.jsonが見つかりません。メールアドレスとパスワードを入力してください。",
+                    "error": "config/account.jsonが見つかりません。メールアドレスとパスワードを入力してください。",
                 }
             )
         except json.JSONDecodeError:
             return jsonify(
-                {"success": False, "error": "account.jsonの形式が不正です。"}
+                {"success": False, "error": "config/account.jsonの形式が不正です。"}
             )
 
     if not email or not password:
         return jsonify(
             {
                 "success": False,
-                "error": "メールアドレスとパスワードを入力するか、account.jsonに設定してください。",
+                "error": "メールアドレスとパスワードを入力するか、config/account.jsonに設定してください。",
             }
         )
 
     # update_idtoken.pyにメールアドレスとパスワードを渡す
     cmd = [
         sys.executable,
-        "update_idtoken.py",
+        "src/cli/update_idtoken.py",
         "--mail",
         email,
         "--password",
         password,
     ]
     result = run_command(" ".join(cmd), "IDトークン更新")
-
-    # 成功時はaccount.jsonを更新（パスワードは保存しない）
-    if result["success"]:
-        try:
-            with open("account.json", "w") as f:
-                json.dump({"mailaddress": email, "password": "***"}, f, indent=2)
-        except Exception:
-            pass  # account.jsonの更新に失敗しても結果は返す
 
     return jsonify(result)
 

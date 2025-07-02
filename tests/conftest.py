@@ -6,6 +6,7 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 
@@ -63,6 +64,117 @@ def temp_db() -> Generator[Path, None, None]:
 
     # クリーンアップ
     os.unlink(db_path)
+
+
+@pytest.fixture
+def sample_prices_df():
+    """テスト用の価格データフレーム"""
+    return pd.DataFrame(
+        {
+            "code": ["1234", "1234", "1234", "5678", "5678"],
+            "date": [
+                "2024-01-01",
+                "2024-01-02",
+                "2024-01-03",
+                "2024-01-01",
+                "2024-01-02",
+            ],
+            "open": [100.0, 101.0, 102.0, 200.0, 201.0],
+            "high": [105.0, 106.0, 107.0, 205.0, 206.0],
+            "low": [95.0, 96.0, 97.0, 195.0, 196.0],
+            "close": [102.0, 103.0, 104.0, 202.0, 203.0],
+            "volume": [10000, 11000, 12000, 20000, 21000],
+            "adjustment_close": [102.0, 103.0, 104.0, 202.0, 203.0],
+        }
+    )
+
+
+@pytest.fixture
+def sample_statements_df():
+    """テスト用の財務諸表データフレーム"""
+    return pd.DataFrame(
+        {
+            "code": ["1234", "1234", "5678"],
+            "disclosure_date": ["2024-01-10", "2023-10-10", "2024-01-10"],
+            "type_of_document": ["1Q", "3Q", "1Q"],
+            "net_sales": [1000000, 900000, 2000000],
+            "operating_profit": [100000, 90000, 200000],
+            "ordinary_profit": [110000, 95000, 210000],
+            "profit_attributable_to_owners_of_parent": [80000, 70000, 150000],
+            "total_assets": [5000000, 4500000, 8000000],
+            "net_assets": [2000000, 1800000, 3000000],
+            "equity_to_asset_ratio": [0.4, 0.4, 0.375],
+            "book_value_per_share": [200.0, 180.0, 300.0],
+        }
+    )
+
+
+@pytest.fixture
+def mock_jquants_response():
+    """J-Quants APIレスポンスのモック"""
+
+    def _create_response(data_type):
+        if data_type == "daily_quotes":
+            return {
+                "daily_quotes": [
+                    {
+                        "Code": "1234",
+                        "Date": "2024-01-01",
+                        "Open": 100,
+                        "High": 105,
+                        "Low": 95,
+                        "Close": 102,
+                        "Volume": 10000,
+                        "TurnoverValue": 1020000,
+                        "AdjustmentFactor": 1.0,
+                        "AdjustmentOpen": 100,
+                        "AdjustmentHigh": 105,
+                        "AdjustmentLow": 95,
+                        "AdjustmentClose": 102,
+                        "AdjustmentVolume": 10000,
+                    }
+                ]
+            }
+        elif data_type == "listed_info":
+            return {
+                "info": [
+                    {
+                        "Code": "1234",
+                        "CompanyName": "テスト会社",
+                        "CompanyNameEnglish": "Test Company",
+                        "Sector17Code": "1",
+                        "Sector17CodeName": "食品",
+                        "Sector33Code": "1050",
+                        "Sector33CodeName": "電気機器",
+                        "ScaleCategory": "TOPIX Core30",
+                        "MarketCode": "0111",
+                        "MarketCodeName": "プライム",
+                    }
+                ]
+            }
+        elif data_type == "statements":
+            return {
+                "statements": [
+                    {
+                        "Code": "1234",
+                        "DisclosureDate": "2024-01-10",
+                        "TypeOfDocument": "1Q",
+                        "NetSales": 1000000,
+                        "OperatingProfit": 100000,
+                        "OrdinaryProfit": 110000,
+                        "ProfitAttributableToOwnersOfParent": 80000,
+                        "TotalAssets": 5000000,
+                        "NetAssets": 2000000,
+                        "EquityToAssetRatio": 0.4,
+                        "BookValuePerShare": 200.0,
+                    }
+                ]
+            }
+        elif data_type == "idtoken":
+            return {"idToken": "test_id_token_12345"}
+        return {}
+
+    return _create_response
 
 
 @pytest.fixture
