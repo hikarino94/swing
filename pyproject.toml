@@ -111,7 +111,7 @@ filterwarnings = [
     "ignore::DeprecationWarning:numpy",
     "ignore::RuntimeWarning:numpy",
 ]
-pythonpath = ["."]
+pythonpath = "."
 
 [tool.coverage.run]
 branch = true

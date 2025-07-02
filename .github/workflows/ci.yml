@@ -98,6 +98,9 @@ jobs:
       run: |
         # Pythonパスの設定を明示的に行う
         echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
+        # 環境変数が設定されたことを確認
+        echo "GITHUB_ENV content:"
+        cat $GITHUB_ENV
 
     - name: Debug Import Issues
       run: |
@@ -118,8 +121,17 @@ jobs:
         echo "Current directory: $(pwd)"
         echo "PYTHONPATH: $PYTHONPATH"
         echo "Python version: $(python --version)"
+        # conftest.pyの存在確認
+        echo "conftest.py exists: $([ -f conftest.py ] && echo 'yes' || echo 'no')"
+        cat conftest.py || true
         # テスト実行（最初のエラーで停止）
-        pytest -v --tb=short --cov=. --cov-report=xml --cov-report=term -x
+        pytest tests/test_web.py::TestTimestampedPath::test_timestamped_path_basic -v --tb=long || {
+          echo "::error::Test failed with exit code: $?"
+          echo "Trying to run a simple import test..."
+          python -c "import sys; print('Python paths:'); [print(p) for p in sys.path]"
+          python -c "from src.ui.web import timestamped_path"
+          exit 1
+        }
 
     - name: Check coverage threshold
       run: |
