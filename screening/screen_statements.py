@@ -16,14 +16,23 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sqlite3
 import sys
+import warnings
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final
 
 import pandas as pd
+
+# NumPyの警告を環境変数レベルで抑制
+os.environ["PYTHONWARNINGS"] = "ignore::UserWarning"
+
+# 追加の警告フィルター
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", message=".*does not match any known type.*")
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # Threshold constants shared across screening modules

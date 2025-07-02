@@ -5,16 +5,19 @@ Swing Trading Tool - モダンなWeb UI版
 """
 
 import json
+import sqlite3
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
 from flask import Flask, jsonify, render_template, request, send_file
 
 # プロジェクトルートをPYTHONPATHに追加
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
+from src.config import DB_PATH
 from src.utils.file_utils import get_timestamped_output_path
 
 # プロジェクトルートとテンプレートディレクトリのパスを設定
@@ -106,7 +109,6 @@ def fetch_statements():
 def screen_fundamental():
     """ファンダメンタルスクリーニング"""
     data = request.json
-    output_file = timestamped_path("screening", "fundamental", ".xlsx")
     cmd = [sys.executable, "screening/screen_statements.py"]
 
     if data.get("lookback"):
@@ -116,10 +118,46 @@ def screen_fundamental():
     if data.get("as_of"):
         cmd.extend(["--as-of", data["as_of"]])
 
-    cmd.extend(["--xlsx", output_file])
-
     result = run_command(" ".join(cmd), "ファンダメンタルスクリーニング")
-    result["output_file"] = output_file if result["success"] else None
+
+    # スクリーニング成功時、DBから結果を取得してExcelファイルを生成
+    if result["success"]:
+        try:
+            output_file = timestamped_path("screening", "fundamental", ".xlsx")
+            conn = sqlite3.connect(DB_PATH)
+
+            # 最新のシグナルを取得
+            query = """
+                SELECT fs.*, li.company_name
+                FROM fundamental_signals fs
+                LEFT JOIN listed_info li ON fs.LocalCode = li.code
+                WHERE DATE(fs.created_at) = DATE('now')
+                ORDER BY fs.created_at DESC
+            """
+            df = pd.read_sql(query, conn)
+            conn.close()
+
+            if not df.empty:
+                # Excelファイルに出力
+                with pd.ExcelWriter(output_file, engine="xlsxwriter") as writer:
+                    df.to_excel(writer, sheet_name="Signals", index=False)
+
+                    # 列幅の自動調整
+                    worksheet = writer.sheets["Signals"]
+                    for i, col in enumerate(df.columns):
+                        max_len = max(df[col].astype(str).str.len().max(), len(col)) + 2
+                        worksheet.set_column(i, i, min(max_len, 50))
+
+                result["output_file"] = output_file
+            else:
+                result["output_file"] = None
+                result["message"] = "スクリーニング結果がありません"
+        except Exception as e:
+            result["error"] += f"\nExcel出力エラー: {str(e)}"
+            result["output_file"] = None
+    else:
+        result["output_file"] = None
+
     return jsonify(result)
 
 
@@ -127,7 +165,6 @@ def screen_fundamental():
 def screen_technical():
     """テクニカルスクリーニング"""
     data = request.json
-    output_file = timestamped_path("screening", "technical", ".xlsx")
     cmd = [sys.executable, "screening/screen_technical.py"]
 
     action = data.get("action", "screen")
@@ -138,12 +175,61 @@ def screen_technical():
             cmd.extend(["--as-of", data["as_of"]])
         if data.get("lookback"):
             cmd.extend(["--lookback", str(data["lookback"])])
-        cmd.extend(["--xlsx", output_file])
 
     result = run_command(" ".join(cmd), f"テクニカル{action}")
-    result["output_file"] = (
-        output_file if result["success"] and action == "screen" else None
-    )
+
+    # screen実行成功時、DBから結果を取得してExcelファイルを生成
+    if result["success"] and action == "screen":
+        try:
+            output_file = timestamped_path("screening", "technical", ".xlsx")
+            conn = sqlite3.connect(DB_PATH)
+
+            # 最新のシグナルを取得
+            as_of_date = data.get("as_of")
+            if as_of_date:
+                query = """
+                    SELECT ti.*, li.company_name
+                    FROM technical_indicators ti
+                    LEFT JOIN listed_info li ON ti.code = li.code
+                    WHERE ti.signal_date = ?
+                    AND (ti.signals_count >= 3 OR ti.signals_short_count >= 3)
+                    ORDER BY ti.signals_count DESC, ti.signals_short_count DESC
+                """
+                df = pd.read_sql(query, conn, params=[as_of_date])
+            else:
+                query = """
+                    SELECT ti.*, li.company_name
+                    FROM technical_indicators ti
+                    LEFT JOIN listed_info li ON ti.code = li.code
+                    WHERE ti.signal_date = (SELECT MAX(signal_date) FROM technical_indicators)
+                    AND (ti.signals_count >= 3 OR ti.signals_short_count >= 3)
+                    ORDER BY ti.signals_count DESC, ti.signals_short_count DESC
+                """
+                df = pd.read_sql(query, conn)
+
+            conn.close()
+
+            if not df.empty:
+                # Excelファイルに出力
+                with pd.ExcelWriter(output_file, engine="xlsxwriter") as writer:
+                    df.to_excel(writer, sheet_name="Signals", index=False)
+
+                    # 列幅の自動調整
+                    worksheet = writer.sheets["Signals"]
+                    for i, col in enumerate(df.columns):
+                        max_len = max(df[col].astype(str).str.len().max(), len(col)) + 2
+                        worksheet.set_column(i, i, min(max_len, 50))
+
+                result["output_file"] = output_file
+            else:
+                result["output_file"] = None
+                result["message"] = "スクリーニング結果がありません"
+        except Exception as e:
+            result["error"] += f"\nExcel出力エラー: {str(e)}"
+            result["output_file"] = None
+    else:
+        result["output_file"] = None
+
     return jsonify(result)
 
 
