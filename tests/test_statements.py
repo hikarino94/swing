@@ -35,7 +35,7 @@ class TestHelpers:
         token_file = tmp_path / "idtoken.json"
         token_file.write_text('{"idToken": "test_token_789"}')
 
-        with mock.patch("config.config.get_file_path") as mock_path:
+        with mock.patch("src.config.config.get_file_path") as mock_path:
             mock_path.return_value = token_file
             token = statements._load_token()
             assert token == "test_token_789"
@@ -45,7 +45,7 @@ class TestHelpers:
         token_file = tmp_path / "idtoken.json"
         token_file.write_text("{}")
 
-        with mock.patch("config.config.get_file_path") as mock_path:
+        with mock.patch("src.config.config.get_file_path") as mock_path:
             mock_path.return_value = token_file
             with pytest.raises(RuntimeError, match="idToken not found"):
                 statements._load_token()

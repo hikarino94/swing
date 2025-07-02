@@ -96,15 +96,28 @@ def ml_backtest_db():
 class TestHelpers:
     """ヘルパー関数のテスト"""
 
-    def test_result_paths(self):
+    @mock.patch("backtest.backtest_ml.get_timestamped_output_path")
+    def test_result_paths(self, mock_get_path):
         """タイムスタンプ付きファイルパス生成のテスト"""
-        with mock.patch("backtest.backtest_ml.dt.datetime") as mock_dt:
-            mock_dt.now.return_value.strftime.return_value = "20240601_120000"
+        # get_timestamped_output_pathの返り値をモック
+        mock_get_path.side_effect = [
+            Path("data/output/backtest/test_prefix_20240601_120000.xlsx"),
+            Path("data/output/backtest/test_prefix_20240601_120000.json"),
+        ]
 
-            xlsx_path, json_path = backtest_ml._result_paths("test_prefix")
+        xlsx_path, json_path = backtest_ml._result_paths("test_prefix")
 
-            assert xlsx_path == "test_prefix_20240601_120000.xlsx"
-            assert json_path == "test_prefix_20240601_120000.json"
+        assert xlsx_path == Path(
+            "data/output/backtest/test_prefix_20240601_120000.xlsx"
+        )
+        assert json_path == Path(
+            "data/output/backtest/test_prefix_20240601_120000.json"
+        )
+
+        # get_timestamped_output_pathが正しく呼ばれたことを確認
+        assert mock_get_path.call_count == 2
+        mock_get_path.assert_any_call("backtest", "test_prefix", ".xlsx")
+        mock_get_path.assert_any_call("backtest", "test_prefix", ".json")
 
     def test_fetch_price_range(self, ml_backtest_db):
         """価格データ範囲取得のテスト"""

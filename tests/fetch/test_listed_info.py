@@ -73,13 +73,15 @@ class TestPrivateFunctions:
         idtoken_path = tmp_path / "idtoken.json"
         idtoken_path.write_text(json.dumps({"idToken": "test_token_12345"}))
 
-        mock_config.files.idtoken = str(idtoken_path)
+        # configのモック - Pathオブジェクトを返す
+        mock_config.get_file_path.return_value = idtoken_path
 
         # テスト実行
         token = listed_info._load_token()
 
         # 検証
         assert token == "test_token_12345"
+        mock_config.get_file_path.assert_called_once_with("idtoken")
 
     @patch("fetch.listed_info.requests")
     def test_fetch_listed_info(self, mock_requests):

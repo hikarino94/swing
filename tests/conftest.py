@@ -42,8 +42,18 @@ def temp_db() -> Generator[Path, None, None]:
 
         CREATE TABLE IF NOT EXISTS listed_info (
             code TEXT PRIMARY KEY,
+            date TEXT,
             company_name TEXT,
+            company_name_en TEXT,
+            sector17_code TEXT,
+            sector17_name TEXT,
+            sector33_code TEXT,
             sector33_name TEXT,
+            scale_category TEXT,
+            market_code TEXT,
+            market_name TEXT,
+            margin_code TEXT,
+            margin_name TEXT,
             delete_flag INTEGER DEFAULT 0
         );
 

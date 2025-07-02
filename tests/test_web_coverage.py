@@ -27,14 +27,40 @@ def client():
 class TestAdditionalScreeningCoverage:
     """スクリーニングAPIの追加カバレッジテスト"""
 
+    @patch("src.ui.web.pd")
+    @patch("src.ui.web.sqlite3.connect")
     @patch("src.ui.web.run_command")
-    def test_screen_technical_screen_action_with_all_params(self, mock_run, client):
+    @patch("src.ui.web.timestamped_path")
+    def test_screen_technical_screen_action_with_all_params(
+        self, mock_timestamped_path, mock_run, mock_connect, mock_pd, client
+    ):
         """テクニカルスクリーニング - 全パラメータ指定"""
         mock_run.return_value = {
             "success": True,
             "output": "スクリーニング完了",
             "error": "",
         }
+
+        # データベース接続のモック
+        mock_conn = MagicMock()
+        mock_connect.return_value = mock_conn
+
+        # DataFrameのモック（結果あり）
+        mock_df = MagicMock()
+        mock_df.empty = False
+        mock_df.columns = ["code", "company_name", "signal_date", "signals_count"]
+        mock_df.__getitem__.return_value.astype.return_value.str.len.return_value.max.return_value = (
+            10
+        )
+        mock_pd.read_sql.return_value = mock_df
+
+        # Excel出力のモック
+        mock_writer = MagicMock()
+        mock_pd.ExcelWriter.return_value.__enter__.return_value = mock_writer
+        mock_writer.sheets = {"Signals": MagicMock()}
+
+        # timestamped_pathのモック
+        mock_timestamped_path.return_value = "technical_20240101_120000.xlsx"
 
         response = client.post(
             "/api/screen/technical",
@@ -66,7 +92,9 @@ class TestAdditionalScreeningCoverage:
         )
         assert response.status_code == 200
         data = response.get_json()
-        assert data["output_file"] is not None
+        assert (
+            data["output_file"] is None
+        )  # MLスクリーニングはExcel出力をサポートしていない
 
         cmd = mock_run.call_args[0][0]
         assert "--top 20" in cmd
@@ -132,8 +160,10 @@ class TestUtilityEdgeCases:
         self, mock_run, client, tmp_path, monkeypatch
     ):
         """account.jsonから部分的な情報を読み込む"""
-        # メールアドレスのみaccount.jsonに存在
-        account_file = tmp_path / "account.json"
+        # configディレクトリとaccount.jsonを作成
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        account_file = config_dir / "account.json"
         account_file.write_text(
             json.dumps({"mailaddress": "stored@example.com"})  # パスワードなし
         )
@@ -153,7 +183,9 @@ class TestUtilityEdgeCases:
 
     def test_update_token_invalid_json(self, client, tmp_path, monkeypatch):
         """不正なaccount.jsonの処理"""
-        account_file = tmp_path / "account.json"
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        account_file = config_dir / "account.json"
         account_file.write_text("invalid json content")
         monkeypatch.chdir(tmp_path)
 
@@ -261,14 +293,26 @@ class TestUtilityEdgeCases:
 class TestResultsEdgeCases:
     """結果ファイル関連のエッジケーステスト"""
 
-    def test_list_results_with_custom_types(self, client, tmp_path, monkeypatch):
+    @patch("src.ui.web.Path")
+    def test_list_results_with_custom_types(
+        self, mock_path_class, client, tmp_path, monkeypatch
+    ):
         """カスタムファイルタイプでの一覧取得"""
         monkeypatch.chdir(tmp_path)
 
+        # data/output/backtestディレクトリ構造を作成
+        output_dir = tmp_path / "data" / "output" / "backtest"
+        output_dir.mkdir(parents=True)
+
         # 異なる拡張子のファイルを作成
-        (tmp_path / "result.csv").write_text("csv data")
-        (tmp_path / "result.txt").write_text("txt data")
-        (tmp_path / "result.xlsx").write_text("xlsx data")
+        (output_dir / "result.csv").write_text("csv data")
+        (output_dir / "result.txt").write_text("txt data")
+        (output_dir / "result.xlsx").write_text("xlsx data")
+
+        # Pathのモックを設定してプロジェクトルートを偽装
+        mock_path_instance = MagicMock()
+        mock_path_instance.resolve.return_value.parent.parent.parent = tmp_path
+        mock_path_class.return_value = mock_path_instance
 
         response = client.get("/api/results/list?types=csv,txt")
         assert response.status_code == 200
@@ -280,16 +324,22 @@ class TestResultsEdgeCases:
 
     def test_download_result_exception_handling(self, client, tmp_path, monkeypatch):
         """ダウンロード時の例外処理"""
-        monkeypatch.chdir(tmp_path)
+        # data/output/backtestディレクトリとファイルを作成
+        output_dir = tmp_path / "data" / "output" / "backtest"
+        output_dir.mkdir(parents=True)
+        test_file = output_dir / "test.xlsx"
+        test_file.write_text("test data")
 
-        # send_fileが例外を投げるようにモック
-        with patch("web.send_file") as mock_send:
-            mock_send.side_effect = Exception("File error")
+        # __file__のパスをモックしてプロジェクトルートを偽装
+        with patch("src.ui.web.__file__", str(tmp_path / "src" / "ui" / "web.py")):
+            # ファイルは存在するが、send_fileで例外が発生
+            with patch("src.ui.web.send_file") as mock_send:
+                mock_send.side_effect = Exception("File error")
 
-            response = client.get("/api/results/download/test.xlsx")
-            assert response.status_code == 404
-            data = response.get_json()
-            assert "File error" in data["error"]
+                response = client.get("/api/results/download/backtest/test.xlsx")
+                assert response.status_code == 404
+                data = response.get_json()
+                assert "File error" in data["error"]
 
 
 class TestErrorScenarios:
@@ -313,7 +363,7 @@ class TestErrorScenarios:
 
     def test_statements_mode_default(self, client):
         """財務諸表取得のデフォルトモード"""
-        with patch("web.run_command") as mock_run:
+        with patch("src.ui.web.run_command") as mock_run:
             mock_run.return_value = {"success": True, "output": "", "error": ""}
 
             # modeを指定しない
@@ -328,13 +378,25 @@ class TestErrorScenarios:
 class TestSpecialCases:
     """特殊ケースのテスト"""
 
-    def test_file_with_special_characters(self, client, tmp_path, monkeypatch):
+    @patch("src.ui.web.Path")
+    def test_file_with_special_characters(
+        self, mock_path_class, client, tmp_path, monkeypatch
+    ):
         """特殊文字を含むファイル名"""
         monkeypatch.chdir(tmp_path)
 
+        # data/output/backtestディレクトリ構造を作成
+        output_dir = tmp_path / "data" / "output" / "backtest"
+        output_dir.mkdir(parents=True)
+
         # 特殊文字を含むファイル名
-        special_file = tmp_path / "result_テスト_2024.xlsx"
+        special_file = output_dir / "result_テスト_2024.xlsx"
         special_file.write_text("test")
+
+        # Pathのモックを設定してプロジェクトルートを偽装
+        mock_path_instance = MagicMock()
+        mock_path_instance.resolve.return_value.parent.parent.parent = tmp_path
+        mock_path_class.return_value = mock_path_instance
 
         response = client.get("/api/results/list")
         assert response.status_code == 200
@@ -344,7 +406,7 @@ class TestSpecialCases:
     @patch("subprocess.run")
     def test_run_command_with_unicode_output(self, mock_subprocess, client):
         """Unicode出力の処理"""
-        from web import run_command
+        from src.ui.web import run_command
 
         mock_subprocess.return_value = MagicMock(
             returncode=0, stdout="日本語の出力です", stderr=""

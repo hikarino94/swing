@@ -70,19 +70,19 @@ class TestFetchTasks:
     def test_fetch_quotes(self, mock_run):
         """日次価格取得タスクのテスト"""
         scheduler.fetch_quotes()
-        mock_run.assert_called_once_with("python fetch/daily_quotes.py")
+        mock_run.assert_called_once_with("python -m fetch.daily_quotes")
 
     @mock.patch("src.cli.scheduler._run")
     def test_fetch_statements(self, mock_run):
         """財務諸表取得タスクのテスト"""
         scheduler.fetch_statements()
-        mock_run.assert_called_once_with("python fetch/statements.py 2")
+        mock_run.assert_called_once_with("python -m fetch.statements 2")
 
     @mock.patch("src.cli.scheduler._run")
     def test_update_listed_info(self, mock_run):
         """銘柄情報更新タスクのテスト"""
         scheduler.update_listed_info()
-        mock_run.assert_called_once_with("python fetch/listed_info.py")
+        mock_run.assert_called_once_with("python -m fetch.listed_info")
 
 
 class TestScheduleSetup:
@@ -225,17 +225,17 @@ class TestIntegration:
 
         # 実行確認
         expected_calls = [
-            mock.call("python fetch/daily_quotes.py", shell=True),
-            mock.call("python fetch/statements.py 2", shell=True),
-            mock.call("python fetch/listed_info.py", shell=True),
+            mock.call("python -m fetch.daily_quotes", shell=True),
+            mock.call("python -m fetch.statements 2", shell=True),
+            mock.call("python -m fetch.listed_info", shell=True),
         ]
         mock_subprocess.assert_has_calls(expected_calls)
 
         # ログ確認
         expected_log_calls = [
-            mock.call("Run: %s", "python fetch/daily_quotes.py"),
-            mock.call("Run: %s", "python fetch/statements.py 2"),
-            mock.call("Run: %s", "python fetch/listed_info.py"),
+            mock.call("Run: %s", "python -m fetch.daily_quotes"),
+            mock.call("Run: %s", "python -m fetch.statements 2"),
+            mock.call("Run: %s", "python -m fetch.listed_info"),
         ]
         mock_logger.info.assert_has_calls(expected_log_calls)
         mock_logger.error.assert_not_called()
@@ -270,7 +270,7 @@ class TestIntegration:
         ]
         mock_subprocess.side_effect = results
 
-        with mock.patch("scheduler.logger") as mock_logger:
+        with mock.patch("src.cli.scheduler.logger") as mock_logger:
             # 複数タスクを実行
             scheduler.fetch_quotes()  # 成功
             scheduler.fetch_statements()  # 失敗

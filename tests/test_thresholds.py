@@ -89,7 +89,7 @@ class TestThresholdsLoading:
         }
         json_path.write_text(json.dumps(custom_values))
 
-        with mock.patch("config.config.get_file_path") as mock_get_path:
+        with mock.patch("src.config.config.get_file_path") as mock_get_path:
             mock_get_path.return_value = json_path
 
             result = thresholds.load_thresholds()
