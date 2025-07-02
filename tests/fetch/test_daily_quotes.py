@@ -1,12 +1,13 @@
 """daily_quotes.pyのテスト"""
 
+import datetime as dt
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
-import pytest
 import requests
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -18,12 +19,12 @@ from fetch import daily_quotes
 class TestFetchAndLoad:
     """fetch_and_load関数のテスト"""
 
-    @patch("fetch.daily_quotes.sqlite3.connect")
+    @patch("fetch.daily_quotes._get_optimized_connection")
     @patch("fetch.daily_quotes._load_token")
     @patch("fetch.daily_quotes._by_date")
     @patch("fetch.daily_quotes.logger")
     def test_fetch_and_load_single_date(
-        self, mock_logger, mock_by_date, mock_load_token, mock_connect
+        self, mock_logger, mock_by_date, mock_load_token, mock_get_connection
     ):
         """単一日付でのデータ取得テスト"""
         # モックの設定
@@ -42,7 +43,7 @@ class TestFetchAndLoad:
 
         # データベース接続のモック
         mock_conn = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_get_connection.return_value = mock_conn
 
         # テスト実行
         daily_quotes.fetch_and_load(None, None)
@@ -52,18 +53,18 @@ class TestFetchAndLoad:
         mock_conn.commit.assert_called_once()
         mock_conn.close.assert_called_once()
 
-    @patch("fetch.daily_quotes.sqlite3.connect")
+    @patch("fetch.daily_quotes._get_optimized_connection")
     @patch("fetch.daily_quotes._load_token")
-    @patch("fetch.daily_quotes._by_date")
+    @patch("fetch.daily_quotes.fetch_dates_parallel")
     @patch("fetch.daily_quotes.logger")
     def test_fetch_and_load_date_range(
-        self, mock_logger, mock_by_date, mock_load_token, mock_connect
+        self, mock_logger, mock_fetch_parallel, mock_load_token, mock_get_connection
     ):
         """日付範囲指定でのデータ取得テスト"""
         # モックの設定
         mock_load_token.return_value = "test_token"
 
-        # DataFrameのモック（複数日）
+        # 並列実行の結果をモック
         mock_dfs = [
             pd.DataFrame(
                 {
@@ -90,26 +91,28 @@ class TestFetchAndLoad:
                 }
             ),
         ]
-        mock_by_date.side_effect = mock_dfs
+        # fetch_dates_parallelは(成功したDFリスト, 失敗リスト)のタプルを返す
+        mock_fetch_parallel.return_value = (mock_dfs, [])
 
         # データベース接続のモック
         mock_conn = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_get_connection.return_value = mock_conn
 
         # テスト実行
         daily_quotes.fetch_and_load("2024-01-01", "2024-01-03")
 
         # 検証
-        assert mock_by_date.call_count == 3
-        mock_conn.commit.assert_called_once()
+        mock_fetch_parallel.assert_called_once()
+        # 3日分なので1回のバッチでコミット
+        mock_conn.commit.assert_called()
         mock_conn.close.assert_called_once()
 
-    @patch("fetch.daily_quotes.sqlite3.connect")
+    @patch("fetch.daily_quotes._get_optimized_connection")
     @patch("fetch.daily_quotes._load_token")
     @patch("fetch.daily_quotes._by_date")
     @patch("fetch.daily_quotes.logger")
     def test_fetch_and_load_error_handling(
-        self, mock_logger, mock_by_date, mock_load_token, mock_connect
+        self, mock_logger, mock_by_date, mock_load_token, mock_get_connection
     ):
         """エラーハンドリングのテスト"""
         # モックの設定
@@ -120,14 +123,13 @@ class TestFetchAndLoad:
 
         # データベース接続のモック
         mock_conn = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_get_connection.return_value = mock_conn
 
-        # テスト実行
-        with pytest.raises(requests.HTTPError):
-            daily_quotes.fetch_and_load(None, None)
+        # テスト実行（エラーが発生しても例外は発生しない）
+        daily_quotes.fetch_and_load(None, None)
 
-        # エラー時でもcommitとcloseが呼ばれることを確認
-        mock_conn.commit.assert_called_once()
+        # エラー時でもBEGINとcommitが呼ばれることを確認（個別トランザクション）
+        mock_conn.execute.assert_called_with("BEGIN")
         mock_conn.close.assert_called_once()
         mock_logger.error.assert_called()
 
@@ -221,6 +223,56 @@ class TestCLI:
 
         # fetch_and_loadが日付引数付きで呼ばれたことを確認
         mock_fetch_and_load.assert_called_once_with("2024-01-01", "2024-01-03")
+
+
+class TestParallelFetch:
+    """並列処理のテスト"""
+
+    @patch("fetch.daily_quotes.ThreadPoolExecutor")
+    @patch("fetch.daily_quotes._by_date")
+    def test_fetch_dates_parallel(self, mock_by_date, mock_executor_class):
+        """並列データ取得のテスト"""
+        # モックの設定
+        mock_df = pd.DataFrame({"Code": ["1234"], "Close": [100]})
+        mock_by_date.return_value = mock_df
+
+        # ThreadPoolExecutorのモック
+        mock_executor = MagicMock()
+        mock_executor_class.return_value.__enter__.return_value = mock_executor
+
+        # submitの戻り値をモック
+        mock_future = MagicMock()
+        mock_future.result.return_value = (dt.date(2024, 1, 1), mock_df, None)
+        mock_executor.submit.return_value = mock_future
+
+        # as_completedのモック
+        with patch("fetch.daily_quotes.as_completed", return_value=[mock_future]):
+            # テスト実行
+            dates = [dt.date(2024, 1, 1), dt.date(2024, 1, 2)]
+            successful_dfs, failed_dates = daily_quotes.fetch_dates_parallel(
+                dates, "test_token"
+            )
+
+        # 検証
+        assert len(successful_dfs) == 1
+        assert len(failed_dates) == 0
+
+    def test_rate_limiter(self):
+        """レート制限クラスのテスト"""
+        rate_limiter = daily_quotes.RateLimiter(max_per_second=2)
+
+        # 2回は即座に実行可能
+        start = time.time()
+        rate_limiter.wait_if_needed()
+        rate_limiter.wait_if_needed()
+        elapsed = time.time() - start
+        assert elapsed < 0.1  # ほぼ即座
+
+        # 3回目は待機が必要
+        start = time.time()
+        rate_limiter.wait_if_needed()
+        elapsed = time.time() - start
+        assert elapsed >= 0.9  # 約1秒待機
 
 
 class TestUtilityFunctions:

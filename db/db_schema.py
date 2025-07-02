@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS prices (
 );
 CREATE INDEX IF NOT EXISTS idx_prices_date ON prices(date);
 CREATE INDEX IF NOT EXISTS idx_prices_code ON prices(code);
+-- 複合インデックス（日付範囲検索の高速化）
+CREATE INDEX IF NOT EXISTS idx_prices_code_date ON prices(code, date);
+CREATE INDEX IF NOT EXISTS idx_prices_date_code ON prices(date, code);
 
 -- listed_info (master) ----------------------------------------------
 CREATE TABLE IF NOT EXISTS listed_info (

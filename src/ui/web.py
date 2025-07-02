@@ -49,24 +49,55 @@ def timestamped_path(category, base_name, extension):
 def run_command(command, description="コマンド実行中"):
     """コマンドを実行し、結果を返す"""
     try:
-        result = subprocess.run(
+        # ターミナルに処理開始を表示
+        print(f"\n{'='*60}")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {description} 開始")
+        print(f"コマンド: {command}")
+        print(f"{'='*60}\n")
+
+        # リアルタイム出力のために、stdout/stderrを同時に処理
+        process = subprocess.Popen(
             command,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # stderrもstdoutに統合
             text=True,
             shell=True,
-            cwd=project_root,  # プロジェクトルート
+            cwd=project_root,
+            bufsize=1,  # 行バッファリング
+            universal_newlines=True,
         )
+
+        output_lines = []
+        # リアルタイムで出力を表示
+        for line in iter(process.stdout.readline, ""):
+            if line:
+                # ターミナルに表示（改行なし、flushで即座に表示）
+                print(f"[{description}] {line}", end="", flush=True)
+                output_lines.append(line)
+
+        # プロセスの終了を待つ
+        process.wait()
+
+        # 終了メッセージ
+        print(f"\n{'='*60}")
+        print(
+            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {description} 完了 (exit code: {process.returncode})"
+        )
+        print(f"{'='*60}\n")
+
         return {
-            "success": result.returncode == 0,
-            "output": result.stdout,
-            "error": result.stderr,
+            "success": process.returncode == 0,
+            "output": "".join(output_lines),
+            "error": "" if process.returncode == 0 else "".join(output_lines),
             "description": description,
         }
     except Exception as e:
+        error_msg = f"コマンド実行エラー: {str(e)}"
+        print(f"\n[ERROR] {error_msg}\n")
         return {
             "success": False,
             "output": "",
-            "error": str(e),
+            "error": error_msg,
             "description": description,
         }
 
@@ -82,26 +113,35 @@ def index():
 def fetch_quotes():
     """株価データ取得"""
     logger.info("株価データ取得APIが呼び出されました")
+    print(
+        f"\n[API] 株価データ取得リクエストを受信しました - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
     try:
         data = request.json
         cmd = [sys.executable, "fetch/daily_quotes.py"]
 
         if data.get("start_date"):
             cmd.extend(["--start", data["start_date"]])
+            print(f"[API] 開始日: {data['start_date']}")
         if data.get("end_date"):
             cmd.extend(["--end", data["end_date"]])
+            print(f"[API] 終了日: {data['end_date']}")
 
         logger.info(f"実行コマンド: {' '.join(cmd)}")
         result = run_command(" ".join(cmd), "株価データ取得")
 
         if result["success"]:
             logger.info("株価データ取得が正常に完了しました")
+            print("[API] 株価データ取得が正常に完了しました")
         else:
             logger.error(f"株価データ取得でエラーが発生しました: {result['error']}")
+            print(f"[API] エラー: {result['error']}")
 
         return jsonify(result)
     except Exception as e:
         logger.error(f"株価データ取得APIでエラーが発生しました: {str(e)}")
+        print(f"[API] 例外エラー: {str(e)}")
         return jsonify({"success": False, "error": str(e)})
 
 
@@ -109,6 +149,10 @@ def fetch_quotes():
 def fetch_listed():
     """上場情報取得"""
     logger.info("上場情報取得APIが呼び出されました")
+    print(
+        f"\n[API] 上場情報取得リクエストを受信しました - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
     try:
         cmd = [sys.executable, "fetch/listed_info.py"]
         logger.info(f"実行コマンド: {' '.join(cmd)}")
@@ -116,12 +160,15 @@ def fetch_listed():
 
         if result["success"]:
             logger.info("上場情報取得が正常に完了しました")
+            print("[API] 上場情報取得が正常に完了しました")
         else:
             logger.error(f"上場情報取得でエラーが発生しました: {result['error']}")
+            print(f"[API] エラー: {result['error']}")
 
         return jsonify(result)
     except Exception as e:
         logger.error(f"上場情報取得APIでエラーが発生しました: {str(e)}")
+        print(f"[API] 例外エラー: {str(e)}")
         return jsonify({"success": False, "error": str(e)})
 
 
@@ -129,29 +176,39 @@ def fetch_listed():
 def fetch_statements():
     """財務諸表取得"""
     logger.info("財務諸表取得APIが呼び出されました")
+    print(
+        f"\n[API] 財務諸表取得リクエストを受信しました - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
     try:
         data = request.json
         cmd = [sys.executable, "fetch/statements.py"]
 
         mode = data.get("mode", "2")  # デフォルトは日次取得モード
         cmd.append(mode)
+        print(f"[API] モード: {mode}")
 
         if data.get("start_date"):
             cmd.extend(["--start", data["start_date"]])
+            print(f"[API] 開始日: {data['start_date']}")
         if data.get("end_date"):
             cmd.extend(["--end", data["end_date"]])
+            print(f"[API] 終了日: {data['end_date']}")
 
         logger.info(f"実行コマンド: {' '.join(cmd)}")
         result = run_command(" ".join(cmd), f"財務諸表{mode}")
 
         if result["success"]:
             logger.info(f"財務諸表取得（モード{mode}）が正常に完了しました")
+            print(f"[API] 財務諸表取得（モード{mode}）が正常に完了しました")
         else:
             logger.error(f"財務諸表取得でエラーが発生しました: {result['error']}")
+            print(f"[API] エラー: {result['error']}")
 
         return jsonify(result)
     except Exception as e:
         logger.error(f"財務諸表取得APIでエラーが発生しました: {str(e)}")
+        print(f"[API] 例外エラー: {str(e)}")
         return jsonify({"success": False, "error": str(e)})
 
 
@@ -654,4 +711,13 @@ if __name__ == "__main__":
     # デバッグモードで起動（本番環境では無効にすること）
     logger.info("Web UIサーバーを起動します")
     logger.info("http://localhost:5000 でアクセスできます")
+
+    print("\n" + "=" * 60)
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Swing Trading Tool Web UI")
+    print("=" * 60)
+    print("サーバーを起動しています...")
+    print("URL: http://localhost:5000")
+    print("Ctrl+C で終了")
+    print("=" * 60 + "\n")
+
     app.run(host="0.0.0.0", port=5000, debug=True)
