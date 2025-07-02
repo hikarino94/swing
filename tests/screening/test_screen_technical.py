@@ -93,7 +93,7 @@ class TestScreeningFunctions:
     """スクリーニング関数のテスト"""
 
     @patch("screening.screen_technical.pd.read_sql_query")
-    def test_load_price_data(self, mock_read_sql, tmp_db):
+    def test_load_price_data(self, mock_read_sql, temp_db):
         """価格データ読み込みのテスト"""
         # モックデータの設定
         mock_df = pd.DataFrame(
@@ -107,15 +107,15 @@ class TestScreeningFunctions:
         mock_read_sql.return_value = mock_df
 
         # データ読み込み（実際の関数を呼び出す場合）
-        # result = screen_technical.load_price_data(tmp_db, '2024-01-01')
+        # result = screen_technical.load_price_data(temp_db, '2024-01-01')
 
         # モックが呼ばれたことを確認
         mock_read_sql.assert_called_once()
 
-    def test_screen_stocks(self, tmp_db, sample_prices_df):
+    def test_screen_stocks(self, temp_db, sample_prices_df):
         """銘柄スクリーニングのテスト"""
         # テスト用データベースにデータを準備
-        conn = sqlite3.connect(tmp_db)
+        conn = sqlite3.connect(temp_db)
 
         # 価格データ
         prices_data = []
@@ -154,13 +154,13 @@ class TestScreeningFunctions:
             }
 
             # 実際の関数呼び出しをテスト
-            # results = screen_technical.screen_stocks(tmp_db, '2024-01-30')
+            # results = screen_technical.screen_stocks(temp_db, '2024-01-30')
 
 
 class TestSaveResults:
     """結果保存のテスト"""
 
-    def test_save_technical_indicators(self, tmp_db):
+    def test_save_technical_indicators(self, temp_db):
         """テクニカル指標の保存テスト"""
         # テストデータ
         indicators = pd.DataFrame(
@@ -176,7 +176,7 @@ class TestSaveResults:
         )
 
         # データベースに保存
-        conn = sqlite3.connect(tmp_db)
+        conn = sqlite3.connect(temp_db)
         indicators.to_sql(
             "technical_indicators", conn, if_exists="replace", index=False
         )

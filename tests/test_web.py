@@ -58,22 +58,22 @@ class TestTimestampedPath:
 
     def test_timestamped_path_basic(self):
         """基本的なファイル名のタイムスタンプ付与"""
-        result = timestamped_path("test.txt")
-        assert result.startswith("test_")
+        result = timestamped_path("screening", "test", ".txt")
+        assert "screening/test_" in result
         assert result.endswith(".txt")
-        assert len(result) > len("test_YYYYMMDD_HHMMSS.txt") - 1
+        assert len(result) > len("screening/test_YYYYMMDD_HHMMSS.txt") - 1
 
     def test_timestamped_path_no_extension(self):
         """拡張子なしファイル名"""
-        result = timestamped_path("test")
-        assert result.startswith("test_")
-        assert "." not in result
+        result = timestamped_path("backtest", "test", "")
+        assert "backtest/test_" in result
+        assert not result.endswith(".")
 
     def test_timestamped_path_multiple_dots(self):
         """複数のドットを含むファイル名"""
-        result = timestamped_path("test.backup.tar.gz")
-        assert result.startswith("test.backup.tar_")
-        assert result.endswith(".gz")
+        result = timestamped_path("backtest", "test.backup", ".tar.gz")
+        assert "backtest/test.backup_" in result
+        assert result.endswith(".tar.gz")
 
 
 class TestBasicRoutes:
@@ -93,7 +93,7 @@ class TestBasicRoutes:
 class TestFetchRoutes:
     """データ取得APIのテスト"""
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_fetch_quotes_basic(self, mock_run, client):
         """株価データ取得の基本テスト"""
         mock_run.return_value = {
@@ -109,7 +109,7 @@ class TestFetchRoutes:
         assert data["success"] is True
         assert "株価データ取得" in data["description"]
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_fetch_quotes_with_dates(self, mock_run, client):
         """日付指定での株価データ取得"""
         mock_run.return_value = {
@@ -130,7 +130,7 @@ class TestFetchRoutes:
         assert "--start 2024-01-01" in cmd
         assert "--end 2024-01-31" in cmd
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_fetch_statements_mode_selection(self, mock_run, client):
         """財務諸表取得のモード選択テスト"""
         mock_run.return_value = {"success": True, "output": "", "error": ""}
@@ -151,7 +151,7 @@ class TestFetchRoutes:
 class TestScreeningRoutes:
     """スクリーニングAPIのテスト"""
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_screen_fundamental(self, mock_run, client):
         """ファンダメンタルスクリーニング"""
         mock_run.return_value = {
@@ -171,7 +171,7 @@ class TestScreeningRoutes:
         assert data["output_file"] is not None
         assert data["output_file"].startswith("fund_screen_")
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_screen_technical_indicators(self, mock_run, client):
         """テクニカル指標計算"""
         mock_run.return_value = {"success": True, "output": "", "error": ""}
@@ -181,7 +181,7 @@ class TestScreeningRoutes:
         data = response.get_json()
         assert data["output_file"] is None  # indicators実行時はファイル出力なし
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_screen_ml_train(self, mock_run, client):
         """ML学習"""
         mock_run.return_value = {"success": True, "output": "学習完了", "error": ""}
@@ -198,7 +198,7 @@ class TestScreeningRoutes:
 class TestBacktestRoutes:
     """バックテストAPIのテスト"""
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_backtest_fundamental(self, mock_run, client):
         """ファンダメンタルバックテスト"""
         mock_run.return_value = {
@@ -222,7 +222,7 @@ class TestBacktestRoutes:
         assert data["success"] is True
         assert data["output_file"].startswith("backtest_fund_")
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_backtest_ml(self, mock_run, client):
         """MLバックテスト"""
         mock_run.return_value = {"success": True, "output": "", "error": ""}
@@ -239,7 +239,7 @@ class TestBacktestRoutes:
 class TestUtilityRoutes:
     """ユーティリティAPIのテスト"""
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_update_token_with_credentials(self, mock_run, client):
         """認証情報を指定したトークン更新"""
         mock_run.return_value = {
@@ -256,7 +256,7 @@ class TestUtilityRoutes:
         data = response.get_json()
         assert data["success"] is True
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_update_token_from_account_json(
         self, mock_run, client, tmp_path, monkeypatch
     ):
@@ -293,7 +293,7 @@ class TestUtilityRoutes:
         assert data["success"] is False
         assert "account.jsonが見つかりません" in data["error"]
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_db_summary(self, mock_run, client):
         """DBサマリー取得"""
         mock_run.return_value = {
@@ -382,7 +382,7 @@ class TestResultsRoutes:
 class TestAnalyzeJsonRoute:
     """JSON分析APIのテスト"""
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_analyze_json_basic(self, mock_run, client):
         """基本的なJSON分析"""
         mock_run.return_value = {"success": True, "output": "分析結果", "error": ""}
@@ -411,7 +411,7 @@ class TestRunCommand:
     @patch("subprocess.run")
     def test_run_command_success(self, mock_subprocess):
         """コマンド実行成功"""
-        from web import run_command
+        from src.ui.web import run_command
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="出力", stderr="")
 
@@ -423,7 +423,7 @@ class TestRunCommand:
     @patch("subprocess.run")
     def test_run_command_failure(self, mock_subprocess):
         """コマンド実行失敗"""
-        from web import run_command
+        from src.ui.web import run_command
 
         mock_subprocess.return_value = MagicMock(
             returncode=1, stdout="", stderr="エラー"
@@ -436,7 +436,7 @@ class TestRunCommand:
     @patch("subprocess.run")
     def test_run_command_exception(self, mock_subprocess):
         """コマンド実行時の例外"""
-        from web import run_command
+        from src.ui.web import run_command
 
         mock_subprocess.side_effect = Exception("実行エラー")
 

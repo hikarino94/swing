@@ -27,7 +27,7 @@ def client():
 class TestAdditionalScreeningCoverage:
     """スクリーニングAPIの追加カバレッジテスト"""
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_screen_technical_screen_action_with_all_params(self, mock_run, client):
         """テクニカルスクリーニング - 全パラメータ指定"""
         mock_run.return_value = {
@@ -51,7 +51,7 @@ class TestAdditionalScreeningCoverage:
         assert "--as-of 2024-01-01" in cmd
         assert "--lookback 150" in cmd
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_screen_ml_screen_action_with_all_params(self, mock_run, client):
         """MLスクリーニング - 全パラメータ指定"""
         mock_run.return_value = {
@@ -76,7 +76,7 @@ class TestAdditionalScreeningCoverage:
 class TestAdditionalBacktestCoverage:
     """バックテストAPIの追加カバレッジテスト"""
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_backtest_technical_with_all_params(self, mock_run, client):
         """テクニカルバックテスト - 全パラメータ指定"""
         mock_run.return_value = {
@@ -106,7 +106,7 @@ class TestAdditionalBacktestCoverage:
         assert "--start 2023-01-01" in cmd
         assert "--end 2023-12-31" in cmd
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_backtest_ml_with_minimal_params(self, mock_run, client):
         """MLバックテスト - 最小パラメータ"""
         mock_run.return_value = {
@@ -127,7 +127,7 @@ class TestAdditionalBacktestCoverage:
 class TestUtilityEdgeCases:
     """ユーティリティAPIのエッジケーステスト"""
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_update_token_partial_info_from_json(
         self, mock_run, client, tmp_path, monkeypatch
     ):
@@ -165,7 +165,7 @@ class TestUtilityEdgeCases:
         assert data["success"] is False
         assert "形式が不正" in data["error"]
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_update_token_save_account_json_failure(
         self, mock_run, client, tmp_path, monkeypatch
     ):
@@ -189,7 +189,7 @@ class TestUtilityEdgeCases:
         data = response.get_json()
         assert data["success"] is True
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_list_signals_with_all_params(self, mock_run, client):
         """シグナル一覧 - 全パラメータ指定"""
         mock_run.return_value = {
@@ -215,7 +215,7 @@ class TestUtilityEdgeCases:
         assert "--end 2024-12-31" in cmd
         assert "--limit 50" in cmd
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_analyze_json_with_options(self, mock_run, client):
         """JSON分析 - オプション指定"""
         mock_run.return_value = {
@@ -295,7 +295,7 @@ class TestResultsEdgeCases:
 class TestErrorScenarios:
     """エラーシナリオのテスト"""
 
-    @patch("web.run_command")
+    @patch("src.ui.web.run_command")
     def test_command_execution_with_stderr(self, mock_run, client):
         """標準エラー出力がある場合"""
         mock_run.return_value = {

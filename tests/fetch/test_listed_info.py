@@ -105,7 +105,7 @@ class TestFetchListedInfo:
 class TestSaveListedInfo:
     """save_listed_info関数のテスト"""
 
-    def test_save_listed_info_to_db(self, tmp_db):
+    def test_save_listed_info_to_db(self, temp_db):
         """データベースへの保存テスト"""
         # テストデータの準備
         info_list = [
@@ -124,10 +124,10 @@ class TestSaveListedInfo:
         ]
 
         # 保存実行
-        listed_info.save_listed_info(info_list, str(tmp_db))
+        listed_info.save_listed_info(info_list, str(temp_db))
 
         # データベースから読み込んで検証
-        conn = sqlite3.connect(tmp_db)
+        conn = sqlite3.connect(temp_db)
         df = pd.read_sql_query("SELECT * FROM listed_info WHERE code = '1234'", conn)
         conn.close()
 
@@ -135,7 +135,7 @@ class TestSaveListedInfo:
         assert df.iloc[0]["code"] == "1234"
         assert df.iloc[0]["company_name"] == "テスト会社"
 
-    def test_save_listed_info_update_existing(self, tmp_db):
+    def test_save_listed_info_update_existing(self, temp_db):
         """既存データの更新テスト"""
         # 初回データ
         info_list_1 = [
@@ -164,11 +164,11 @@ class TestSaveListedInfo:
         ]
 
         # 保存実行
-        listed_info.save_listed_info(info_list_1, str(tmp_db))
-        listed_info.save_listed_info(info_list_2, str(tmp_db))
+        listed_info.save_listed_info(info_list_1, str(temp_db))
+        listed_info.save_listed_info(info_list_2, str(temp_db))
 
         # データベースから読み込んで検証
-        conn = sqlite3.connect(tmp_db)
+        conn = sqlite3.connect(temp_db)
         df = pd.read_sql_query("SELECT * FROM listed_info WHERE code = '1234'", conn)
         conn.close()
 
@@ -176,10 +176,10 @@ class TestSaveListedInfo:
         assert len(df) == 1
         assert df.iloc[0]["company_name"] == "新テスト会社"
 
-    def test_save_listed_info_delete_flag(self, tmp_db):
+    def test_save_listed_info_delete_flag(self, temp_db):
         """delete_flagの処理テスト"""
         # 既存データを作成
-        conn = sqlite3.connect(tmp_db)
+        conn = sqlite3.connect(temp_db)
         conn.execute(
             """
             INSERT INTO listed_info (code, company_name, delete_flag)
@@ -202,10 +202,10 @@ class TestSaveListedInfo:
         ]
 
         # 保存実行（delete_flagの更新を含む）
-        listed_info.save_listed_info(info_list, str(tmp_db))
+        listed_info.save_listed_info(info_list, str(temp_db))
 
         # データベースから読み込んで検証
-        conn = sqlite3.connect(tmp_db)
+        conn = sqlite3.connect(temp_db)
         df = pd.read_sql_query("SELECT * FROM listed_info WHERE code = '9999'", conn)
         conn.close()
 

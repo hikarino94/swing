@@ -68,7 +68,7 @@ class TestScreeningLogic:
     """スクリーニングロジックのテスト"""
 
     @patch("screening.screen_statements.pd.read_sql_query")
-    def test_load_financial_data(self, mock_read_sql, tmp_db):
+    def test_load_financial_data(self, mock_read_sql, temp_db):
         """財務データ読み込みのテスト"""
         # モックデータ
         mock_df = pd.DataFrame(
@@ -82,7 +82,7 @@ class TestScreeningLogic:
         mock_read_sql.return_value = mock_df
 
         # 読み込みテスト
-        # result = screen_statements.load_financial_data(tmp_db, '2024-01-10')
+        # result = screen_statements.load_financial_data(temp_db, '2024-01-10')
 
         mock_read_sql.assert_called_once()
 
@@ -129,7 +129,7 @@ class TestScreeningLogic:
 class TestDatabaseOperations:
     """データベース操作のテスト"""
 
-    def test_save_screening_results(self, tmp_db):
+    def test_save_screening_results(self, temp_db):
         """スクリーニング結果の保存テスト"""
         # テストデータ
         results = pd.DataFrame(
@@ -137,7 +137,7 @@ class TestDatabaseOperations:
         )
 
         # データベースに保存
-        conn = sqlite3.connect(tmp_db)
+        conn = sqlite3.connect(temp_db)
         results.to_sql("fundamental_signals", conn, if_exists="replace", index=False)
 
         # 保存されたデータを確認
@@ -147,9 +147,9 @@ class TestDatabaseOperations:
         assert len(saved_df) == 2
         assert "1234" in saved_df["code"].values
 
-    def test_avoid_duplicate_signals(self, tmp_db):
+    def test_avoid_duplicate_signals(self, temp_db):
         """重複シグナルの回避テスト"""
-        conn = sqlite3.connect(tmp_db)
+        conn = sqlite3.connect(temp_db)
 
         # 既存のシグナルを作成
         existing = pd.DataFrame({"code": ["1234"], "signal_date": ["2024-01-09"]})

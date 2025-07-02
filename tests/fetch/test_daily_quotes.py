@@ -136,7 +136,7 @@ class TestDatabaseOperations:
     """データベース操作のテスト"""
 
     @patch("fetch.daily_quotes._norm")
-    def test_upsert_operation(self, mock_norm, tmp_db):
+    def test_upsert_operation(self, mock_norm, temp_db):
         """_upsert関数のテスト"""
         # テストデータ
         test_df = pd.DataFrame(
@@ -162,7 +162,7 @@ class TestDatabaseOperations:
         mock_norm.return_value = test_df
 
         # データベース接続
-        conn = sqlite3.connect(tmp_db)
+        conn = sqlite3.connect(temp_db)
 
         # _upsert実行
         daily_quotes._upsert(conn, test_df)
@@ -175,7 +175,7 @@ class TestDatabaseOperations:
         assert len(df) == 1
         assert df.iloc[0]["code"] == "1234"
 
-    def test_stock_split_detection(self, tmp_db):
+    def test_stock_split_detection(self, temp_db):
         """株式分割検出のテスト"""
         # 株式分割を含むデータ
         test_df = pd.DataFrame(

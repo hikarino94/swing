@@ -114,7 +114,7 @@ class TestFetchStatements:
 class TestSaveStatements:
     """save_statements関数のテスト"""
 
-    def test_save_statements_to_db(self, tmp_db):
+    def test_save_statements_to_db(self, temp_db):
         """データベースへの保存テスト"""
         # テストデータの準備
         stmt_list = [
@@ -134,10 +134,10 @@ class TestSaveStatements:
         ]
 
         # 保存実行
-        statements.save_statements(stmt_list, str(tmp_db))
+        statements.save_statements(stmt_list, str(temp_db))
 
         # データベースから読み込んで検証
-        conn = sqlite3.connect(tmp_db)
+        conn = sqlite3.connect(temp_db)
         df = pd.read_sql_query(
             "SELECT * FROM statements WHERE LocalCode = '1234'", conn
         )
@@ -148,7 +148,7 @@ class TestSaveStatements:
         assert df.iloc[0]["DisclosedDate"] == "2024-01-10"
         assert df.iloc[0]["NetSales"] == 1000000
 
-    def test_save_statements_duplicate_handling(self, tmp_db):
+    def test_save_statements_duplicate_handling(self, temp_db):
         """重複データのハンドリングテスト"""
         stmt_list = [
             {
@@ -167,14 +167,14 @@ class TestSaveStatements:
         ]
 
         # 同じデータを2回保存
-        statements.save_statements(stmt_list, str(tmp_db))
+        statements.save_statements(stmt_list, str(temp_db))
 
         # 更新されたデータで再度保存
         stmt_list[0]["NetSales"] = 1100000
-        statements.save_statements(stmt_list, str(tmp_db))
+        statements.save_statements(stmt_list, str(temp_db))
 
         # データベースから読み込んで検証
-        conn = sqlite3.connect(tmp_db)
+        conn = sqlite3.connect(temp_db)
         df = pd.read_sql_query(
             "SELECT * FROM statements WHERE LocalCode = '1234'", conn
         )
