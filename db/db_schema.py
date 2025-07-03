@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS listed_info (
     delete_flag     INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_listed_date ON listed_info(code);
+-- 市場コードでのフィルタリング高速化
+CREATE INDEX IF NOT EXISTS idx_listed_market_code ON listed_info(market_code);
 
 -- statements -------------------------------------------------------
 CREATE TABLE IF NOT EXISTS statements (
@@ -243,6 +245,9 @@ CREATE TABLE IF NOT EXISTS technical_indicators (
 );
 CREATE INDEX IF NOT EXISTS idx_tindicators_code ON technical_indicators(code);
 CREATE INDEX IF NOT EXISTS idx_tindicators_date ON technical_indicators(signal_date);
+-- 複合インデックスの追加（シグナル検索高速化）
+CREATE INDEX IF NOT EXISTS idx_tech_date_count ON technical_indicators(signal_date, signals_count);
+CREATE INDEX IF NOT EXISTS idx_tech_date_short_count ON technical_indicators(signal_date, signals_short_count);
 
 
 """
