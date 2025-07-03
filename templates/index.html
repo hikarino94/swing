@@ -511,7 +511,7 @@
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="formatFileSize(file.size)"></td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="formatDate(file.modified)"></td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <button @click="downloadFile(file.name)" class="text-blue-600 hover:text-blue-900">
+                                        <button @click="downloadFile(file.path)" class="text-blue-600 hover:text-blue-900">
                                             ダウンロード
                                         </button>
                                     </td>

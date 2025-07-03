@@ -144,7 +144,8 @@
 
         // ファイルダウンロード関数
         function downloadFile(filename) {
-            window.location.href = `/api/results/download/${filename}`;
+            // ファイルパスをURLエンコードして送信
+            window.location.href = `/api/results/download/${encodeURIComponent(filename)}`;
         }
 
         // 現在時刻の更新
