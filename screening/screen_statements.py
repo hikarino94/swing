@@ -99,7 +99,7 @@ def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
     """Load recent statements rows from DB and return as DataFrame."""
     start_date = (cfg.as_of - timedelta(days=cfg.lookback_days)).strftime("%Y-%m-%d")
     sql = """
-        SELECT A.LocalCode,
+        SELECT A.code,
             A.DisclosedDate,
             A.DisclosedTime,
             A.TypeOfCurrentPeriod,
@@ -116,15 +116,16 @@ def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
             A.ChangesInAccountingEstimates
         FROM statements A
         join listed_info B
-        on A.LocalCode = B.code
+        on A.code = B.code
         where  B.market_code != "0109"
         and A.DisclosedDate >= ?;
     """
-    df = pd.read_sql(sql, conn, params=(start_date,))
+    # codeカラムを文字列として読み込むように指定
+    df = pd.read_sql(sql, conn, params=(start_date,), dtype={"code": str})
 
     # Cast numerics
     non_numeric_cols: Final = [
-        "LocalCode",
+        "code",
         "DisclosedDate",
         "DisclosedTime",
         "TypeOfCurrentPeriod",
@@ -144,7 +145,7 @@ def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
         + df["DisclosedTime"].fillna("00:00:00")
     )
 
-    df.sort_values(["LocalCode", "DisclosedAt"], inplace=True)
+    df.sort_values(["code", "DisclosedAt"], inplace=True)
     return df
 
 
@@ -199,7 +200,16 @@ def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
         g.drop(columns="q_num", inplace=True)
         return g
 
-    return df.groupby("LocalCode", group_keys=False).apply(_add, include_groups=False)
+    # groupbyでcodeカラムを保持するようにgroup_keysをTrueに変更
+    result = df.groupby("code", group_keys=True).apply(_add, include_groups=False)
+
+    # マルチインデックスの場合は、codeレベルをカラムに戻す
+    if isinstance(result.index, pd.MultiIndex):
+        result = result.reset_index(level=0)
+    elif result.index.name == "code":
+        result = result.reset_index()
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +257,7 @@ def save_signals(sig_df: pd.DataFrame, conn: sqlite3.Connection) -> int:
 
     sig = sig_df[
         [
-            "LocalCode",
+            "code",
             "DisclosedAt",
             "TypeOfCurrentPeriod",
             "eps_yoy_fy",
@@ -266,9 +276,14 @@ def save_signals(sig_df: pd.DataFrame, conn: sqlite3.Connection) -> int:
     sig["turnaround"] = sig["turnaround"].astype(int)
     sig["created_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    cols = list(sig.columns)
-    sql = f"INSERT OR IGNORE INTO fundamental_signals ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})"
-    conn.executemany(sql, sig.to_records(index=False))
+    # codeカラムを明示的に文字列型に変換して、先頭の0が削除されないようにする
+    sig["code"] = sig["code"].astype(str)
+
+    # 重複を除去（code + DisclosedAtの組み合わせで）
+    sig = sig.drop_duplicates(subset=["code", "DisclosedAt"], keep="first")
+
+    # to_sql()を使用してDataFrameを直接保存し、codeが文字列として保存されるようにする
+    sig.to_sql("fundamental_signals", conn, if_exists="append", index=False)
     conn.commit()
     return len(sig)
 

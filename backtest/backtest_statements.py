@@ -61,14 +61,9 @@ def read_prices(conn: sqlite3.Connection) -> pd.DataFrame:
     処理内容: prices テーブルを取得しマルチインデックスで整形して返す。
     """
 
-    q = (
-        "SELECT code   AS LocalCode,"
-        "       date   AS trade_date,"
-        "       adj_close"
-        "  FROM prices"
-    )
+    q = "SELECT code," "       date   AS trade_date," "       adj_close" "  FROM prices"
     df = pd.read_sql(q, conn, parse_dates=["trade_date"])
-    return df.set_index(["LocalCode", "trade_date"]).sort_index()
+    return df.set_index(["code", "trade_date"]).sort_index()
 
 
 def read_signals(
@@ -81,7 +76,7 @@ def read_signals(
     処理内容: fundamental_signals テーブルから期間で絞り込んで読み込む。
     """
 
-    q = "SELECT LocalCode, DisclosedAt FROM fundamental_signals"
+    q = "SELECT code, DisclosedAt FROM fundamental_signals"
     if start or end:
         q += " WHERE 1=1"
         if start:
@@ -139,8 +134,8 @@ def run_backtest(
     signals["exit_date"] = add_n_trading_days(signals["entry_date"], hold, calendar)
 
     # マルチ‑インデックスで価格取得
-    entry_idx = signals.set_index(["LocalCode", "entry_date"]).index
-    exit_idx = signals.set_index(["LocalCode", "exit_date"]).index
+    entry_idx = signals.set_index(["code", "entry_date"]).index
+    exit_idx = signals.set_index(["code", "exit_date"]).index
 
     entry_px = prices.reindex(entry_idx)["adj_close"].to_numpy()
     exit_px = prices.reindex(exit_idx)["adj_close"].to_numpy()
@@ -157,7 +152,7 @@ def run_backtest(
 
     trades = pd.DataFrame(
         {
-            "code": signals_filtered["LocalCode"],
+            "code": signals_filtered["code"],
             "DisclosedAt": signals_filtered["DisclosedAt"].dt.date,
             "entry_date": signals_filtered["entry_date"].dt.date,
             "exit_date": signals_filtered["exit_date"].dt.date,
@@ -240,7 +235,15 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: Path | str):
 
         # 自動列幅調整
         for i, col in enumerate(trades.columns):
-            width = max(10, int(trades[col].astype(str).str.len().max() * 1.1))
+            if len(trades) > 0:
+                # 列の最大文字数を計算（NaNをチェック）
+                max_len = trades[col].astype(str).str.len().max()
+                if pd.notna(max_len):
+                    width = max(10, int(max_len * 1.1))
+                else:
+                    width = 15  # デフォルト幅
+            else:
+                width = 15  # DataFrameが空の場合のデフォルト幅
             sheet.set_column(i, i, width)
 
 

@@ -190,11 +190,11 @@ class TestMainFunction:
         mock_conn = MagicMock()
         mock_connect.return_value = mock_conn
 
-        mock_df = pd.DataFrame({"LocalCode": ["1234", "5678"]})
+        mock_df = pd.DataFrame({"Code": ["1234", "5678"]})
         mock_fetch.return_value = mock_df
         mock_compute.return_value = mock_df
         mock_screen.return_value = pd.DataFrame(
-            {"LocalCode": ["1234", "5678"], "signal_date": ["2024-01-10", "2024-01-10"]}
+            {"Code": ["1234", "5678"], "signal_date": ["2024-01-10", "2024-01-10"]}
         )
         mock_save.return_value = 2
 
@@ -222,10 +222,10 @@ class TestMainFunction:
         mock_conn = MagicMock()
         mock_connect.return_value = mock_conn
 
-        mock_df = pd.DataFrame({"LocalCode": ["1234"]})
+        mock_df = pd.DataFrame({"Code": ["1234"]})
         mock_fetch.return_value = mock_df
         mock_compute.return_value = mock_df
-        mock_screen.return_value = pd.DataFrame({"LocalCode": ["1234"]})
+        mock_screen.return_value = pd.DataFrame({"Code": ["1234"]})
         mock_save.return_value = 1
 
         # カスタムパラメータを指定

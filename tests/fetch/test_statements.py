@@ -275,7 +275,7 @@ class TestDatabaseOperations:
     @patch(
         "fetch.statements.SCHEMA_COLUMNS",
         [
-            "LocalCode",
+            "Code",
             "DisclosureNumber",
             "DisclosedDate",
             "NetSales",
@@ -291,7 +291,7 @@ class TestDatabaseOperations:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS statements (
-                LocalCode TEXT,
+                Code TEXT,
                 DisclosureNumber TEXT PRIMARY KEY,
                 DisclosedDate TEXT,
                 NetSales REAL,
@@ -306,7 +306,7 @@ class TestDatabaseOperations:
         # テストデータ（リスト形式）
         records = [
             {
-                "LocalCode": "1234",
+                "Code": "1234",
                 "DisclosureNumber": "12345678901234567890",
                 "DisclosedDate": "2024-01-10",
                 "NetSales": 1000000,
@@ -321,19 +321,19 @@ class TestDatabaseOperations:
 
         # データベースから読み込んで検証
         result_df = pd.read_sql_query(
-            "SELECT * FROM statements WHERE LocalCode = '1234'", conn
+            "SELECT * FROM statements WHERE Code = '1234'", conn
         )
         conn.close()
 
         assert len(result_df) == 1
-        assert result_df.iloc[0]["LocalCode"] == "1234"
+        assert result_df.iloc[0]["Code"] == "1234"
         assert result_df.iloc[0]["DisclosedDate"] == "2024-01-10"
         assert result_df.iloc[0]["NetSales"] == 1000000
 
     @patch(
         "fetch.statements.SCHEMA_COLUMNS",
         [
-            "LocalCode",
+            "Code",
             "DisclosureNumber",
             "DisclosedDate",
             "NetSales",
@@ -349,7 +349,7 @@ class TestDatabaseOperations:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS statements (
-                LocalCode TEXT,
+                Code TEXT,
                 DisclosureNumber TEXT PRIMARY KEY,
                 DisclosedDate TEXT,
                 NetSales REAL,
@@ -372,7 +372,7 @@ class TestDatabaseOperations:
     @patch(
         "fetch.statements.SCHEMA_COLUMNS",
         [
-            "LocalCode",
+            "Code",
             "DisclosureNumber",
             "DisclosedDate",
             "NetSales",
@@ -388,7 +388,7 @@ class TestDatabaseOperations:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS statements (
-                LocalCode TEXT,
+                Code TEXT,
                 DisclosureNumber TEXT PRIMARY KEY,
                 DisclosedDate TEXT,
                 NetSales REAL,
@@ -403,7 +403,7 @@ class TestDatabaseOperations:
         # 同じデータを作成
         records1 = [
             {
-                "LocalCode": "1234",
+                "Code": "1234",
                 "DisclosureNumber": "12345678901234567890",
                 "DisclosedDate": "2024-01-10",
                 "NetSales": 1000000,
@@ -413,7 +413,7 @@ class TestDatabaseOperations:
         # 更新されたデータ
         records2 = [
             {
-                "LocalCode": "1234",
+                "Code": "1234",
                 "DisclosureNumber": "12345678901234567890",
                 "DisclosedDate": "2024-01-10",
                 "NetSales": 1100000,  # 売上が更新された
@@ -430,7 +430,7 @@ class TestDatabaseOperations:
 
         # データベースから読み込んで検証
         result_df = pd.read_sql_query(
-            "SELECT * FROM statements WHERE LocalCode = '1234'", conn
+            "SELECT * FROM statements WHERE Code = '1234'", conn
         )
         conn.close()
 
@@ -454,7 +454,7 @@ class TestUtilityConstants:
         assert len(statements.SCHEMA_COLUMNS) > 0
 
         # 主要なカラムが含まれていることを確認
-        expected_columns = ["LocalCode", "DisclosedDate", "NetSales"]
+        expected_columns = ["code", "DisclosedDate", "NetSales"]
         for col in expected_columns:
             assert col in statements.SCHEMA_COLUMNS
 

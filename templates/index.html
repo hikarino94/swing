@@ -201,7 +201,7 @@
                             </label>
                         </div>
                     </div>
-                    <div x-show="screening.technical.action === 'screen'" class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">対象日</label>
                             <input type="date" x-model="screening.technical.asOf"
@@ -452,6 +452,19 @@
                 <h3 class="text-lg font-medium text-gray-900 mb-4">JSON分析</h3>
                 <div class="space-y-4">
                     <div>
+                        <label class="block text-sm font-medium text-gray-700">分析タイプ</label>
+                        <div class="mt-2 space-x-4">
+                            <label class="inline-flex items-center">
+                                <input type="radio" x-model="utilities.json.analysisType" value="basic" class="mr-2">
+                                <span>基本分析</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="radio" x-model="utilities.json.analysisType" value="advanced" class="mr-2">
+                                <span>高度な分析（ビジュアルチャート付き）</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
                         <label class="block text-sm font-medium text-gray-700">JSONファイル（複数選択可）</label>
                         <input type="file" @change="handleJsonFiles" multiple accept=".json"
                                class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
@@ -471,11 +484,43 @@
                             </select>
                         </div>
                     </div>
+
+                    <!-- 高度な分析オプション -->
+                    <div x-show="utilities.json.analysisType === 'advanced'" class="space-y-2 pl-4 border-l-4 border-blue-400">
+                        <label class="flex items-center">
+                            <input type="checkbox" x-model="utilities.json.exportExcel" class="mr-2">
+                            <span>Excelファイル出力</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" x-model="utilities.json.exportPdf" class="mr-2">
+                            <span>PDFレポート出力</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" x-model="utilities.json.compare" class="mr-2">
+                            <span>戦略比較（複数ファイル選択時）</span>
+                        </label>
+                    </div>
+
                     <button @click="analyzeJson()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
                         分析実行
                     </button>
                 </div>
                 <div id="jsonAnalysis" class="mt-4 bg-gray-50 p-4 rounded-md h-64 overflow-y-auto custom-scrollbar font-mono text-sm"></div>
+
+                <!-- 生成されたファイルの表示 -->
+                <div x-show="utilities.json.generatedFiles && utilities.json.generatedFiles.length > 0" class="mt-4">
+                    <h4 class="text-md font-medium text-gray-900 mb-2">生成されたファイル:</h4>
+                    <div class="space-y-2">
+                        <template x-for="file in utilities.json.generatedFiles" :key="file.path">
+                            <div class="flex items-center justify-between bg-gray-100 p-2 rounded">
+                                <span x-text="file.name" class="text-sm"></span>
+                                <a :href="'/api/results/download/' + file.path"
+                                   class="text-blue-600 hover:text-blue-800 text-sm"
+                                   download>ダウンロード</a>
+                            </div>
+                        </template>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -625,7 +670,12 @@ function swingApp() {
             json: {
                 files: [],
                 showTrades: false,
-                side: ''
+                side: '',
+                analysisType: 'basic',
+                exportExcel: false,
+                exportPdf: false,
+                compare: false,
+                generatedFiles: []
             }
         },
 
@@ -799,10 +849,19 @@ function swingApp() {
             const result = await apiCall('/utils/analyze_json', {
                 files: this.utilities.json.files,
                 show_trades: this.utilities.json.showTrades,
-                side: this.utilities.json.side
+                side: this.utilities.json.side,
+                analysis_type: this.utilities.json.analysisType,
+                export_excel: this.utilities.json.exportExcel,
+                export_pdf: this.utilities.json.exportPdf,
+                compare: this.utilities.json.compare
             });
             const element = document.getElementById('jsonAnalysis');
             element.textContent = result.output || result.error;
+
+            // 生成されたファイルの更新
+            if (result.generated_files) {
+                this.utilities.json.generatedFiles = result.generated_files;
+            }
         },
 
         async loadThresholds() {

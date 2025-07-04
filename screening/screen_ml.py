@@ -103,10 +103,10 @@ def _fetch_price(con: sqlite3.Connection, lookback: int) -> pd.DataFrame:
 
 
 def _fetch_stmt(con: sqlite3.Connection) -> pd.DataFrame:
-    cols = ", ".join(["LocalCode"] + NUMERIC_STMT_COLS + ["DisclosedDate"])
+    cols = ", ".join(["code"] + NUMERIC_STMT_COLS + ["DisclosedDate"])
     query = f"SELECT {cols} FROM {STMT_TABLE} WHERE DisclosedDate IS NOT NULL"
     df = pd.read_sql(query, con, parse_dates=["DisclosedDate"])
-    return df.rename(columns={"LocalCode": "code"})
+    return df
 
 
 # -----------------------------------------------------------------------------

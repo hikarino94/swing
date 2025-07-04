@@ -58,7 +58,7 @@ def temp_db() -> Generator[Path, None, None]:
         );
 
         CREATE TABLE IF NOT EXISTS statements (
-            LocalCode TEXT,
+            Code TEXT,
             DisclosureNumber TEXT PRIMARY KEY,
             DisclosedDate TEXT,
             NetSales REAL,

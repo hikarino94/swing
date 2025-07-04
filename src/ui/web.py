@@ -237,7 +237,7 @@ def screen_fundamental():
             query = """
                 SELECT fs.*, li.company_name
                 FROM fundamental_signals fs
-                LEFT JOIN listed_info li ON fs.LocalCode = li.code
+                LEFT JOIN listed_info li ON fs.code = li.code
                 WHERE DATE(fs.created_at) = DATE('now')
                 ORDER BY fs.created_at DESC
             """
@@ -288,11 +288,11 @@ def screen_technical():
         action = data.get("action", "screen")
         cmd.append(action)
 
-        if action == "screen":
-            if data.get("as_of"):
-                cmd.extend(["--as-of", data["as_of"]])
-            if data.get("lookback"):
-                cmd.extend(["--lookback", str(data["lookback"])])
+        # indicatorsとscreenの両方でas_ofとlookbackパラメータを渡す
+        if data.get("as_of"):
+            cmd.extend(["--as-of", data["as_of"]])
+        if data.get("lookback"):
+            cmd.extend(["--lookback", str(data["lookback"])])
 
         logger.info(f"実行コマンド: {' '.join(cmd)}")
         result = run_command(" ".join(cmd), f"テクニカル{action}")
@@ -588,13 +588,32 @@ def analyze_json():
     try:
         data = request.json
         files = data.get("files", [])
+        analysis_type = data.get("analysis_type", "basic")  # basic or advanced
 
         if not files:
             logger.warning("JSON分析でファイルが選択されていません")
             return jsonify({"success": False, "error": "ファイルが選択されていません"})
 
-        cmd = [sys.executable, "backtest/analyze_backtest_json.py"] + files
+        if analysis_type == "advanced":
+            # 高度な分析を使用
+            cmd = [sys.executable, "backtest/analyze_json_advanced.py"] + files
 
+            # 高度な分析のオプション
+            if data.get("export_excel"):
+                cmd.append("--export-excel")
+            if data.get("export_pdf"):
+                cmd.append("--export-pdf")
+            if data.get("compare"):
+                cmd.append("--compare")
+
+            output_dir = Path("data/output/analysis")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            cmd.extend(["--output-dir", str(output_dir)])
+        else:
+            # 基本分析を使用
+            cmd = [sys.executable, "backtest/analyze_backtest_json.py"] + files
+
+        # 共通オプション
         if data.get("show_trades"):
             cmd.append("--show-trades")
         if data.get("side"):
@@ -602,6 +621,19 @@ def analyze_json():
 
         logger.info(f"実行コマンド: {' '.join(cmd)}")
         result = run_command(" ".join(cmd), "JSON分析")
+
+        # 高度な分析の場合、生成されたファイルのパスも返す
+        if result["success"] and analysis_type == "advanced":
+            analysis_files = list(Path("data/output/analysis").glob("*"))
+            # 最新のファイルを取得
+            latest_files = sorted(
+                analysis_files, key=lambda p: p.stat().st_mtime, reverse=True
+            )[:5]
+            result["generated_files"] = [
+                {"name": f.name, "path": str(f.relative_to(Path.cwd()))}
+                for f in latest_files
+            ]
+            logger.info(f"高度な分析で生成されたファイル: {result['generated_files']}")
 
         if result["success"]:
             logger.info("JSON分析が正常に完了しました")

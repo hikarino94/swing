@@ -76,7 +76,7 @@ CREATE INDEX IF NOT EXISTS idx_listed_market_code ON listed_info(market_code);
 CREATE TABLE IF NOT EXISTS statements (
     DisclosedDate                                 TEXT,
     DisclosedTime                                 TEXT,
-    LocalCode                                     TEXT,
+    code                                          TEXT,
     DisclosureNumber                              TEXT    PRIMARY KEY,
     TypeOfDocument                                TEXT,
     TypeOfCurrentPeriod                           TEXT,
@@ -194,14 +194,14 @@ CREATE TABLE IF NOT EXISTS statements (
     NextYearForecastNonConsolidatedEarningsPerShare REAL
 );
 
-CREATE INDEX IF NOT EXISTS idx_statements_localcode  ON statements(LocalCode);
+CREATE INDEX IF NOT EXISTS idx_statements_code  ON statements(code);
 CREATE INDEX IF NOT EXISTS idx_statements_disclosure_no ON statements(DisclosureNumber);
 CREATE INDEX IF NOT EXISTS idx_statements_disclosed_date
     ON statements(DisclosedDate);
 -- fundamental_signals ----------------------------------------------
 -- スクリーニング結果を永続化し、後から検証・可視化できるようにする
 CREATE TABLE IF NOT EXISTS fundamental_signals (
-    LocalCode           TEXT NOT NULL,
+    code                TEXT NOT NULL,
     DisclosedAt         TEXT NOT NULL,  -- ISO8601 (YYYY‑MM‑DD HH:MM:SS)
     TypeOfCurrentPeriod TEXT,
 
@@ -216,9 +216,9 @@ CREATE TABLE IF NOT EXISTS fundamental_signals (
     treasury_delta      REAL,
 
     created_at          TEXT DEFAULT (datetime('now')),
-    PRIMARY KEY (LocalCode, DisclosedAt)
+    PRIMARY KEY (code, DisclosedAt)
 );
-CREATE INDEX IF NOT EXISTS idx_fsignals_localcode ON fundamental_signals(LocalCode);
+CREATE INDEX IF NOT EXISTS idx_fsignals_code ON fundamental_signals(code);
 CREATE INDEX IF NOT EXISTS idx_fsignals_created  ON fundamental_signals(created_at);
 
 -- technical_indicators ----------------------------------------------

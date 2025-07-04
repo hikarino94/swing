@@ -59,7 +59,7 @@ def ml_db():
     conn.execute(
         """
         CREATE TABLE statements (
-            LocalCode TEXT,
+            code TEXT,
             DisclosedDate DATE,
             NetSales REAL,
             OperatingProfit REAL,
@@ -152,7 +152,7 @@ class TestDatabaseHelpers:
         df = screen_ml._fetch_stmt(conn)
 
         assert not df.empty
-        assert "code" in df.columns  # LocalCode → code にリネームされているはず
+        assert "code" in df.columns  # codeカラムが存在することを確認
         assert "NetSales" in df.columns
         assert len(df) == 2
 

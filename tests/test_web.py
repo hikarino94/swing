@@ -202,7 +202,7 @@ class TestScreeningRoutes:
         # DBから結果を返す
         mock_df = MagicMock()
         mock_df.empty = False
-        mock_df.columns = ["LocalCode", "company_name", "created_at"]
+        mock_df.columns = ["Code", "company_name", "created_at"]
         mock_df.__len__.return_value = 1
         mock_df.__getitem__.return_value.astype.return_value.str.len.return_value.max.return_value = (
             10

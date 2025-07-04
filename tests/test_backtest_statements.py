@@ -52,13 +52,13 @@ def backtest_db():
     conn.execute(
         """
         CREATE TABLE fundamental_signals (
-            LocalCode TEXT,
+            code TEXT,
             DisclosedAt TEXT,
             turnaround INTEGER,
             cf_quality INTEGER,
             treasury_delta_ok INTEGER,
             eta_delta_ok INTEGER,
-            PRIMARY KEY (LocalCode, DisclosedAt)
+            PRIMARY KEY (code, DisclosedAt)
         )
     """
     )
@@ -164,8 +164,8 @@ class TestTradeOperations:
         # シグナルデータ
         signals = pd.DataFrame(
             [
-                {"LocalCode": "1234", "DisclosedAt": pd.Timestamp("2024-01-10")},
-                {"LocalCode": "1234", "DisclosedAt": pd.Timestamp("2024-02-01")},
+                {"code": "1234", "DisclosedAt": pd.Timestamp("2024-01-10")},
+                {"code": "1234", "DisclosedAt": pd.Timestamp("2024-02-01")},
             ]
         )
 
@@ -199,7 +199,7 @@ class TestTradeOperations:
 
         prices = backtest_statements.read_prices(conn)
         signals = pd.DataFrame(
-            [{"LocalCode": "1234", "DisclosedAt": pd.Timestamp("2024-01-10")}]
+            [{"code": "1234", "DisclosedAt": pd.Timestamp("2024-01-10")}]
         )
 
         # 最低価格300円でバックテスト
@@ -454,11 +454,11 @@ class TestMainFunction:
                     ("1234", pd.Timestamp("2024-01-01")),
                     ("1234", pd.Timestamp("2024-01-02")),
                 ],
-                names=["LocalCode", "trade_date"],
+                names=["Code", "trade_date"],
             ),
         )
         mock_signals = pd.DataFrame(
-            [{"LocalCode": "1234", "DisclosedAt": pd.Timestamp("2024-01-10")}]
+            [{"code": "1234", "DisclosedAt": pd.Timestamp("2024-01-10")}]
         )
         mock_trades = pd.DataFrame(
             [{"code": "1234", "profit_jpy": 100000, "ret_pct": 0.10}]
@@ -555,7 +555,7 @@ class TestIntegration:
         ]
         for code, disclosed_date in signals:
             conn.execute(
-                "INSERT INTO fundamental_signals (LocalCode, DisclosedAt, turnaround, cf_quality, treasury_delta_ok, eta_delta_ok) VALUES (?, ?, 1, 1, 1, 1)",
+                "INSERT INTO fundamental_signals (code, DisclosedAt, turnaround, cf_quality, treasury_delta_ok, eta_delta_ok) VALUES (?, ?, 1, 1, 1, 1)",
                 (code, disclosed_date),
             )
 
@@ -571,12 +571,12 @@ class TestIntegration:
         # 1. 価格データ読み込み
         prices = backtest_statements.read_prices(conn)
         assert not prices.empty
-        assert prices.index.names == ["LocalCode", "trade_date"]
+        assert prices.index.names == ["code", "trade_date"]
 
         # 2. シグナル読み込み
         signals = backtest_statements.read_signals(conn, "2024-01-01", "2024-03-31")
         assert not signals.empty
-        assert "LocalCode" in signals.columns
+        assert "code" in signals.columns
         assert "DisclosedAt" in signals.columns
 
         # 3. バックテスト実行

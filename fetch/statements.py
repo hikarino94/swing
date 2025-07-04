@@ -56,7 +56,7 @@ logger = logging.getLogger("statements")
 SCHEMA_COLUMNS: list[str] = [
     "DisclosedDate",
     "DisclosedTime",
-    "LocalCode",
+    "code",
     "DisclosureNumber",
     "TypeOfDocument",
     "TypeOfCurrentPeriod",
@@ -285,7 +285,12 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
     """DataFrameを正規化し、スキーマに合わせて列を調整する。
 
     断片化警告を避けるため、不足している列を一括で追加します。
+    APIレスポンスのLocalCodeをcodeに変換します。
     """
+    # LocalCodeをcodeに変換（APIレスポンスとの互換性のため）
+    if "LocalCode" in df.columns and "code" not in df.columns:
+        df = df.rename(columns={"LocalCode": "code"})
+
     # 不足している列を特定
     missing_cols = [col for col in SCHEMA_COLUMNS if col not in df.columns]
 
