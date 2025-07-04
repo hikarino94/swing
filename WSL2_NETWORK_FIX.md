@@ -72,7 +72,7 @@ python src/ui/web_production.py
 #### 軽量テストサーバーでの検証
 ```bash
 # ネットワーク問題の診断
-python test_network.py
+python dev_tools/test_network.py
 ```
 
 ### 6. トラブルシューティング

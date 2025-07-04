@@ -171,11 +171,9 @@ class TestPathValidation:
         """Webアプリケーションのパス設定を検証"""
         from src.ui.web import (
             app,
-        )
-        from src.ui.web import project_root as web_project_root
-        from src.ui.web import (
             template_dir,
         )
+        from src.ui.web import project_root as web_project_root
 
         # プロジェクトルートが正しく設定されているか
         assert web_project_root == project_root

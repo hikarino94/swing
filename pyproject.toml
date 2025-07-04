@@ -60,6 +60,7 @@ include = '\.pyi?$'
 [tool.ruff]
 target-version = "py312"
 line-length = 88
+exclude = ["dev_tools/"]
 
 [tool.ruff.lint]
 select = [
@@ -101,6 +102,7 @@ ignore_missing_imports = true
 exclude = [
     "docs/",
     "tests/",
+    "dev_tools/",
 ]
 
 [tool.pytest.ini_options]
@@ -121,6 +123,7 @@ omit = [
     "*/test_*",
     "setup.py",
     "setup_environment.py",
+    "dev_tools/*",
 ]
 
 [tool.coverage.report]
