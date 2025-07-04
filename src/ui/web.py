@@ -283,7 +283,8 @@ def screen_technical():
     logger.info("テクニカルスクリーニングAPIが呼び出されました")
     try:
         data = request.json
-        cmd = [sys.executable, "screening/screen_technical.py"]
+        # 高速版を使用
+        cmd = [sys.executable, "screening/screen_technical_fast.py"]
 
         action = data.get("action", "screen")
         cmd.append(action)
