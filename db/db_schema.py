@@ -249,6 +249,69 @@ CREATE INDEX IF NOT EXISTS idx_tindicators_date ON technical_indicators(signal_d
 CREATE INDEX IF NOT EXISTS idx_tech_date_count ON technical_indicators(signal_date, signals_count);
 CREATE INDEX IF NOT EXISTS idx_tech_date_short_count ON technical_indicators(signal_date, signals_short_count);
 
+-- users --------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- sessions -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+-- holdings -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS holdings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    code TEXT NOT NULL,
+    account_name TEXT NOT NULL DEFAULT 'default',
+    quantity INTEGER NOT NULL,
+    average_price REAL NOT NULL,
+    market_value REAL,
+    profit_loss REAL,
+    profit_loss_ratio REAL,
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, code, account_name)
+);
+CREATE INDEX IF NOT EXISTS idx_holdings_user_id ON holdings(user_id);
+CREATE INDEX IF NOT EXISTS idx_holdings_code ON holdings(code);
+CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_name);
+
+-- transactions -------------------------------------------------------
+CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    code TEXT NOT NULL,
+    transaction_date TEXT NOT NULL,  -- YYYY-MM-DD
+    transaction_type TEXT NOT NULL,  -- 'buy' or 'sell'
+    quantity INTEGER NOT NULL,
+    price REAL NOT NULL,
+    commission REAL DEFAULT 0,
+    tax REAL DEFAULT 0,
+    total_amount REAL NOT NULL,
+    remarks TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_code ON transactions(code);
+CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date);
+CREATE INDEX IF NOT EXISTS idx_transactions_user_code ON transactions(user_id, code);
+
 
 """
 

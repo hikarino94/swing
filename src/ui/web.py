@@ -7,6 +7,7 @@ Swing Trading Tool - モダンなWeb UI版
 import gzip
 import json
 import os
+import secrets
 import sqlite3
 import subprocess
 import sys
@@ -15,13 +16,25 @@ from functools import wraps
 from pathlib import Path
 
 import pandas as pd
-from flask import Flask, jsonify, make_response, render_template, request, send_file
+from flask import (
+    Flask,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
 from werkzeug.serving import WSGIRequestHandler
 
 # プロジェクトルートをPYTHONPATHに追加
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
+from src.auth import AuthManager, login_required
 from src.config import DB_PATH
+from src.portfolio import Holding, PortfolioManager, SBICSVParser
 from src.utils.file_utils import get_timestamped_output_path
 from src.utils.logging_config import get_logger
 
@@ -33,10 +46,22 @@ project_root = Path(__file__).resolve().parent.parent.parent
 template_dir = project_root / "templates"
 
 app = Flask(__name__, template_folder=str(template_dir))
-app.config["SECRET_KEY"] = (
-    "your-secret-key-here"  # 本番環境では環境変数から取得すること
-)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_urlsafe(32))
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SECURE"] = False  # 本番環境ではTrue
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+
+# CSRFトークン生成
+def generate_csrf_token():
+    if "_csrf_token" not in session:
+        session["_csrf_token"] = secrets.token_hex(16)
+    return session["_csrf_token"]
+
+
+# テンプレートにCSRFトークンを渡す
+app.jinja_env.globals["csrf_token"] = generate_csrf_token
 
 # WSL2ネットワーク問題対策の設定
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # キャッシュ無効化
@@ -147,7 +172,75 @@ def run_command(command, description="コマンド実行中"):
 def index():
     """メインページ"""
     logger.info("メインページへのアクセス")
-    return render_template("index.html")
+    # ログインしている場合はユーザー情報を渡す
+    user = None
+    if "session_id" in session:
+        user = AuthManager.get_user_by_session(session["session_id"])
+    return render_template("index.html", user=user)
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """ログインページ"""
+    if request.method == "GET":
+        # 既にログイン済みの場合はリダイレクト
+        if "session_id" in session:
+            user = AuthManager.get_user_by_session(session["session_id"])
+            if user:
+                return redirect(url_for("index"))
+        return render_template("login.html", error=None)
+
+    # POST: ログイン処理
+    username_or_email = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+
+    user, session_id, error = AuthManager.login(username_or_email, password)
+
+    if user and session_id:
+        session["session_id"] = session_id
+        # リダイレクト先の処理
+        next_url = session.pop("next_url", None)
+        return redirect(next_url or url_for("index"))
+
+    return render_template("login.html", error=error)
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    """新規登録ページ"""
+    if request.method == "GET":
+        return render_template("register.html", error=None)
+
+    # POST: 登録処理
+    username = request.form.get("username", "").strip()
+    email = request.form.get("email", "").strip()
+    password = request.form.get("password", "")
+    password_confirm = request.form.get("password_confirm", "")
+
+    # パスワード確認
+    if password != password_confirm:
+        return render_template("register.html", error="パスワードが一致しません")
+
+    success, message = AuthManager.register_user(username, email, password)
+
+    if success:
+        # 登録成功したら自動的にログイン
+        user, session_id, _ = AuthManager.login(username, password)
+        if user and session_id:
+            session["session_id"] = session_id
+            return redirect(url_for("index"))
+
+    return render_template("register.html", error=message)
+
+
+@app.route("/logout")
+def logout():
+    """ログアウト処理"""
+    session_id = session.get("session_id")
+    if session_id:
+        AuthManager.logout(session_id)
+        session.clear()
+    return redirect(url_for("login"))
 
 
 @app.route("/api/fetch/quotes", methods=["POST"])
@@ -781,6 +874,281 @@ def download_result(filepath):
     except Exception as e:
         logger.error(f"ファイルダウンロードでエラーが発生しました: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 404
+
+
+# ポートフォリオ管理API
+@app.route("/api/portfolio/holdings", methods=["GET"])
+@login_required
+def get_holdings():
+    """保有銘柄一覧を取得"""
+    try:
+        from src.portfolio.models import Holding
+
+        # 集約フラグを取得
+        aggregate = request.args.get("aggregate", "false").lower() == "true"
+
+        if aggregate:
+            # 銘柄コードで集約
+            holdings_data = PortfolioManager.aggregate_holdings_by_code(
+                request.current_user.id
+            )
+        else:
+            # 通常の一覧取得
+            holdings = Holding.find_all_by_user(request.current_user.id)
+            holdings_data = []
+            for h in holdings:
+                holdings_data.append(
+                    {
+                        "code": h.code,
+                        "company_name": getattr(h, "company_name", ""),
+                        "account_name": h.account_name,
+                        "quantity": h.quantity,
+                        "average_price": h.average_price,
+                        "market_value": h.market_value,
+                        "profit_loss": h.profit_loss,
+                        "profit_loss_ratio": h.profit_loss_ratio,
+                        "updated_at": h.updated_at,
+                    }
+                )
+
+        return jsonify(
+            {"success": True, "holdings": holdings_data, "aggregated": aggregate}
+        )
+    except Exception as e:
+        logger.error(f"保有銘柄取得エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/portfolio/holdings/upload", methods=["POST"])
+@login_required
+def upload_holdings():
+    """保有銘柄CSVアップロード"""
+    try:
+        if "file" not in request.files:
+            return jsonify({"success": False, "error": "ファイルが選択されていません"})
+
+        file = request.files["file"]
+        if file.filename == "":
+            return jsonify({"success": False, "error": "ファイルが選択されていません"})
+
+        # 口座名を取得（デフォルトは "default"）
+        account_name = request.form.get("account_name", "default").strip()
+        if not account_name:
+            account_name = "default"
+
+        # CSVを読み込み（バイト列として渡してエンコーディングを自動検出）
+        csv_content = file.read()
+        logger.info(
+            f"保有銘柄CSVアップロード開始: {file.filename} (口座: {account_name})"
+        )
+
+        # 解析（エンコーディング検出はパーサー側で実施）
+        holdings_data = SBICSVParser.parse_holdings_csv(csv_content)
+
+        # 保有銘柄を追加（更新ではなく追加）
+        updated, new = PortfolioManager.update_holdings_from_csv(
+            request.current_user.id, holdings_data, account_name
+        )
+
+        # 時価評価を更新
+        PortfolioManager.update_market_values(request.current_user.id)
+
+        logger.info(f"保有銘柄追加完了: {new}件（口座: {account_name}）")
+        return jsonify(
+            {
+                "success": True,
+                "message": f"保有銘柄を追加しました（{new}件、口座: {account_name}）",
+                "updated": updated,
+                "new": new,
+                "account_name": account_name,
+            }
+        )
+    except ValueError as e:
+        logger.error(f"保有銘柄アップロードエラー（値エラー）: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+    except Exception as e:
+        logger.error(f"保有銘柄アップロードエラー: {str(e)}", exc_info=True)
+        return jsonify(
+            {"success": False, "error": f"アップロードに失敗しました: {str(e)}"}
+        )
+
+
+@app.route("/api/portfolio/transactions", methods=["GET"])
+@login_required
+def get_transactions():
+    """取引履歴一覧を取得"""
+    try:
+        from src.portfolio.models import Transaction
+
+        # パラメータ取得
+        code = request.args.get("code")
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+
+        transactions = Transaction.find_all_by_user(
+            request.current_user.id, code, start_date, end_date
+        )
+
+        trans_data = []
+        for t in transactions:
+            # 売買金額と実現損益を計算
+            if t.transaction_type == "buy":
+                buy_amount = t.quantity * t.price + (t.commission or 0)
+                sell_amount = 0
+                realized_profit = 0
+            else:  # sell
+                buy_amount = 0
+                sell_amount = t.quantity * t.price - (t.commission or 0) - (t.tax or 0)
+
+                # 売却時点での平均取得価格から実現損益を計算
+                # 注：現在の保有銘柄の平均取得価格は売却後の価格なので、
+                # 正確な計算には売却時点の価格が必要
+                # ここでは簡易的に現在の平均取得価格を使用
+                holding = Holding.find_by_user_and_code(request.current_user.id, t.code)
+                if holding and holding.average_price > 0:
+                    # 平均取得価格での取得金額（手数料は含まれている）
+                    cost_basis = t.quantity * holding.average_price
+                    # 実現損益 = 売却額 - 取得コスト
+                    realized_profit = sell_amount - cost_basis
+                else:
+                    # 保有していない銘柄の売却（デイトレードの可能性）
+                    # TODO: より正確な計算には取引履歴全体の分析が必要
+                    realized_profit = 0
+
+            trans_data.append(
+                {
+                    "id": t.id,
+                    "code": t.code,
+                    "company_name": getattr(t, "company_name", ""),
+                    "transaction_date": t.transaction_date,
+                    "transaction_type": t.transaction_type,
+                    "quantity": t.quantity,
+                    "price": t.price,
+                    "commission": t.commission,
+                    "tax": t.tax,
+                    "total_amount": t.total_amount,
+                    "buy_amount": buy_amount,
+                    "sell_amount": sell_amount,
+                    "realized_profit": realized_profit,
+                    "remarks": t.remarks,
+                }
+            )
+
+        return jsonify({"success": True, "transactions": trans_data})
+    except Exception as e:
+        logger.error(f"取引履歴取得エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/portfolio/transactions/upload", methods=["POST"])
+@login_required
+def upload_transactions():
+    """取引履歴CSVアップロード"""
+    try:
+        if "file" not in request.files:
+            return jsonify({"success": False, "error": "ファイルが選択されていません"})
+
+        file = request.files["file"]
+        if file.filename == "":
+            return jsonify({"success": False, "error": "ファイルが選択されていません"})
+
+        # CSVを読み込み（バイト列として渡してエンコーディングを自動検出）
+        csv_content = file.read()
+        logger.info(f"取引履歴CSVアップロード開始: {file.filename}")
+
+        # 解析（エンコーディング検出はパーサー側で実施）
+        transactions_data = SBICSVParser.parse_transactions_csv(csv_content)
+
+        # 取引履歴をインポート
+        imported = PortfolioManager.import_transactions_from_csv(
+            request.current_user.id, transactions_data
+        )
+
+        logger.info(f"取引履歴インポート完了: {imported}件")
+        return jsonify(
+            {
+                "success": True,
+                "message": f"取引履歴をインポートしました（{imported}件）",
+                "imported": imported,
+            }
+        )
+    except ValueError as e:
+        logger.error(f"取引履歴アップロードエラー（値エラー）: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+    except Exception as e:
+        logger.error(f"取引履歴アップロードエラー: {str(e)}", exc_info=True)
+        return jsonify(
+            {"success": False, "error": f"アップロードに失敗しました: {str(e)}"}
+        )
+
+
+@app.route("/api/portfolio/summary", methods=["GET"])
+@login_required
+def get_portfolio_summary():
+    """ポートフォリオサマリーを取得"""
+    try:
+        summary = PortfolioManager.get_portfolio_summary(request.current_user.id)
+        return jsonify({"success": True, "summary": summary})
+    except Exception as e:
+        logger.error(f"ポートフォリオサマリー取得エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/portfolio/holdings/delete", methods=["POST"])
+@login_required
+def delete_holdings():
+    """保有銘柄を削除"""
+    try:
+        data = request.json
+        delete_type = data.get("type", "all")  # all or account
+        account_name = data.get("account_name")
+
+        if delete_type == "account" and not account_name:
+            return jsonify({"success": False, "error": "口座名が指定されていません"})
+
+        if delete_type == "account":
+            # 特定口座の保有銘柄を削除
+            deleted = PortfolioManager.delete_holdings_by_account(
+                request.current_user.id, account_name
+            )
+            message = f"口座 '{account_name}' の保有銘柄を削除しました（{deleted}件）"
+        else:
+            # 全保有銘柄を削除
+            deleted = PortfolioManager.delete_all_holdings(request.current_user.id)
+            message = f"全ての保有銘柄を削除しました（{deleted}件）"
+
+        logger.info(message)
+        return jsonify({"success": True, "message": message, "deleted": deleted})
+    except Exception as e:
+        logger.error(f"保有銘柄削除エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/portfolio/accounts", methods=["GET"])
+@login_required
+def get_accounts():
+    """口座名一覧を取得"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT DISTINCT account_name
+            FROM holdings
+            WHERE user_id = ?
+            ORDER BY account_name
+        """,
+            (request.current_user.id,),
+        )
+
+        accounts = [row[0] for row in cursor.fetchall()]
+        conn.close()
+
+        return jsonify({"success": True, "accounts": accounts})
+    except Exception as e:
+        logger.error(f"口座名取得エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
 
 
 if __name__ == "__main__":

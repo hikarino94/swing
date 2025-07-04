@@ -14,3 +14,4 @@ matplotlib>=3.7.0
 seaborn>=0.12.0
 scipy>=1.10.0
 waitress>=2.1.2
+chardet>=5.0.0

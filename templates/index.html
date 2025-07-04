@@ -20,6 +20,7 @@
                 <option value="data">📊 データ取得</option>
                 <option value="screening">🔍 スクリーニング</option>
                 <option value="backtest">📈 バックテスト</option>
+                <option value="portfolio" x-show="isLoggedIn">💼 ポートフォリオ</option>
                 <option value="utilities">🛠️ ユーティリティ</option>
                 <option value="results">📁 結果閲覧</option>
                 <option value="settings">⚙️ 設定</option>
@@ -65,6 +66,13 @@
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'settings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 ⚙️ 設定
+            </button>
+            <button x-show="isLoggedIn"
+                    @click="checkTabChange('portfolio')"
+                    :class="{'tab-active': activeTab === 'portfolio'}"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                    :class="activeTab === 'portfolio' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                💼 ポートフォリオ
             </button>
         </nav>
     </div>
@@ -666,6 +674,234 @@
                 </div>
             </div>
         </div>
+
+        <!-- ポートフォリオタブ（ログイン時のみ表示） -->
+        <div x-show="activeTab === 'portfolio' && isLoggedIn" class="space-y-6">
+            <!-- ポートフォリオサマリー -->
+            <div class="bg-white shadow rounded-lg p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">ポートフォリオサマリー</h3>
+                <div x-show="portfolio.summary" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">保有銘柄数</div>
+                        <div class="text-2xl font-bold text-gray-900" x-text="portfolio.summary.stock_count"></div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">取得金額合計</div>
+                        <div class="text-2xl font-bold text-gray-900" x-text="formatCurrency(portfolio.summary.total_cost)"></div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">評価額合計</div>
+                        <div class="text-2xl font-bold text-gray-900" x-text="formatCurrency(portfolio.summary.total_market_value)"></div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">評価損益</div>
+                        <div class="text-2xl font-bold"
+                             :class="portfolio.summary.total_profit_loss >= 0 ? 'text-green-600' : 'text-red-600'"
+                             x-text="formatCurrency(portfolio.summary.total_profit_loss)"></div>
+                        <div class="text-sm"
+                             :class="portfolio.summary.total_profit_loss >= 0 ? 'text-green-600' : 'text-red-600'"
+                             x-text="formatPercentage(portfolio.summary.total_profit_loss_ratio)"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- タブ選択 -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="border-b border-gray-200">
+                    <nav class="-mb-px flex">
+                        <button @click="portfolio.activeTab = 'holdings'"
+                                :class="portfolio.activeTab === 'holdings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                class="w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm">
+                            保有銘柄
+                        </button>
+                        <button @click="portfolio.activeTab = 'transactions'"
+                                :class="portfolio.activeTab === 'transactions' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                class="w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm">
+                            取引履歴
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- 保有銘柄タブ -->
+                <div x-show="portfolio.activeTab === 'holdings'" class="p-6">
+                    <!-- CSV取り込み -->
+                    <div class="mb-4">
+                        <h4 class="text-md font-medium text-gray-900 mb-2">CSV取り込み</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">口座名</label>
+                                <input type="text" x-model="portfolio.accountName"
+                                       placeholder="例: SBI証券、楽天証券（省略時: default）"
+                                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                            </div>
+                            <div class="flex items-end space-x-2">
+                                <input type="file" @change="handleHoldingsFile" accept=".csv"
+                                       class="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                                <button @click="uploadHoldings()"
+                                        :disabled="!portfolio.holdingsFile"
+                                        class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap">
+                                    アップロード
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 表示オプションとアクション -->
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex items-center space-x-4">
+                            <label class="flex items-center">
+                                <input type="checkbox" x-model="portfolio.aggregateView" @change="loadHoldings()" class="mr-2">
+                                <span class="text-sm">複数口座を合算表示</span>
+                            </label>
+                            <button @click="loadHoldings()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 text-sm">
+                                更新
+                            </button>
+                        </div>
+
+                        <!-- 削除機能 -->
+                        <div class="flex items-center space-x-2">
+                            <template x-if="portfolio.accounts.length > 0">
+                                <select x-model="portfolio.deleteAccount"
+                                        class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                                    <option value="">全口座</option>
+                                    <template x-for="account in portfolio.accounts" :key="account">
+                                        <option :value="account" x-text="account"></option>
+                                    </template>
+                                </select>
+                            </template>
+                            <button @click="deleteHoldings()"
+                                    class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 text-sm">
+                                削除
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 保有銘柄一覧 -->
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">銘柄</th>
+                                    <th x-show="!portfolio.aggregateView" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">口座</th>
+                                    <th x-show="portfolio.aggregateView" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">口座数</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">保有数</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">取得単価</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">評価額</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">評価損益</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">損益率</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <template x-for="holding in portfolio.holdings" :key="holding.code + (holding.account_name || '')">
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm font-medium text-gray-900" x-text="holding.code"></div>
+                                            <div class="text-sm text-gray-500" x-text="holding.company_name"></div>
+                                        </td>
+                                        <td x-show="!portfolio.aggregateView" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="holding.account_name || 'default'"></td>
+                                        <td x-show="portfolio.aggregateView" class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm text-gray-900" x-text="holding.account_count + '口座'"></div>
+                                            <div class="text-xs text-gray-500" x-text="holding.account_names"></div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="(holding.quantity || holding.total_quantity).toLocaleString()"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="formatCurrency(holding.average_price || holding.weighted_avg_price)"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="formatCurrency(holding.market_value || holding.total_market_value)"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium"
+                                            :class="(holding.profit_loss || holding.total_profit_loss) >= 0 ? 'text-green-600' : 'text-red-600'"
+                                            x-text="formatCurrency(holding.profit_loss || holding.total_profit_loss)"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm"
+                                            :class="holding.profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'"
+                                            x-text="formatPercentage(holding.profit_loss_ratio)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 取引履歴タブ -->
+                <div x-show="portfolio.activeTab === 'transactions'" class="p-6">
+                    <div class="mb-4">
+                        <h4 class="text-md font-medium text-gray-900 mb-2">CSV取り込み</h4>
+                        <div class="flex items-center space-x-4">
+                            <input type="file" @change="handleTransactionsFile" accept=".csv"
+                                   class="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                            <button @click="uploadTransactions()"
+                                    :disabled="!portfolio.transactionsFile"
+                                    class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                                アップロード
+                            </button>
+                            <button @click="loadTransactions()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 text-sm">
+                                更新
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- フィルター -->
+                    <div class="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">銘柄コード</label>
+                            <input type="text" x-model="portfolio.filter.code"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                   placeholder="例: 7203">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">開始日</label>
+                            <input type="date" x-model="portfolio.filter.startDate"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">終了日</label>
+                            <input type="date" x-model="portfolio.filter.endDate"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <!-- 取引履歴一覧 -->
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">取引日</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">銘柄</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">売買</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">数量</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">単価</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">購入金額</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">売却金額</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">実現損益</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">備考</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <template x-for="trans in filteredTransactions()" :key="trans.id">
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="trans.transaction_date"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm font-medium text-gray-900" x-text="trans.code"></div>
+                                            <div class="text-sm text-gray-500" x-text="trans.company_name"></div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span x-text="trans.transaction_type === 'buy' ? '買付' : '売却'"
+                                                  :class="trans.transaction_type === 'buy' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'"
+                                                  class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"></span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="trans.quantity.toLocaleString()"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="formatCurrency(trans.price)"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="trans.buy_amount > 0 ? formatCurrency(trans.buy_amount) : '-'"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="trans.sell_amount > 0 ? formatCurrency(trans.sell_amount) : '-'"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium"
+                                            :class="trans.realized_profit >= 0 ? 'text-green-600' : 'text-red-600'"
+                                            x-text="trans.transaction_type === 'sell' ? formatCurrency(trans.realized_profit) : '-'"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="trans.remarks || ''"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -676,11 +912,13 @@ function swingApp() {
         isLoading: false,
         isProcessing: false,
         processingMessage: '',
+        isLoggedIn: {{ 'true' if user else 'false' }},
         processingStates: {
             data: false,
             screening: false,
             backtest: false,
-            utilities: false
+            utilities: false,
+            portfolio: false
         },
 
         // データ取得設定
@@ -775,6 +1013,25 @@ function swingApp() {
 
         // 結果ファイル
         resultFiles: [],
+
+        // ポートフォリオ
+        portfolio: {
+            activeTab: 'holdings',
+            holdings: [],
+            transactions: [],
+            holdingsFile: null,
+            transactionsFile: null,
+            summary: null,
+            filter: {
+                code: '',
+                startDate: '',
+                endDate: ''
+            },
+            accountName: '',
+            aggregateView: false,
+            accounts: [],
+            deleteAccount: ''
+        },
 
         // メソッド
         checkTabChange(newTab) {
@@ -1043,6 +1300,162 @@ function swingApp() {
 
         formatDate(isoString) {
             return new Date(isoString).toLocaleString('ja-JP');
+        },
+
+        // ポートフォリオ関連メソッド
+        formatCurrency(value) {
+            if (value === null || value === undefined) return '-';
+            return new Intl.NumberFormat('ja-JP', {
+                style: 'currency',
+                currency: 'JPY'
+            }).format(value);
+        },
+
+        formatPercentage(value) {
+            if (value === null || value === undefined) return '-';
+            return value.toFixed(2) + '%';
+        },
+
+        async loadPortfolioSummary() {
+            if (!this.isLoggedIn) return;
+            const result = await apiCall('/portfolio/summary', {}, 'GET');
+            if (result.success) {
+                this.portfolio.summary = result.summary;
+            }
+        },
+
+        async loadHoldings() {
+            if (!this.isLoggedIn) return;
+            const params = new URLSearchParams();
+            if (this.portfolio.aggregateView) {
+                params.append('aggregate', 'true');
+            }
+            const result = await apiCall('/portfolio/holdings?' + params.toString(), {}, 'GET');
+            if (result.success) {
+                this.portfolio.holdings = result.holdings;
+            }
+            // 口座一覧も取得
+            await this.loadAccounts();
+        },
+
+        async loadAccounts() {
+            if (!this.isLoggedIn) return;
+            const result = await apiCall('/portfolio/accounts', {}, 'GET');
+            if (result.success) {
+                this.portfolio.accounts = result.accounts;
+            }
+        },
+
+        async loadTransactions() {
+            if (!this.isLoggedIn) return;
+            const params = new URLSearchParams();
+            if (this.portfolio.filter.code) params.append('code', this.portfolio.filter.code);
+            if (this.portfolio.filter.startDate) params.append('start_date', this.portfolio.filter.startDate);
+            if (this.portfolio.filter.endDate) params.append('end_date', this.portfolio.filter.endDate);
+
+            const result = await apiCall('/portfolio/transactions?' + params.toString(), {}, 'GET');
+            if (result.success) {
+                this.portfolio.transactions = result.transactions;
+            }
+        },
+
+        handleHoldingsFile(event) {
+            this.portfolio.holdingsFile = event.target.files[0];
+        },
+
+        handleTransactionsFile(event) {
+            this.portfolio.transactionsFile = event.target.files[0];
+        },
+
+        async uploadHoldings() {
+            if (!this.portfolio.holdingsFile) return;
+
+            const formData = new FormData();
+            formData.append('file', this.portfolio.holdingsFile);
+            formData.append('account_name', this.portfolio.accountName || 'default');
+
+            try {
+                const response = await fetch('/api/portfolio/holdings/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('success', result.message);
+                    await this.loadHoldings();
+                    await this.loadPortfolioSummary();
+                    this.portfolio.holdingsFile = null;
+                    this.portfolio.accountName = '';
+                    event.target.form.reset();
+                } else {
+                    showNotification('error', result.error);
+                }
+            } catch (e) {
+                showNotification('error', 'アップロードに失敗しました');
+            }
+        },
+
+        async deleteHoldings() {
+            const confirmMsg = this.portfolio.deleteAccount
+                ? `口座「${this.portfolio.deleteAccount}」の保有銘柄を削除しますか？`
+                : '全ての保有銘柄を削除しますか？';
+
+            if (!confirm(confirmMsg)) return;
+
+            const data = {
+                type: this.portfolio.deleteAccount ? 'account' : 'all',
+                account_name: this.portfolio.deleteAccount
+            };
+
+            const result = await apiCall('/portfolio/holdings/delete', data);
+            if (result.success) {
+                showNotification('success', result.message);
+                await this.loadHoldings();
+                await this.loadPortfolioSummary();
+                this.portfolio.deleteAccount = '';
+            }
+        },
+
+        async uploadTransactions() {
+            if (!this.portfolio.transactionsFile) return;
+
+            const formData = new FormData();
+            formData.append('file', this.portfolio.transactionsFile);
+
+            try {
+                const response = await fetch('/api/portfolio/transactions/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('success', result.message);
+                    await this.loadTransactions();
+                    await this.loadHoldings();
+                    await this.loadPortfolioSummary();
+                    this.portfolio.transactionsFile = null;
+                    event.target.form.reset();
+                } else {
+                    showNotification('error', result.error);
+                }
+            } catch (e) {
+                showNotification('error', 'アップロードに失敗しました');
+            }
+        },
+
+        filteredTransactions() {
+            return this.portfolio.transactions;
+        },
+
+        // 初期化時の処理を追加
+        init() {
+            if (this.isLoggedIn) {
+                this.loadPortfolioSummary();
+                this.loadHoldings();
+                this.loadTransactions();
+            }
         }
     }
 }

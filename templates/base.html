@@ -117,6 +117,18 @@
                     </h1>
                 </div>
                 <div class="flex items-center space-x-4">
+                    {% if user %}
+                    <span class="text-sm text-gray-600">
+                        {{ user.username }}
+                    </span>
+                    <a href="{{ url_for('logout') }}" class="text-sm text-blue-600 hover:text-blue-800">
+                        ログアウト
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('login') }}" class="text-sm text-blue-600 hover:text-blue-800">
+                        ログイン
+                    </a>
+                    {% endif %}
                     <span class="text-sm text-gray-600" id="currentTime">
                         <!-- 時刻はJavaScriptで更新 -->
                     </span>
