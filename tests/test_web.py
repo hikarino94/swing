@@ -536,37 +536,45 @@ class TestAnalyzeJsonRoute:
 class TestRunCommand:
     """run_command関数のテスト"""
 
-    @patch("subprocess.run")
-    def test_run_command_success(self, mock_subprocess):
+    @patch("subprocess.Popen")
+    def test_run_command_success(self, mock_popen):
         """コマンド実行成功"""
         from src.ui.web import run_command
 
-        mock_subprocess.return_value = MagicMock(returncode=0, stdout="出力", stderr="")
+        # Popenのモックオブジェクトを作成
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout.readline.side_effect = ["test\n", ""]  # 1行読んで終了
+        mock_process.wait.return_value = None
+        mock_popen.return_value = mock_process
 
         result = run_command("echo test", "テスト実行")
         assert result["success"] is True
-        assert result["output"] == "出力"
+        assert "test\n" in result["output"]
         assert result["description"] == "テスト実行"
 
-    @patch("subprocess.run")
-    def test_run_command_failure(self, mock_subprocess):
+    @patch("subprocess.Popen")
+    def test_run_command_failure(self, mock_popen):
         """コマンド実行失敗"""
         from src.ui.web import run_command
 
-        mock_subprocess.return_value = MagicMock(
-            returncode=1, stdout="", stderr="エラー"
-        )
+        # Popenのモックオブジェクトを作成
+        mock_process = MagicMock()
+        mock_process.returncode = 1
+        mock_process.stdout.readline.side_effect = ["エラー\n", ""]  # エラー出力
+        mock_process.wait.return_value = None
+        mock_popen.return_value = mock_process
 
         result = run_command("false", "失敗テスト")
         assert result["success"] is False
-        assert result["error"] == "エラー"
+        assert "エラー" in result["error"]
 
-    @patch("subprocess.run")
-    def test_run_command_exception(self, mock_subprocess):
+    @patch("subprocess.Popen")
+    def test_run_command_exception(self, mock_popen):
         """コマンド実行時の例外"""
         from src.ui.web import run_command
 
-        mock_subprocess.side_effect = Exception("実行エラー")
+        mock_popen.side_effect = Exception("実行エラー")
 
         result = run_command("invalid command", "例外テスト")
         assert result["success"] is False

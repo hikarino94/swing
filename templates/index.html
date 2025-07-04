@@ -2,40 +2,65 @@
 
 {% block content %}
 <div x-data="swingApp()" x-cloak>
-    <!-- タブナビゲーション -->
-    <div class="border-b border-gray-200">
-        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-            <button @click="activeTab = 'data'"
+    <!-- 処理中オーバーレイ -->
+    <div x-show="isProcessing" class="processing-overlay" x-transition>
+        <div class="processing-message">
+            <div class="spinner mx-auto mb-4"></div>
+            <p class="text-lg font-semibold text-gray-900" x-text="processingMessage"></p>
+            <p class="text-sm text-gray-600 mt-2">処理が完了するまでお待ちください...</p>
+        </div>
+    </div>
+
+    <!-- モバイル用タブメニュー -->
+    <div class="sm:hidden border-b border-gray-200">
+        <div class="px-4 py-3">
+            <select x-model="activeTab"
+                    @change="checkTabChange($event.target.value)"
+                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                <option value="data">📊 データ取得</option>
+                <option value="screening">🔍 スクリーニング</option>
+                <option value="backtest">📈 バックテスト</option>
+                <option value="utilities">🛠️ ユーティリティ</option>
+                <option value="results">📁 結果閲覧</option>
+                <option value="settings">⚙️ 設定</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- デスクトップ用タブナビゲーション -->
+    <div class="hidden sm:block border-b border-gray-200">
+        <nav class="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
+            <button @click="checkTabChange('data')"
                     :class="{'tab-active': activeTab === 'data'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'data' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 📊 データ取得
             </button>
-            <button @click="activeTab = 'screening'"
+            <button @click="checkTabChange('screening')"
                     :class="{'tab-active': activeTab === 'screening'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'screening' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 🔍 スクリーニング
             </button>
-            <button @click="activeTab = 'backtest'"
+            <button @click="checkTabChange('backtest')"
                     :class="{'tab-active': activeTab === 'backtest'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'backtest' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 📈 バックテスト
             </button>
-            <button @click="activeTab = 'utilities'"
+            <button @click="checkTabChange('utilities')"
                     :class="{'tab-active': activeTab === 'utilities'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'utilities' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 🛠️ ユーティリティ
             </button>
-            <button @click="activeTab = 'results'"
+            <button @click="checkTabChange('results')"
                     :class="{'tab-active': activeTab === 'results'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'results' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 📁 結果閲覧
             </button>
-            <button @click="activeTab = 'settings'"
+            <button @click="checkTabChange('settings')"
                     :class="{'tab-active': activeTab === 'settings'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'settings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
@@ -58,7 +83,7 @@
                             <h3 class="font-medium text-gray-700">株価取得</h3>
                             <input type="checkbox" x-model="dataFetch.quotes.enabled" class="rounded">
                         </div>
-                        <div x-show="dataFetch.quotes.enabled" class="grid grid-cols-2 gap-4">
+                        <div x-show="dataFetch.quotes.enabled" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">開始日</label>
                                 <input type="date" x-model="dataFetch.quotes.startDate"
@@ -95,7 +120,7 @@
                                     <option value="2">2: 日次取得（期間指定可）</option>
                                 </select>
                             </div>
-                            <div class="grid grid-cols-2 gap-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">開始日</label>
                                     <input type="date" x-model="dataFetch.statements.startDate"
@@ -112,17 +137,17 @@
                 </div>
 
                 <!-- 実行ボタン -->
-                <div class="mt-6 flex justify-between">
+                <div class="mt-6 flex flex-col sm:flex-row gap-4 sm:justify-between">
                     <button @click="executeDataFetch()"
                             :disabled="isLoading"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-base font-medium">
                         <span x-show="!isLoading">実行</span>
-                        <span x-show="isLoading" class="flex items-center">
+                        <span x-show="isLoading" class="flex items-center justify-center">
                             <div class="spinner mr-2"></div>
                             実行中...
                         </span>
                     </button>
-                    <button @click="clearLog()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400">
+                    <button @click="clearLog()" class="bg-gray-300 text-gray-700 px-6 py-3 rounded-md hover:bg-gray-400 text-base font-medium">
                         ログクリア
                     </button>
                 </div>
@@ -143,7 +168,7 @@
                 <!-- スクリーニングタイプ選択 -->
                 <div class="mb-6">
                     <label class="block text-sm font-medium text-gray-700 mb-2">スクリーニングタイプ</label>
-                    <div class="grid grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <button @click="screening.type = 'fundamental'"
                                 :class="screening.type === 'fundamental' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'"
                                 class="border-2 rounded-lg p-4 text-center hover:bg-gray-50 transition-colors">
@@ -167,7 +192,7 @@
 
                 <!-- ファンダメンタルスクリーニング設定 -->
                 <div x-show="screening.type === 'fundamental'" class="space-y-4">
-                    <div class="grid grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">参照期間（日）</label>
                             <input type="number" x-model="screening.fundamental.lookback"
@@ -201,7 +226,7 @@
                             </label>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">対象日</label>
                             <input type="date" x-model="screening.technical.asOf"
@@ -230,22 +255,47 @@
                             </label>
                         </div>
                     </div>
+
+                    <!-- 学習モードの設定 -->
                     <div x-show="screening.ml.action === 'train'" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">学習期間（日数）</label>
+                                <input type="number" x-model="screening.ml.trainLookback"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                       placeholder="デフォルト: 1095日（3年）">
+                                <p class="mt-1 text-sm text-gray-500">過去何日分のデータでモデルを学習するか</p>
+                            </div>
+                        </div>
                         <label class="flex items-center">
                             <input type="checkbox" x-model="screening.ml.force" class="mr-2">
                             <span>強制的に再学習</span>
                         </label>
                     </div>
-                    <div x-show="screening.ml.action === 'screen'" class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">上位件数</label>
-                            <input type="number" x-model="screening.ml.top"
-                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+
+                    <!-- スクリーニングモードの設定 -->
+                    <div x-show="screening.ml.action === 'screen'" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">上位件数</label>
+                                <input type="number" x-model="screening.ml.top"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">特徴量計算期間（日数）</label>
+                                <input type="number" x-model="screening.ml.lookback"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                       placeholder="デフォルト: 250日">
+                                <p class="mt-1 text-sm text-gray-500">テクニカル指標計算用の過去データ期間</p>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">学習参照日数</label>
-                            <input type="number" x-model="screening.ml.lookback"
-                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">基準日</label>
+                                <input type="date" x-model="screening.ml.asOf"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <p class="mt-1 text-sm text-gray-500">空欄の場合は最新日でスクリーニング</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -254,9 +304,9 @@
                 <div class="mt-6">
                     <button @click="executeScreening()"
                             :disabled="isLoading"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-base font-medium w-full sm:w-auto">
                         <span x-show="!isLoading">実行</span>
-                        <span x-show="isLoading" class="flex items-center">
+                        <span x-show="isLoading" class="flex items-center justify-center">
                             <div class="spinner mr-2"></div>
                             実行中...
                         </span>
@@ -279,7 +329,7 @@
                 <!-- バックテストタイプ選択 -->
                 <div class="mb-6">
                     <label class="block text-sm font-medium text-gray-700 mb-2">バックテストタイプ</label>
-                    <div class="grid grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <button @click="backtest.type = 'fundamental'"
                                 :class="backtest.type === 'fundamental' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'"
                                 class="border-2 rounded-lg p-4 text-center hover:bg-gray-50 transition-colors">
@@ -302,7 +352,7 @@
                 </div>
 
                 <!-- 共通設定 -->
-                <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700">資金（円）</label>
                         <input type="number" x-model="backtest.common.capital"
@@ -314,7 +364,7 @@
                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700">開始日</label>
                         <input type="date" x-model="backtest.common.startDate"
@@ -358,9 +408,9 @@
                 <div class="mt-6">
                     <button @click="executeBacktest()"
                             :disabled="isLoading"
-                            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-base font-medium w-full sm:w-auto">
                         <span x-show="!isLoading">実行</span>
-                        <span x-show="isLoading" class="flex items-center">
+                        <span x-show="isLoading" class="flex items-center justify-center">
                             <div class="spinner mr-2"></div>
                             実行中...
                         </span>
@@ -377,7 +427,7 @@
 
         <!-- ユーティリティタブ -->
         <div x-show="activeTab === 'utilities'" class="space-y-6">
-            <div class="grid grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- IDトークン更新 -->
                 <div class="bg-white shadow rounded-lg p-6">
                     <h3 class="text-lg font-medium text-gray-900 mb-4">IDトークン更新</h3>
@@ -397,7 +447,7 @@
                                    placeholder="空欄の場合はaccount.jsonから読み込み"
                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
-                        <button @click="updateToken()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                        <button @click="updateToken()" class="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 text-base font-medium w-full sm:w-auto">
                             更新
                         </button>
                     </div>
@@ -406,7 +456,7 @@
                 <!-- DBサマリー -->
                 <div class="bg-white shadow rounded-lg p-6">
                     <h3 class="text-lg font-medium text-gray-900 mb-4">DBサマリー</h3>
-                    <button @click="getDbSummary()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mb-4">
+                    <button @click="getDbSummary()" class="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 mb-4 text-base font-medium w-full sm:w-auto">
                         サマリー取得
                     </button>
                     <div id="dbSummary" class="bg-gray-50 p-4 rounded-md h-48 overflow-y-auto custom-scrollbar font-mono text-sm"></div>
@@ -416,7 +466,7 @@
             <!-- シグナル確認 -->
             <div class="bg-white shadow rounded-lg p-6">
                 <h3 class="text-lg font-medium text-gray-900 mb-4">シグナル確認</h3>
-                <div class="grid grid-cols-4 gap-4 mb-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700">タイプ</label>
                         <select x-model="utilities.signals.type"
@@ -441,7 +491,7 @@
                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
                 </div>
-                <button @click="listSignals()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                <button @click="listSignals()" class="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 text-base font-medium w-full sm:w-auto">
                     確認
                 </button>
                 <div id="signalsList" class="mt-4 bg-gray-50 p-4 rounded-md h-64 overflow-y-auto custom-scrollbar font-mono text-sm"></div>
@@ -501,7 +551,7 @@
                         </label>
                     </div>
 
-                    <button @click="analyzeJson()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                    <button @click="analyzeJson()" class="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 text-base font-medium w-full sm:w-auto">
                         分析実行
                     </button>
                 </div>
@@ -529,11 +579,12 @@
             <div class="bg-white shadow rounded-lg p-6">
                 <h3 class="text-lg font-medium text-gray-900 mb-4">結果ファイル一覧</h3>
                 <div class="mb-4">
-                    <button @click="loadResultFiles()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                    <button @click="loadResultFiles()" class="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 text-base font-medium">
                         更新
                     </button>
                 </div>
-                <div class="overflow-x-auto">
+                <!-- デスクトップ用テーブル表示 -->
+                <div class="hidden sm:block overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
@@ -565,6 +616,34 @@
                         </tbody>
                     </table>
                 </div>
+
+                <!-- モバイル用カード表示 -->
+                <div class="sm:hidden space-y-4">
+                    <template x-for="file in resultFiles" :key="file.name">
+                        <div class="bg-white border rounded-lg p-4 shadow-sm">
+                            <div class="flex justify-between items-start mb-2">
+                                <h4 class="text-sm font-medium text-gray-900 break-all" x-text="file.name"></h4>
+                                <span x-text="file.type.toUpperCase()"
+                                      :class="file.type === 'xlsx' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'"
+                                      class="px-2 py-1 text-xs font-semibold rounded-full ml-2 flex-shrink-0"></span>
+                            </div>
+                            <div class="text-sm text-gray-500 space-y-1">
+                                <div class="flex justify-between">
+                                    <span>サイズ:</span>
+                                    <span x-text="formatFileSize(file.size)"></span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>更新日時:</span>
+                                    <span x-text="formatDate(file.modified)"></span>
+                                </div>
+                            </div>
+                            <button @click="downloadFile(file.path)"
+                                    class="mt-3 w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm font-medium">
+                                ダウンロード
+                            </button>
+                        </div>
+                    </template>
+                </div>
             </div>
         </div>
 
@@ -573,10 +652,10 @@
             <div class="bg-white shadow rounded-lg p-6">
                 <h3 class="text-lg font-medium text-gray-900 mb-4">閾値設定</h3>
                 <div class="mb-4">
-                    <button @click="loadThresholds()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 mr-2">
+                    <button @click="loadThresholds()" class="bg-gray-300 text-gray-700 px-6 py-3 rounded-md hover:bg-gray-400 mr-2 text-base font-medium">
                         再読込
                     </button>
-                    <button @click="saveThresholds()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                    <button @click="saveThresholds()" class="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 text-base font-medium">
                         保存
                     </button>
                 </div>
@@ -595,6 +674,14 @@ function swingApp() {
     return {
         activeTab: 'data',
         isLoading: false,
+        isProcessing: false,
+        processingMessage: '',
+        processingStates: {
+            data: false,
+            screening: false,
+            backtest: false,
+            utilities: false
+        },
 
         // データ取得設定
         dataFetch: {
@@ -631,7 +718,9 @@ function swingApp() {
                 action: 'screen',
                 force: false,
                 top: 10,
-                lookback: 250
+                lookback: 250,
+                trainLookback: 1095,  // 学習用のデフォルト: 3年
+                asOf: ''
             }
         },
 
@@ -688,8 +777,33 @@ function swingApp() {
         resultFiles: [],
 
         // メソッド
+        checkTabChange(newTab) {
+            // 処理中かチェック
+            const currentProcessing = Object.values(this.processingStates).some(state => state);
+            if (currentProcessing && this.activeTab !== newTab) {
+                if (!confirm('現在処理を実行中です。別のタブに移動してもよろしいですか？\n（処理は継続されます）')) {
+                    return;
+                }
+            }
+            this.activeTab = newTab;
+        },
+
+        setProcessing(isProcessing, message = '') {
+            this.isProcessing = isProcessing;
+            this.processingMessage = message;
+        },
+
         async executeDataFetch() {
+            // 既に処理中かチェック
+            if (this.processingStates.data) {
+                showNotification('error', 'データ取得処理が既に実行中です');
+                return;
+            }
+
             this.isLoading = true;
+            this.processingStates.data = true;
+            this.setProcessing(true, 'データ取得処理を実行中...');
+
             const logElement = document.getElementById('dataLog');
             logElement.innerHTML = '';
 
@@ -719,10 +833,21 @@ function swingApp() {
             }
 
             this.isLoading = false;
+            this.processingStates.data = false;
+            this.setProcessing(false);
         },
 
         async executeScreening() {
+            // 既に処理中かチェック
+            if (this.processingStates.screening) {
+                showNotification('error', 'スクリーニング処理が既に実行中です');
+                return;
+            }
+
             this.isLoading = true;
+            this.processingStates.screening = true;
+            this.setProcessing(true, 'スクリーニング処理を実行中...');
+
             const logElement = document.getElementById('screeningLog');
             logElement.innerHTML = '';
 
@@ -751,7 +876,8 @@ function swingApp() {
                         action: this.screening.ml.action,
                         force: this.screening.ml.force,
                         top: this.screening.ml.top,
-                        lookback: this.screening.ml.lookback
+                        lookback: this.screening.ml.action === 'train' ? this.screening.ml.trainLookback : this.screening.ml.lookback,
+                        as_of: this.screening.ml.asOf
                     };
                     break;
             }
@@ -765,10 +891,21 @@ function swingApp() {
             }
 
             this.isLoading = false;
+            this.processingStates.screening = false;
+            this.setProcessing(false);
         },
 
         async executeBacktest() {
+            // 既に処理中かチェック
+            if (this.processingStates.backtest) {
+                showNotification('error', 'バックテスト処理が既に実行中です');
+                return;
+            }
+
             this.isLoading = true;
+            this.processingStates.backtest = true;
+            this.setProcessing(true, 'バックテスト処理を実行中...');
+
             const logElement = document.getElementById('backtestLog');
             logElement.innerHTML = '';
 
@@ -814,6 +951,8 @@ function swingApp() {
             }
 
             this.isLoading = false;
+            this.processingStates.backtest = false;
+            this.setProcessing(false);
         },
 
         async updateToken() {

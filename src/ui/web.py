@@ -4,15 +4,19 @@ Swing Trading Tool - モダンなWeb UI版
 タブ型インターフェースでGUIアプリの機能を統合
 """
 
+import gzip
 import json
+import os
 import sqlite3
 import subprocess
 import sys
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
 
 import pandas as pd
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, jsonify, make_response, render_template, request, send_file
+from werkzeug.serving import WSGIRequestHandler
 
 # プロジェクトルートをPYTHONPATHに追加
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
@@ -33,6 +37,43 @@ app.config["SECRET_KEY"] = (
     "your-secret-key-here"  # 本番環境では環境変数から取得すること
 )
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
+
+# WSL2ネットワーク問題対策の設定
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # キャッシュ無効化
+app.config["JSONIFY_PRETTYPRINT_REGULAR"] = False  # JSON圧縮
+app.config["PROPAGATE_EXCEPTIONS"] = True
+
+# Werkzeugの設定調整
+WSGIRequestHandler.protocol_version = "HTTP/1.1"
+
+
+def compress_response(f):
+    """レスポンスをgzip圧縮するデコレータ"""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        response = make_response(f(*args, **kwargs))
+
+        # テキストベースのコンテンツのみ圧縮
+        if response.mimetype.startswith(
+            ("text/", "application/json", "application/javascript")
+        ):
+            response.data = gzip.compress(response.data)
+            response.headers["Content-Encoding"] = "gzip"
+            response.headers["Content-Length"] = len(response.data)
+
+        return response
+
+    return decorated_function
+
+
+# チャンク転送エンコーディングを有効化
+@app.after_request
+def after_request(response):
+    # 小さなチャンクサイズでレスポンスを送信
+    response.direct_passthrough = False
+    return response
+
 
 # Flaskのログレベルを設定（開発環境）
 if app.debug:
@@ -384,6 +425,8 @@ def screen_ml():
             cmd.extend(["--top", str(data["top"])])
         if data.get("lookback"):
             cmd.extend(["--lookback", str(data["lookback"])])
+        if data.get("as_of"):
+            cmd.extend(["--as-of", data["as_of"]])
         # MLスクリーニングはExcel出力をサポートしていないため、結果をテキストで取得
 
     result = run_command(" ".join(cmd), f"ML{action}")
@@ -753,4 +796,13 @@ if __name__ == "__main__":
     print("Ctrl+C で終了")
     print("=" * 60 + "\n")
 
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # WSL2環境での実行を検出
+    if "WSL_DISTRO_NAME" in os.environ:
+        print("\n[警告] WSL2環境で実行しています")
+        print("家庭内LANからのアクセスで問題が発生する場合は、以下を試してください：")
+        print("1. sudo ip link set dev eth0 mtu 1450")
+        print("2. python src/ui/web_production.py (Waitressサーバーを使用)")
+        print("3. WSL2_NETWORK_FIX.md を参照\n")
+
+    # チャンクサイズを小さくしてレスポンスを送信
+    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True, use_reloader=True)

@@ -403,18 +403,21 @@ class TestSpecialCases:
         data = response.get_json()
         assert len(data["files"]) == 1
 
-    @patch("subprocess.run")
-    def test_run_command_with_unicode_output(self, mock_subprocess, client):
+    @patch("subprocess.Popen")
+    def test_run_command_with_unicode_output(self, mock_popen, client):
         """Unicode出力の処理"""
         from src.ui.web import run_command
 
-        mock_subprocess.return_value = MagicMock(
-            returncode=0, stdout="日本語の出力です", stderr=""
-        )
+        # Popenのモックオブジェクトを作成
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout.readline.side_effect = ["日本語の出力です\n", ""]
+        mock_process.wait.return_value = None
+        mock_popen.return_value = mock_process
 
         result = run_command("echo test", "テスト")
         assert result["success"] is True
-        assert result["output"] == "日本語の出力です"
+        assert "日本語の出力です" in result["output"]
 
 
 if __name__ == "__main__":

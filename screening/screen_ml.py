@@ -93,12 +93,22 @@ def _connect(db_path: str | Path) -> sqlite3.Connection:
     return con
 
 
-def _fetch_price(con: sqlite3.Connection, lookback: int) -> pd.DataFrame:
-    query = f"""
-        SELECT code, date, adj_close, adj_volume
-        FROM {PRICE_TABLE}
-        WHERE date >= date('now', '-{lookback} day')
-    """
+def _fetch_price(
+    con: sqlite3.Connection, lookback: int, as_of: str | None = None
+) -> pd.DataFrame:
+    if as_of:
+        query = f"""
+            SELECT code, date, adj_close, adj_volume
+            FROM {PRICE_TABLE}
+            WHERE date >= date('{as_of}', '-{lookback} day')
+            AND date <= '{as_of}'
+        """
+    else:
+        query = f"""
+            SELECT code, date, adj_close, adj_volume
+            FROM {PRICE_TABLE}
+            WHERE date >= date('now', '-{lookback} day')
+        """
     return pd.read_sql(query, con, parse_dates=["date"])
 
 
@@ -189,8 +199,9 @@ def _build_dataset(
     lookback: int,
     future_window: int = FUTURE_WINDOW,
     thresh_pct: float = THRESH_PCT,
+    as_of: str | None = None,
 ) -> pd.DataFrame:
-    price = _fetch_price(con, lookback)
+    price = _fetch_price(con, lookback, as_of)
     logger.info(
         f"Fetched {len(price)} price records for {price['code'].nunique()} stocks"
     )
@@ -309,6 +320,11 @@ def cli():
         default=THRESH_PCT,
         help="Threshold percentage for positive label",
     )
+    p.add_argument(
+        "--as-of",
+        type=str,
+        help="Target date for screening (YYYY-MM-DD). If not specified, uses latest date",
+    )
     args = p.parse_args()
     logger.info("screen_ml.py running with command '%s'", args.cmd)
     db_path = Path(args.db)
@@ -350,10 +366,19 @@ def cli():
         logger.info("Loaded model from %s", model_path)
 
     # 最新日の特徴量だけ抽出 — フル履歴から特徴量計算 → 最新日だけ抜粋
-    price = _fetch_price(con, args.lookback)
+    price = _fetch_price(con, args.lookback, args.as_of)
     price_feat = _make_price_features(price)
-    latest_dt = price_feat["date"].max()
-    feat_today = price_feat[price_feat["date"] == latest_dt]
+    if args.as_of:
+        # 指定日付でスクリーニング
+        target_dt = pd.to_datetime(args.as_of)
+        feat_today = price_feat[price_feat["date"] == target_dt]
+        if feat_today.empty:
+            logger.warning(f"No data for specified date {args.as_of} — aborting")
+            return
+    else:
+        # 最新日でスクリーニング
+        latest_dt = price_feat["date"].max()
+        feat_today = price_feat[price_feat["date"] == latest_dt]
     stmt = _fetch_stmt(con)
     merged = _merge_features(feat_today, stmt)
 
@@ -365,7 +390,12 @@ def cli():
     X_pred = feat_df[PRICE_FEATURES + NUMERIC_STMT_COLS].astype(float)
     feat_df["prob_up30d"] = model.predict_proba(X_pred)[:, 1]
 
-    logger.info("Predictions for %s — top %d", latest_dt.date(), args.top)
+    target_date = (
+        pd.to_datetime(args.as_of).date()
+        if args.as_of
+        else feat_today["date"].max().date()
+    )
+    logger.info("Predictions for %s — top %d", target_date, args.top)
     out = (
         feat_df.sort_values("prob_up30d", ascending=False)
         .head(args.top)
