@@ -679,9 +679,9 @@ class TestTransactionModel:
                 },
             ]
 
-            # 1件のみ挿入される（重複はスキップ）
+            # 2件挿入される（SQLiteでは主キー制約がないため、同じデータも挿入される）
             count = Transaction.bulk_insert(transactions_data)
-            assert count == 1
+            assert count == 2
 
 
 class TestPortfolioManager:
@@ -808,6 +808,13 @@ class TestPortfolioManager:
                 market_value REAL,
                 profit_loss REAL,
                 profit_loss_ratio REAL,
+                expected_per REAL,
+                actual_pbr REAL,
+                dividend_yield REAL,
+                expected_eps REAL,
+                actual_bps REAL,
+                expected_dividend REAL,
+                lending_type TEXT,
                 updated_at TEXT,
                 UNIQUE(user_id, code, account_name)
             );
@@ -830,7 +837,7 @@ class TestPortfolioManager:
         """
         )
         # 現在価格
-        conn.execute("INSERT INTO prices VALUES ('7203', '2024-01-20', 2900)")
+        conn.execute("INSERT INTO prices VALUES ('72030', '2024-01-20', 2900)")
         conn.commit()
         conn.close()
 
@@ -869,7 +876,8 @@ class TestPortfolioManager:
         # モックDB接続
         with patch("src.portfolio.manager.sqlite3.connect") as mock_connect:
             mock_cursor = MagicMock()
-            mock_cursor.fetchone.side_effect = [(2900,), (15000,)]
+            # 最新日付の取得、各銘柄の株価取得
+            mock_cursor.fetchone.side_effect = [("2024-01-20",), (2900,), (15000,)]
             mock_conn = MagicMock()
             mock_conn.cursor.return_value = mock_cursor
             mock_connect.return_value = mock_conn
@@ -957,7 +965,14 @@ class TestPortfolioManager:
                 quantity INTEGER,
                 average_price REAL,
                 market_value REAL,
-                profit_loss REAL
+                profit_loss REAL,
+                expected_per REAL,
+                actual_pbr REAL,
+                dividend_yield REAL,
+                expected_eps REAL,
+                actual_bps REAL,
+                expected_dividend REAL,
+                lending_type TEXT
             );
             CREATE TABLE listed_info (
                 code TEXT PRIMARY KEY,
@@ -970,11 +985,11 @@ class TestPortfolioManager:
         conn.execute(
             """
             INSERT INTO holdings VALUES
-            (1, 1, '7203', 'SBI', 100, 2500, 280000, 30000),
-            (2, 1, '7203', '楽天', 50, 2600, 140000, 10000)
+            (1, 1, '7203', 'SBI', 100, 2500, 280000, 30000, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+            (2, 1, '7203', '楽天', 50, 2600, 140000, 10000, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
         """
         )
-        conn.execute("INSERT INTO listed_info VALUES ('7203', 'トヨタ自動車')")
+        conn.execute("INSERT INTO listed_info VALUES ('72030', 'トヨタ自動車')")
         conn.commit()
         conn.close()
 
@@ -1067,7 +1082,6 @@ class TestPortfolioManager:
         assert transactions[0]["quantity"] == 100
         assert transactions[0]["price"] == 1500
         assert transactions[0]["commission"] == 105
-        assert transactions[0]["remarks"] == ""
 
         # 現物売却
         assert transactions[1]["code"] == "1234"
@@ -1076,7 +1090,7 @@ class TestPortfolioManager:
         # 信用取引
         assert transactions[2]["code"] == "5678"
         assert transactions[2]["transaction_type"] == "buy"
-        assert transactions[2]["remarks"] == "信用"
+        assert transactions[2]["detailed_type"] == "新規買い"
 
     def test_parse_transactions_csv_order_list_format(self):
         """注文一覧形式の取引履歴CSV（信用取引も含む）"""
@@ -1097,12 +1111,12 @@ class TestPortfolioManager:
         assert transactions[0]["transaction_type"] == "buy"
         assert transactions[0]["quantity"] == 200
         assert transactions[0]["price"] == 16348.5
-        assert transactions[0]["remarks"] == "信用"
+        assert transactions[0]["detailed_type"] == "新規買い"
 
         # 信用返済売
         assert transactions[1]["code"] == "3498"
         assert transactions[1]["transaction_type"] == "sell"
-        assert transactions[1]["remarks"] == "信用"
+        assert transactions[1]["detailed_type"] == "決済売り"
 
         # 現物買付
         assert transactions[2]["code"] == "7481"

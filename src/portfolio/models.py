@@ -243,6 +243,8 @@ class Transaction:
         self.realized_profit = None  # 決済損益
         self.remarks = ""
         self.created_at = None
+        # 追加情報（DBには保存しない）
+        self.company_name: str | None = None
 
     @classmethod
     def find_all_by_user(

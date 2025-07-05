@@ -55,7 +55,7 @@ def ml_backtest_db():
     conn.execute(
         """
         CREATE TABLE statements (
-            LocalCode TEXT,
+            code TEXT,
             DisclosedDate DATE,
             NetSales REAL,
             OperatingProfit REAL,

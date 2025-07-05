@@ -34,8 +34,8 @@ def test_parse_holdings_with_indicators():
     assert jt["expected_eps"] == 261.9
     assert jt["actual_bps"] == 2121.33
     assert (
-        jt["expected_dividend"] is None
-    )  # "194 ~ 200"という形式は数値として解析できない
+        jt["expected_dividend"] == 197.0
+    )  # "194 ~ 200"という形式は平均値197.0に変換される
     assert jt["lending_type"] == "貸借"
 
     # 2つ目の銘柄（ホンダ）の確認
@@ -44,6 +44,9 @@ def test_parse_holdings_with_indicators():
     assert honda["expected_per"] == 13.85
     assert honda["actual_pbr"] == 0.51
     assert honda["dividend_yield"] == 4.84
+    assert (
+        honda["expected_dividend"] == 75.0
+    )  # "70 ~ 80"という形式は平均値75.0に変換される
 
 
 def test_parse_holdings_without_indicators():
@@ -72,8 +75,8 @@ def test_parse_number_with_range():
     # カンマ付き数値
     assert SBICSVParser._parse_number("2,121.33") == 2121.33
 
-    # 範囲表記は現在の実装ではNoneを返す
-    assert SBICSVParser._parse_number("194 ~ 200") is None
+    # 範囲表記は平均値を返す
+    assert SBICSVParser._parse_number("194 ~ 200") == 197.0
 
     # 空値
     assert SBICSVParser._parse_number("--") is None

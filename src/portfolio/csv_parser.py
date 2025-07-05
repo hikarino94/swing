@@ -57,7 +57,7 @@ class SBICSVParser:
             encoding = SBICSVParser.detect_encoding(csv_content)
             logger.info(f"検出されたエンコーディング: {encoding}")
             try:
-                csv_content = csv_content.decode(encoding)
+                csv_content = csv_content.decode(encoding)  # type: ignore[union-attr]
             except UnicodeDecodeError:
                 # フォールバック
                 for enc in ["utf-8-sig", "shift_jis", "cp932", "utf-8"]:
@@ -82,22 +82,32 @@ class SBICSVParser:
             and "取引区分" in csv_content
             and "約定代金" in csv_content
         ):
-            # 注文一覧形式
+            # 注文一覧形式（新フォーマット）
             return SBICSVParser._parse_order_list_format(csv_content)
+        elif "受渡金額・決済損益" in csv_content and "取引区分" in csv_content:
+            # 注文一覧形式（旧フォーマット）
+            return SBICSVParser._parse_order_list_format_old(csv_content)
         elif "約定履歴照会" in csv_content or (
             "約定日" in csv_content and "受渡金額/決済損益" in csv_content
         ):
             # SaveFile形式
             return SBICSVParser._parse_savefile_format(csv_content)
+        elif (
+            "約定日" in csv_content
+            and "銘柄コード" in csv_content
+            and "売買区分" in csv_content
+        ):
+            # 標準形式
+            return SBICSVParser._parse_standard_format(csv_content)
         else:
             # その他の形式
-            logger.warning("未対応のCSV形式です")
+            logger.warning("未対忌のCSV形式です")
             return []
 
     @staticmethod
     def _parse_order_list_format(csv_content: str) -> list[dict[str, Any]]:
         """注文一覧形式のCSVを解析"""
-        transactions = []
+        transactions: list[dict[str, Any]] = []
 
         lines = csv_content.strip().split("\n")
         if len(lines) < 2:
@@ -152,16 +162,17 @@ class SBICSVParser:
             }
 
             # 受渡金額を計算
-            if transaction["quantity"] and transaction["price"]:
-                base_amount = transaction["quantity"] * transaction["price"]
+            quantity = transaction["quantity"]
+            price = transaction["price"]
+            commission = transaction["commission"] or 0
+            tax = transaction["tax"] or 0
+
+            if quantity is not None and price is not None:
+                base_amount = quantity * price
                 if transaction_type == "buy":
-                    transaction["total_amount"] = (
-                        base_amount + transaction["commission"] + transaction["tax"]
-                    )
+                    transaction["total_amount"] = base_amount + commission + tax
                 else:
-                    transaction["total_amount"] = (
-                        base_amount - transaction["commission"] - transaction["tax"]
-                    )
+                    transaction["total_amount"] = base_amount - commission - tax
 
             transactions.append(transaction)
             logger.debug(
@@ -175,7 +186,7 @@ class SBICSVParser:
     @staticmethod
     def _parse_savefile_format(csv_content: str) -> list[dict[str, Any]]:
         """SaveFile形式のCSVを解析"""
-        transactions = []
+        transactions: list[dict[str, Any]] = []
 
         lines = csv_content.split("\n")
 
@@ -203,8 +214,8 @@ class SBICSVParser:
 
             # 列インデックス（0ベース）
             # [0] 約定日, [1] 銘柄, [2] 銘柄コード, [3] 市場, [4] 取引,
-            # [5] 約定価格, [6] 約定数量, [7] 手数料, [8] 税額,
-            # [9] 受渡日, [10] 受渡金額/決済損益
+            # [5] 期限, [6] 預り, [7] 課税, [8] 約定数量, [9] 約定単価,
+            # [10] 手数料, [11] 税額, [12] 受渡日, [13] 受渡金額/決済損益
 
             code = SBICSVParser._normalize_code(row[2])
             if not code:
@@ -215,10 +226,10 @@ class SBICSVParser:
 
             # 決済損益の解析
             realized_profit = None
-            if len(row) > 10 and row[10] and row[10] != "--":
+            if len(row) > 13 and row[13] and row[13] != "--":
                 # 信用新規買/売の場合は決済損益なし
                 if detailed_type not in ["新規買い", "新規売り"]:
-                    realized_profit = SBICSVParser._parse_number(row[10])
+                    realized_profit = SBICSVParser._parse_number(row[13])
 
             transaction = {
                 "code": code,
@@ -226,26 +237,27 @@ class SBICSVParser:
                 "transaction_date": SBICSVParser._parse_date(row[0]),
                 "transaction_type": transaction_type,
                 "detailed_type": detailed_type,
-                "quantity": SBICSVParser._parse_number(row[6]),
-                "price": SBICSVParser._parse_number(row[5]),
-                "commission": SBICSVParser._parse_number(row[7], default=0),
-                "tax": SBICSVParser._parse_number(row[8], default=0),
+                "quantity": SBICSVParser._parse_number(row[8]),
+                "price": SBICSVParser._parse_number(row[9]),
+                "commission": SBICSVParser._parse_number(row[10], default=0),
+                "tax": SBICSVParser._parse_number(row[11], default=0),
                 "total_amount": None,  # この形式では計算が必要
                 "realized_profit": realized_profit,
                 "remarks": "",
             }
 
             # 受渡金額を計算
-            if transaction["quantity"] and transaction["price"]:
-                base_amount = transaction["quantity"] * transaction["price"]
+            quantity = transaction["quantity"]
+            price = transaction["price"]
+            commission = transaction["commission"] or 0
+            tax = transaction["tax"] or 0
+
+            if quantity is not None and price is not None:
+                base_amount = quantity * price
                 if transaction_type == "buy":
-                    transaction["total_amount"] = (
-                        base_amount + transaction["commission"] + transaction["tax"]
-                    )
+                    transaction["total_amount"] = base_amount + commission + tax
                 else:
-                    transaction["total_amount"] = (
-                        base_amount - transaction["commission"] - transaction["tax"]
-                    )
+                    transaction["total_amount"] = base_amount - commission - tax
 
             transactions.append(transaction)
             logger.debug(
@@ -254,6 +266,156 @@ class SBICSVParser:
             )
 
         logger.info(f"SaveFile形式CSV解析完了: {len(transactions)}件")
+        return transactions
+
+    @staticmethod
+    def _parse_standard_format(csv_content: str) -> list[dict[str, Any]]:
+        """標準形式のCSVを解析"""
+        transactions: list[dict[str, Any]] = []
+
+        try:
+            # CSVを読み込み
+            csv_reader = csv.DictReader(io.StringIO(csv_content))
+            rows = list(csv_reader)
+
+            if not rows:
+                return transactions
+
+            for row in rows:
+                # カラム名のバリエーションに対応
+                code = row.get("銘柄コード") or row.get("コード") or ""
+                code = SBICSVParser._normalize_code(code)
+
+                if not code:
+                    continue
+
+                # 売買区分の判定
+                trade_type = row.get("売買区分", "").strip()
+                if "買" in trade_type:
+                    transaction_type = "buy"
+                    detailed_type = "新規買い"
+                elif "売" in trade_type:
+                    transaction_type = "sell"
+                    detailed_type = "決済売り"
+                else:
+                    transaction_type = "buy"
+                    detailed_type = "新規買い"
+
+                transaction = {
+                    "code": code,
+                    "name": row.get("銘柄名", "").strip(),
+                    "transaction_date": SBICSVParser._parse_date(row.get("約定日")),
+                    "transaction_type": transaction_type,
+                    "detailed_type": detailed_type,
+                    "quantity": SBICSVParser._parse_number(
+                        row.get("数量") or row.get("株数")
+                    ),
+                    "price": SBICSVParser._parse_number(
+                        row.get("約定単価") or row.get("単価")
+                    ),
+                    "commission": SBICSVParser._parse_number(
+                        row.get("手数料"), default=0
+                    ),
+                    "tax": SBICSVParser._parse_number(
+                        row.get("税金") or row.get("税額"), default=0
+                    ),
+                    "total_amount": SBICSVParser._parse_number(row.get("受渡金額")),
+                    "realized_profit": None,
+                    "remarks": row.get("備考", ""),
+                }
+
+                # 必須フィールドのチェック
+                if transaction["code"] and transaction["quantity"] is not None:
+                    transactions.append(transaction)
+                    logger.debug(
+                        f"取引解析: {transaction['transaction_date']} {transaction['code']} "
+                        f"{transaction['detailed_type']} {transaction['quantity']}株"
+                    )
+
+            # 日付順にソート
+            transactions.sort(key=lambda x: x["transaction_date"] or "")
+
+            logger.info(f"標準形式CSV解析完了: {len(transactions)}件")
+            return transactions
+
+        except Exception as e:
+            logger.error(f"取引履歴CSV解析エラー（標準形式）: {e}")
+            raise ValueError(f"CSVファイルの解析に失敗しました: {str(e)}") from e
+
+    @staticmethod
+    def _parse_order_list_format_old(csv_content: str) -> list[dict[str, Any]]:
+        """注文一覧形式（旧フォーマット）のCSVを解析"""
+        transactions: list[dict[str, Any]] = []
+
+        lines = csv_content.strip().split("\n")
+        if len(lines) < 2:
+            return transactions
+
+        # ヘッダー行をスキップして、データ行を処理
+        for i in range(1, len(lines)):
+            line = lines[i].strip()
+            if not line:
+                continue
+
+            reader = csv.reader(io.StringIO(line))
+            row = next(reader, None)
+            if not row or len(row) < 10:
+                continue
+
+            # 列インデックス（0ベース）
+            # [0] 銘柄コード, [1] 銘柄名, [2] 市場, [3] 取引区分,
+            # [6] 約定日, [8] 株数, [9] 平均約定単価,
+            # [10] 手数料・諸経費等, [11] 課税額・譲渡益税,
+            # [12] 受渡金額・決済損益
+
+            code = SBICSVParser._normalize_code(row[0])
+            if not code:
+                continue
+
+            trade_type = row[3].strip()
+            transaction_type, detailed_type = SBICSVParser._parse_trade_type(trade_type)
+
+            # 決済損益の解析
+            realized_profit = None
+            if len(row) > 12 and row[12] and row[12] != "--":
+                if detailed_type in ["決済売り", "決済買い"]:
+                    realized_profit = SBICSVParser._parse_number(row[12])
+
+            transaction = {
+                "code": code,
+                "name": row[1].strip(),
+                "transaction_date": SBICSVParser._parse_date(row[6]),
+                "transaction_type": transaction_type,
+                "detailed_type": detailed_type,
+                "quantity": SBICSVParser._parse_number(row[8]),
+                "price": SBICSVParser._parse_number(row[9]),
+                "commission": SBICSVParser._parse_number(row[10], default=0),
+                "tax": SBICSVParser._parse_number(row[11], default=0),
+                "total_amount": None,  # この形式では計算が必要
+                "realized_profit": realized_profit,
+                "remarks": "信用" if "信用" in trade_type else "",
+            }
+
+            # 受渡金額を計算
+            quantity = transaction["quantity"]
+            price = transaction["price"]
+            commission = transaction["commission"] or 0
+            tax = transaction["tax"] or 0
+
+            if quantity is not None and price is not None:
+                base_amount = quantity * price
+                if transaction_type == "buy":
+                    transaction["total_amount"] = base_amount + commission + tax
+                else:
+                    transaction["total_amount"] = base_amount - commission - tax
+
+            transactions.append(transaction)
+            logger.debug(
+                f"取引解析（旧形式）: {transaction['transaction_date']} {transaction['code']} "
+                f"{transaction['detailed_type']} {transaction['quantity']}株"
+            )
+
+        logger.info(f"注文一覧形式（旧）CSV解析完了: {len(transactions)}件")
         return transactions
 
     @staticmethod
@@ -362,6 +524,7 @@ class SBICSVParser:
             "%Y/%m/%d",
             "%Y-%m-%d",
             "%Y年%m月%d日",
+            "%y/%m/%d",  # 2桁年
         ]
 
         for fmt in date_formats:
@@ -395,7 +558,7 @@ class SBICSVParser:
             encoding = SBICSVParser.detect_encoding(csv_content)
             logger.info(f"検出されたエンコーディング: {encoding}")
             try:
-                csv_content = csv_content.decode(encoding)
+                csv_content = csv_content.decode(encoding)  # type: ignore[union-attr]
             except UnicodeDecodeError:
                 # フォールバック
                 for enc in ["utf-8-sig", "shift_jis", "cp932", "utf-8"]:
