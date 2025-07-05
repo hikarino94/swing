@@ -267,6 +267,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     user_id INTEGER NOT NULL,
     expires_at TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now')),
+    remember_me INTEGER DEFAULT 0,  -- 0: false, 1: true
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
@@ -283,6 +284,13 @@ CREATE TABLE IF NOT EXISTS holdings (
     market_value REAL,
     profit_loss REAL,
     profit_loss_ratio REAL,
+    expected_per REAL,
+    actual_pbr REAL,
+    dividend_yield REAL,
+    expected_eps REAL,
+    actual_bps REAL,
+    expected_dividend REAL,
+    lending_type TEXT,
     updated_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE(user_id, code, account_name)
@@ -304,6 +312,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     tax REAL DEFAULT 0,
     total_amount REAL NOT NULL,
     remarks TEXT,
+    detailed_type TEXT,
+    realized_profit REAL,
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

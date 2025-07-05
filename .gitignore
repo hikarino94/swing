@@ -3,6 +3,7 @@ account.json
 idtoken.json
 config.json
 login.json
+.secret_key
 
 # データベースファイル
 *.db

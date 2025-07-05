@@ -76,16 +76,16 @@ class TestSBICSVParser:
 データがありません
 """
 
-        with pytest.raises(ValueError) as exc_info:
-            SBICSVParser.parse_holdings_csv(csv_content)
-        assert "解析に失敗しました" in str(exc_info.value)
+        # 不正なフォーマットの場合は空のリストを返す
+        result = SBICSVParser.parse_holdings_csv(csv_content)
+        assert len(result) == 0
 
     def test_parse_holdings_csv_detailed_format(self):
         """保有証券_現物形式のCSV"""
-        csv_content = """﻿銘柄,銘柄,銘柄,銘柄,銘柄,銘柄,銘柄,預り区分,保有株数,注文株数,取得単価,現在値,現在値,評価損益,評価損益(%),買付金額,評価額
-,,,,1911,住友林業,東P,特定,300,--,"1,455","1,434",→,"-6,300",-1.44%,"436,500","430,200"
-,,,,7267,本田技研工業,東P,NISA,100,--,"1,476","1,445",↑,"-3,100",-2.10%,"147,600","144,500"
-,,,,9432,ＮＴＴ,東P,旧NISA,500,--,163,154.2,↑,"-4,400",-5.40%,"81,500","77,100"
+        csv_content = """﻿銘柄,銘柄,銘柄,銘柄,銘柄,銘柄,銘柄,預り区分,保有株数,注文株数,取得単価,現在値,現在値,評価損益,評価損益(%),買付金額,評価額,配当落ち日,配当落ち日,保有期間,当日売却注文,日中売却有効数量,引け後売却有効数量,週間騰落率,月間騰落率,年間騰落率,予想PER,実績PBR,予想配当利回り,予想EPS,実績BPS,予想1株配当,貸借区分
+,,,,1911,住友林業,東P,特定,300,--,"1,455","1,434",→,"-6,300",-1.44%,"436,500","430,200",,,,,,,,,,,10.5,1.2,3.2%,136.57,1195.00,46.00,貸借
+,,,,7267,本田技研工業,東P,NISA,100,--,"1,476","1,445",↑,"-3,100",-2.10%,"147,600","144,500",,,,,,,,,,,15.2,0.8,2.8%,95.07,1806.25,40.50,貸借
+,,,,9432,ＮＴＴ,東P,旧NISA,500,--,163,154.2,↑,"-4,400",-5.40%,"81,500","77,100",,,,,,,,,,,12.3,1.5,4.1%,12.54,102.80,6.32,貸借
 """
 
         result = SBICSVParser.parse_holdings_csv(csv_content)
@@ -256,15 +256,16 @@ class TestSBICSVParser:
         assert SBICSVParser._parse_number(None) is None
         assert SBICSVParser._parse_number("invalid", default=0) == 0
 
-    def test_parse_transaction_type(self):
+    def test_parse_trade_type(self):
         """売買区分の解析"""
-        assert SBICSVParser._parse_transaction_type("買付") == "buy"
-        assert SBICSVParser._parse_transaction_type("買") == "buy"
-        assert SBICSVParser._parse_transaction_type("売却") == "sell"
-        assert SBICSVParser._parse_transaction_type("売付") == "sell"
-        assert SBICSVParser._parse_transaction_type("売") == "sell"
-        assert SBICSVParser._parse_transaction_type("") == "buy"
-        assert SBICSVParser._parse_transaction_type("その他") == "buy"
+        assert SBICSVParser._parse_trade_type("現物買")[0] == "buy"
+        assert SBICSVParser._parse_trade_type("現物売")[0] == "sell"
+        assert SBICSVParser._parse_trade_type("信用新規買")[0] == "buy"
+        assert SBICSVParser._parse_trade_type("信用新規売")[0] == "sell"
+        assert SBICSVParser._parse_trade_type("信用返済買")[0] == "buy"
+        assert SBICSVParser._parse_trade_type("信用返済売")[0] == "sell"
+        assert SBICSVParser._parse_trade_type("")[0] == "buy"
+        assert SBICSVParser._parse_trade_type("その他")[0] == "buy"
 
 
 class TestHoldingModel:
@@ -292,6 +293,13 @@ class TestHoldingModel:
                 market_value REAL,
                 profit_loss REAL,
                 profit_loss_ratio REAL,
+                expected_per REAL,
+                actual_pbr REAL,
+                dividend_yield REAL,
+                expected_eps REAL,
+                actual_bps REAL,
+                expected_dividend REAL,
+                lending_type TEXT,
                 updated_at TEXT DEFAULT (datetime('now')),
                 UNIQUE(user_id, code, account_name)
             );
@@ -452,6 +460,8 @@ class TestTransactionModel:
                 tax REAL DEFAULT 0,
                 total_amount REAL NOT NULL,
                 remarks TEXT,
+                detailed_type TEXT,
+                realized_profit REAL,
                 created_at TEXT DEFAULT (datetime('now'))
             );
             CREATE TABLE listed_info (

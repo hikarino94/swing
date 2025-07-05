@@ -164,7 +164,8 @@ class TestSessionModel:
                 id TEXT PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 expires_at TEXT NOT NULL,
-                created_at TEXT DEFAULT (datetime('now'))
+                created_at TEXT DEFAULT (datetime('now')),
+                remember_me INTEGER DEFAULT 0
             );
         """
         )

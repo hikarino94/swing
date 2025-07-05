@@ -41,9 +41,33 @@ class PortfolioManager:
             # データを設定
             holding.quantity = data["quantity"]
             holding.average_price = data.get("average_price", 0)
-            holding.market_value = data.get("market_value")
-            holding.profit_loss = data.get("profit_loss")
-            holding.profit_loss_ratio = data.get("profit_loss_ratio")
+
+            # 市場価値と損益は取得価格と数量から再計算
+            # CSVからの値はデバッグ用にログ出力のみ
+            csv_market_value = data.get("market_value")
+            csv_profit_loss = data.get("profit_loss")
+            csv_profit_loss_ratio = data.get("profit_loss_ratio")
+
+            if csv_market_value is not None and csv_profit_loss is not None:
+                logger.debug(
+                    f"CSV損益データ: {data['code']} - "
+                    f"評価額: {csv_market_value}, 損益: {csv_profit_loss}, "
+                    f"損益率: {csv_profit_loss_ratio}%"
+                )
+
+            # 一旦NULLに設定（後でupdate_market_valuesで更新）
+            holding.market_value = None
+            holding.profit_loss = None
+            holding.profit_loss_ratio = None
+
+            # 株価指標データを設定
+            holding.expected_per = data.get("expected_per")
+            holding.actual_pbr = data.get("actual_pbr")
+            holding.dividend_yield = data.get("dividend_yield")
+            holding.expected_eps = data.get("expected_eps")
+            holding.actual_bps = data.get("actual_bps")
+            holding.expected_dividend = data.get("expected_dividend")
+            holding.lending_type = data.get("lending_type")
 
             # 保存
             if not holding.save():
@@ -173,6 +197,8 @@ class PortfolioManager:
                     holding.average_price = average_price
 
                     # 現在の株価を取得して時価評価を更新
+                    # pricesテーブルは5桁（末尾0埋め）なので変換
+                    code_5digit = code.ljust(5, "0")
                     cursor.execute(
                         """
                         SELECT close FROM prices
@@ -180,7 +206,7 @@ class PortfolioManager:
                         ORDER BY date DESC
                         LIMIT 1
                     """,
-                        (code,),
+                        (code_5digit,),
                     )
                     price_row = cursor.fetchone()
 
@@ -236,16 +262,28 @@ class PortfolioManager:
         cursor = conn.cursor()
 
         try:
+            # データベースから最新の日付を取得
+            cursor.execute("SELECT MAX(date) as latest_date FROM prices")
+            latest_date_row = cursor.fetchone()
+            latest_date = latest_date_row[0] if latest_date_row else None
+
+            if not latest_date:
+                logger.warning("No price data available in database")
+                return 0
+
+            logger.info(f"Using latest price date: {latest_date}")
+
             for holding in holdings:
-                # 最新の株価を取得
+                # pricesテーブルは5桁（末尾0埋め）なので変換
+                code_5digit = holding.code.ljust(5, "0")
+
+                # 最新日付の株価を取得
                 cursor.execute(
                     """
                     SELECT close FROM prices
-                    WHERE code = ?
-                    ORDER BY date DESC
-                    LIMIT 1
+                    WHERE code = ? AND date = ?
                 """,
-                    (holding.code,),
+                    (code_5digit, latest_date),
                 )
                 row = cursor.fetchone()
 
@@ -254,6 +292,28 @@ class PortfolioManager:
                     holding.update_market_value(current_price)
                     if holding.save():
                         updated_count += 1
+                else:
+                    # 最新日付にデータがない場合は、その銘柄の最新データを取得
+                    cursor.execute(
+                        """
+                        SELECT close FROM prices
+                        WHERE code = ?
+                        ORDER BY date DESC
+                        LIMIT 1
+                    """,
+                        (code_5digit,),
+                    )
+                    row = cursor.fetchone()
+
+                    if row:
+                        current_price = row[0]
+                        holding.update_market_value(current_price)
+                        if holding.save():
+                            updated_count += 1
+                    else:
+                        logger.warning(
+                            f"No price data found for code {holding.code} (tried {code_5digit})"
+                        )
 
             logger.info(f"時価評価更新完了: {updated_count}件")
             return updated_count
@@ -286,9 +346,17 @@ class PortfolioManager:
                     SUM(h.market_value) as total_market_value,
                     SUM(h.profit_loss) as total_profit_loss,
                     COUNT(DISTINCT h.account_name) as account_count,
-                    GROUP_CONCAT(DISTINCT h.account_name) as account_names
+                    GROUP_CONCAT(DISTINCT h.account_name) as account_names,
+                    -- 株価指標は最初の値を使用（通常、同じ銘柄なら同じ値のはず）
+                    MAX(h.expected_per) as expected_per,
+                    MAX(h.actual_pbr) as actual_pbr,
+                    MAX(h.dividend_yield) as dividend_yield,
+                    MAX(h.expected_eps) as expected_eps,
+                    MAX(h.actual_bps) as actual_bps,
+                    MAX(h.expected_dividend) as expected_dividend,
+                    MAX(h.lending_type) as lending_type
                 FROM holdings h
-                LEFT JOIN listed_info li ON h.code = li.code
+                LEFT JOIN listed_info li ON (h.code || '0') = li.code
                 WHERE h.user_id = ? AND h.quantity > 0
                 GROUP BY h.code, li.company_name
                 ORDER BY h.code
@@ -308,6 +376,14 @@ class PortfolioManager:
                     "account_count": row[6],
                     "account_names": row[7],
                     "profit_loss_ratio": 0,
+                    # 株価指標データ
+                    "expected_per": row[8],
+                    "actual_pbr": row[9],
+                    "dividend_yield": row[10],
+                    "expected_eps": row[11],
+                    "actual_bps": row[12],
+                    "expected_dividend": row[13],
+                    "lending_type": row[14],
                 }
 
                 # 損益率の計算

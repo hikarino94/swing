@@ -64,7 +64,7 @@ def screening_db():
     conn.execute(
         """
         CREATE TABLE statements (
-            LocalCode TEXT,
+            code TEXT,
             DisclosedDate TEXT,
             DisclosedTime TEXT,
             TypeOfCurrentPeriod TEXT,
@@ -97,7 +97,7 @@ def screening_db():
     conn.execute(
         """
         CREATE TABLE fundamental_signals (
-            LocalCode TEXT,
+            code TEXT,
             DisclosedAt TEXT,
             TypeOfCurrentPeriod TEXT,
             eps_yoy_fy REAL,
@@ -110,7 +110,7 @@ def screening_db():
             turnaround INTEGER,
             treasury_delta REAL,
             created_at TEXT,
-            PRIMARY KEY (LocalCode, DisclosedAt)
+            PRIMARY KEY (code, DisclosedAt)
         )
     """
     )
@@ -159,7 +159,7 @@ class TestDataAccess:
 
         # OTC銘柄は除外されているか確認
         assert len(df) == 2
-        assert all(df["LocalCode"] == "1234")
+        assert all(df["code"] == "1234")
 
         # 数値型変換の確認
         assert df["NetSales"].dtype == "float64"
@@ -184,7 +184,7 @@ class TestFeatureEngineering:
         df = pd.DataFrame(
             [
                 {
-                    "LocalCode": "1234",
+                    "code": "1234",
                     "DisclosedAt": pd.Timestamp("2023-01-01"),
                     "TypeOfCurrentPeriod": "FY",
                     "NetSales": 1000000,
@@ -197,7 +197,7 @@ class TestFeatureEngineering:
                     "NumberOfTreasuryStockAtTheEndOfFiscalYear": 1000000,
                 },
                 {
-                    "LocalCode": "1234",
+                    "code": "1234",
                     "DisclosedAt": pd.Timestamp("2024-01-01"),
                     "TypeOfCurrentPeriod": "FY",
                     "NetSales": 1100000,
@@ -244,7 +244,7 @@ class TestFeatureEngineering:
         df = pd.DataFrame(
             [
                 {
-                    "LocalCode": "1234",
+                    "code": "1234",
                     "DisclosedAt": pd.Timestamp("2023-01-01"),
                     "TypeOfCurrentPeriod": "FY",
                     "NetSales": 1000000,
@@ -257,7 +257,7 @@ class TestFeatureEngineering:
                     "NumberOfTreasuryStockAtTheEndOfFiscalYear": 1000000,
                 },
                 {
-                    "LocalCode": "1234",
+                    "code": "1234",
                     "DisclosedAt": pd.Timestamp("2024-01-01"),
                     "TypeOfCurrentPeriod": "FY",
                     "NetSales": 1100000,
@@ -284,7 +284,7 @@ class TestFeatureEngineering:
         df = pd.DataFrame(
             [
                 {
-                    "LocalCode": "1234",
+                    "code": "1234",
                     "DisclosedAt": pd.Timestamp("2023-03-31"),
                     "TypeOfCurrentPeriod": "1Q",
                     "EarningsPerShare": 2.0,
@@ -297,7 +297,7 @@ class TestFeatureEngineering:
                     "NumberOfTreasuryStockAtTheEndOfFiscalYear": 1000000,
                 },
                 {
-                    "LocalCode": "1234",
+                    "code": "1234",
                     "DisclosedAt": pd.Timestamp("2024-03-31"),
                     "TypeOfCurrentPeriod": "1Q",
                     "EarningsPerShare": 2.5,
@@ -328,7 +328,7 @@ class TestScreening:
         df = pd.DataFrame(
             [
                 {
-                    "LocalCode": "1234",
+                    "code": "1234",
                     "DisclosedAt": pd.Timestamp("2024-05-30"),  # 最近
                     "TypeOfCurrentPeriod": "FY",
                     "eps_yoy_fy": 0.31,  # 31%成長 > 閾値(30%)
@@ -360,14 +360,14 @@ class TestScreening:
                         result = screen_statements.screen_signals(df, cfg)
 
         assert len(result) == 1
-        assert result.iloc[0]["LocalCode"] == "1234"
+        assert result.iloc[0]["code"] == "1234"
 
     def test_screen_signals_filter_old(self):
         """古いデータが除外されることのテスト"""
         df = pd.DataFrame(
             [
                 {
-                    "LocalCode": "1234",
+                    "code": "1234",
                     "DisclosedAt": pd.Timestamp("2024-05-01"),  # 古い
                     "TypeOfCurrentPeriod": "FY",
                     "eps_yoy_fy": 0.3,
@@ -396,7 +396,7 @@ class TestScreening:
         df = pd.DataFrame(
             [
                 {
-                    "LocalCode": "1234",
+                    "code": "1234",
                     "DisclosedAt": pd.Timestamp("2024-05-30"),
                     "TypeOfCurrentPeriod": "FY",
                     "eps_yoy_fy": 0.05,  # 5%成長（閾値以下）
@@ -425,7 +425,7 @@ class TestScreening:
         df = pd.DataFrame(
             [
                 {
-                    "LocalCode": "1234",
+                    "code": "1234",
                     "DisclosedAt": pd.Timestamp("2024-05-30"),
                     "TypeOfCurrentPeriod": "FY",
                     "eps_yoy_fy": 0.3,
@@ -458,7 +458,7 @@ class TestPersistence:
         sig_df = pd.DataFrame(
             [
                 {
-                    "LocalCode": "1234",
+                    "code": "1234",
                     "DisclosedAt": pd.Timestamp("2024-05-30 15:00:00"),
                     "TypeOfCurrentPeriod": "FY",
                     "eps_yoy_fy": 0.3,
@@ -480,9 +480,7 @@ class TestPersistence:
         assert count == 1
 
         # 保存確認
-        cursor = conn.execute(
-            "SELECT * FROM fundamental_signals WHERE LocalCode = '1234'"
-        )
+        cursor = conn.execute("SELECT * FROM fundamental_signals WHERE code = '1234'")
         row = cursor.fetchone()
         assert row is not None
 
@@ -572,14 +570,14 @@ class TestIntegration:
         conn.commit()
         conn.close()
 
-        # compute_featuresの結果にLocalCodeが含まれるようにモック
+        # compute_featuresの結果にcodeが含まれるようにモック
         original_compute_features = screen_statements.compute_features
 
         def mock_compute_features(df, cfg):
             result = original_compute_features(df, cfg)
-            # LocalCodeを復元
-            if "LocalCode" not in result.columns:
-                result["LocalCode"] = df["LocalCode"]
+            # codeを復元
+            if "code" not in result.columns:
+                result["code"] = df["code"]
             return result
 
         # 閾値のモック

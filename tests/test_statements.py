@@ -73,7 +73,7 @@ class TestAPI:
             {
                 "statements": [
                     {
-                        "LocalCode": "1234",
+                        "code": "1234",
                         "DisclosureNumber": "12345678901234",
                         "NetSales": 1000000,
                     }
@@ -83,7 +83,7 @@ class TestAPI:
             {
                 "statements": [
                     {
-                        "LocalCode": "1234",
+                        "code": "1234",
                         "DisclosureNumber": "12345678901235",
                         "NetSales": 2000000,
                     }
@@ -122,8 +122,8 @@ class TestAPI:
 
         response = {
             "statements": [
-                {"LocalCode": "1234", "DisclosedDate": "2024-01-01"},
-                {"LocalCode": "5678", "DisclosedDate": "2024-01-01"},
+                {"code": "1234", "DisclosedDate": "2024-01-01"},
+                {"code": "5678", "DisclosedDate": "2024-01-01"},
             ]
         }
 
@@ -135,14 +135,14 @@ class TestAPI:
         )
 
         assert len(result) == 2
-        assert result[0]["LocalCode"] == "1234"
-        assert result[1]["LocalCode"] == "5678"
+        assert result[0]["code"] == "1234"
+        assert result[1]["code"] == "5678"
 
     def test_fetch_statements_by_date_with_message(self):
         """APIメッセージ付きレスポンスのテスト"""
         mock_session = mock.Mock()
 
-        response = {"message": "データ取得成功", "statements": [{"LocalCode": "1234"}]}
+        response = {"message": "データ取得成功", "statements": [{"code": "1234"}]}
 
         mock_session.get.return_value.status_code = 200
         mock_session.get.return_value.json.return_value = response
@@ -161,7 +161,7 @@ class TestAPI:
 
         # 各日付に対するレスポンスを設定
         def mock_response(date_str):
-            return {"statements": [{"LocalCode": "1234", "DisclosedDate": date_str}]}
+            return {"statements": [{"code": "1234", "DisclosedDate": date_str}]}
 
         with mock.patch.object(statements, "_fetch_statements_by_date") as mock_fetch:
             mock_fetch.side_effect = lambda s, t, d: mock_response(d)["statements"]
@@ -179,8 +179,8 @@ class TestAPI:
 
         def mock_fetch_by_code(session, token, code):
             return [
-                {"LocalCode": code, "DisclosureNumber": f"{code}0001"},
-                {"LocalCode": code, "DisclosureNumber": f"{code}0002"},
+                {"code": code, "DisclosureNumber": f"{code}0001"},
+                {"code": code, "DisclosureNumber": f"{code}0002"},
             ]
 
         with mock.patch.object(
@@ -190,7 +190,7 @@ class TestAPI:
 
             assert len(result) == 6  # 3銘柄 × 2件ずつ
             # 全ての銘柄のデータが含まれているか確認
-            local_codes = {stmt["LocalCode"] for stmt in result}
+            local_codes = {stmt["code"] for stmt in result}
             assert local_codes == {"1234", "5678", "9012"}
 
 
@@ -202,7 +202,7 @@ class TestDataProcessing:
         df = pd.DataFrame(
             [
                 {
-                    "LocalCode": "1234",
+                    "code": "1234",
                     "DisclosureNumber": "12345678901234",
                     "NetSales": 1000000,
                     "OperatingProfit": 100000,
@@ -219,7 +219,7 @@ class TestDataProcessing:
         assert list(result.columns) == statements.SCHEMA_COLUMNS
 
         # 存在するカラムの値が保持されていることを確認
-        assert result["LocalCode"].iloc[0] == "1234"
+        assert result["code"].iloc[0] == "1234"
         assert result["NetSales"].iloc[0] == 1000000
 
         # 存在しないカラムはNAになることを確認
@@ -279,13 +279,13 @@ class TestDatabase:
 
         records = [
             {
-                "LocalCode": "1234",
+                "code": "1234",
                 "DisclosureNumber": "12345678901234",
                 "NetSales": 1000000,
                 "OperatingProfit": 100000,
             },
             {
-                "LocalCode": "5678",
+                "code": "5678",
                 "DisclosureNumber": "56789012345678",
                 "NetSales": 2000000,
                 "OperatingProfit": 200000,
@@ -309,7 +309,7 @@ class TestDatabase:
         # 初回挿入
         records1 = [
             {
-                "LocalCode": "1234",
+                "code": "1234",
                 "DisclosureNumber": "12345678901234",
                 "NetSales": 1000000,
             }
@@ -320,7 +320,7 @@ class TestDatabase:
         # 更新
         records2 = [
             {
-                "LocalCode": "1234",
+                "code": "1234",
                 "DisclosureNumber": "12345678901234",
                 "NetSales": 1500000,  # 変更
             }
@@ -371,8 +371,8 @@ class TestIntegration:
 
         # モックの戻り値設定
         mock_fetch_codes.return_value = [
-            {"LocalCode": "1234", "DisclosureNumber": "12340001"},
-            {"LocalCode": "5678", "DisclosureNumber": "56780001"},
+            {"code": "1234", "DisclosureNumber": "12340001"},
+            {"code": "5678", "DisclosureNumber": "56780001"},
         ]
 
         with mock.patch("fetch.statements.DB_PATH", statements_db):
@@ -408,7 +408,7 @@ class TestIntegration:
         mock_date.today.return_value = mock_today
 
         mock_fetch_date.return_value = [
-            {"LocalCode": "1234", "DisclosureNumber": "12340001"}
+            {"code": "1234", "DisclosureNumber": "12340001"}
         ]
 
         with mock.patch("fetch.statements.DB_PATH", statements_db):
@@ -426,8 +426,8 @@ class TestIntegration:
         mock_load_token.return_value = "test_token"
 
         mock_fetch_period.return_value = [
-            {"LocalCode": "1234", "DisclosureNumber": "12340001"},
-            {"LocalCode": "5678", "DisclosureNumber": "56780001"},
+            {"code": "1234", "DisclosureNumber": "12340001"},
+            {"code": "5678", "DisclosureNumber": "56780001"},
         ]
 
         with mock.patch("fetch.statements.DB_PATH", statements_db):

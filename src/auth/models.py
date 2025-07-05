@@ -145,6 +145,7 @@ class Session:
         self.user_id = user_id
         self.expires_at = expires_at
         self.created_at = None
+        self.remember_me = False  # Remember Meフラグ
 
     @classmethod
     def find_by_id(cls, session_id: str) -> Optional["Session"]:
@@ -157,7 +158,7 @@ class Session:
             current_time = datetime.now().isoformat()
             cursor.execute(
                 """
-                SELECT id, user_id, expires_at, created_at
+                SELECT id, user_id, expires_at, created_at, remember_me
                 FROM sessions
                 WHERE id = ? AND expires_at > ?
             """,
@@ -167,6 +168,7 @@ class Session:
             if row:
                 session = cls(session_id=row[0], user_id=row[1], expires_at=row[2])
                 session.created_at = row[3]
+                session.remember_me = bool(row[4]) if len(row) > 4 else False
                 return session
             return None
         finally:
@@ -177,13 +179,28 @@ class Session:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         try:
+            # テーブルのremember_meカラムが存在するか確認
             cursor.execute(
-                """
-                INSERT INTO sessions (id, user_id, expires_at)
-                VALUES (?, ?, ?)
-            """,
-                (self.id, self.user_id, self.expires_at),
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='sessions'"
             )
+            table_sql = cursor.fetchone()[0]
+
+            if "remember_me" in table_sql:
+                cursor.execute(
+                    """
+                    INSERT INTO sessions (id, user_id, expires_at, remember_me)
+                    VALUES (?, ?, ?, ?)
+                """,
+                    (self.id, self.user_id, self.expires_at, int(self.remember_me)),
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO sessions (id, user_id, expires_at)
+                    VALUES (?, ?, ?)
+                """,
+                    (self.id, self.user_id, self.expires_at),
+                )
             conn.commit()
             logger.info(f"セッション保存成功: {self.id}")
             return True

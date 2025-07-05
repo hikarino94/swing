@@ -23,6 +23,16 @@ class Holding:
         self.profit_loss: float | None = None
         self.profit_loss_ratio: float | None = None
         self.updated_at: str | None = None
+        # 株価指標データ
+        self.expected_per: float | None = None
+        self.actual_pbr: float | None = None
+        self.dividend_yield: float | None = None
+        self.expected_eps: float | None = None
+        self.actual_bps: float | None = None
+        self.expected_dividend: float | None = None
+        self.lending_type: str | None = None
+        # 追加情報（DBには保存しない）
+        self.company_name: str | None = None
 
     @classmethod
     def find_by_user_and_code(cls, user_id: int, code: str) -> Optional["Holding"]:
@@ -40,7 +50,9 @@ class Holding:
             cursor.execute(
                 """
                 SELECT id, user_id, code, account_name, quantity, average_price,
-                       market_value, profit_loss, profit_loss_ratio, updated_at
+                       market_value, profit_loss, profit_loss_ratio, updated_at,
+                       expected_per, actual_pbr, dividend_yield, expected_eps,
+                       actual_bps, expected_dividend, lending_type
                 FROM holdings
                 WHERE user_id = ? AND code = ? AND account_name = ?
             """,
@@ -56,6 +68,14 @@ class Holding:
                 holding.profit_loss = row[7]
                 holding.profit_loss_ratio = row[8]
                 holding.updated_at = row[9]
+                # 株価指標データ
+                holding.expected_per = row[10]
+                holding.actual_pbr = row[11]
+                holding.dividend_yield = row[12]
+                holding.expected_eps = row[13]
+                holding.actual_bps = row[14]
+                holding.expected_dividend = row[15]
+                holding.lending_type = row[16]
                 return holding
             return None
         finally:
@@ -71,9 +91,11 @@ class Holding:
                 """
                 SELECT h.id, h.user_id, h.code, h.account_name, h.quantity, h.average_price,
                        h.market_value, h.profit_loss, h.profit_loss_ratio, h.updated_at,
+                       h.expected_per, h.actual_pbr, h.dividend_yield, h.expected_eps,
+                       h.actual_bps, h.expected_dividend, h.lending_type,
                        li.company_name
                 FROM holdings h
-                LEFT JOIN listed_info li ON h.code = li.code
+                LEFT JOIN listed_info li ON (h.code || '0') = li.code
                 WHERE h.user_id = ? AND h.quantity > 0
                 ORDER BY h.code, h.account_name
             """,
@@ -90,7 +112,15 @@ class Holding:
                 holding.profit_loss = row[7]
                 holding.profit_loss_ratio = row[8]
                 holding.updated_at = row[9]
-                # holding.company_name = row[10]  # 追加情報（現在は未使用）
+                # 株価指標データ
+                holding.expected_per = row[10]
+                holding.actual_pbr = row[11]
+                holding.dividend_yield = row[12]
+                holding.expected_eps = row[13]
+                holding.actual_bps = row[14]
+                holding.expected_dividend = row[15]
+                holding.lending_type = row[16]
+                holding.company_name = row[17]  # 追加情報
                 holdings.append(holding)
 
             return holdings
@@ -108,8 +138,10 @@ class Holding:
                     """
                     INSERT INTO holdings
                     (user_id, code, account_name, quantity, average_price, market_value,
-                     profit_loss, profit_loss_ratio)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                     profit_loss, profit_loss_ratio, expected_per, actual_pbr,
+                     dividend_yield, expected_eps, actual_bps, expected_dividend,
+                     lending_type)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         self.user_id,
@@ -120,6 +152,13 @@ class Holding:
                         self.market_value,
                         self.profit_loss,
                         self.profit_loss_ratio,
+                        self.expected_per,
+                        self.actual_pbr,
+                        self.dividend_yield,
+                        self.expected_eps,
+                        self.actual_bps,
+                        self.expected_dividend,
+                        self.lending_type,
                     ),
                 )
                 self.id = cursor.lastrowid  # type: ignore[assignment]
@@ -130,7 +169,9 @@ class Holding:
                     UPDATE holdings
                     SET quantity = ?, average_price = ?, market_value = ?,
                         profit_loss = ?, profit_loss_ratio = ?,
-                        updated_at = datetime('now')
+                        expected_per = ?, actual_pbr = ?, dividend_yield = ?,
+                        expected_eps = ?, actual_bps = ?, expected_dividend = ?,
+                        lending_type = ?, updated_at = datetime('now')
                     WHERE id = ?
                 """,
                     (
@@ -139,6 +180,13 @@ class Holding:
                         self.market_value,
                         self.profit_loss,
                         self.profit_loss_ratio,
+                        self.expected_per,
+                        self.actual_pbr,
+                        self.dividend_yield,
+                        self.expected_eps,
+                        self.actual_bps,
+                        self.expected_dividend,
+                        self.lending_type,
                         self.id,
                     ),
                 )
@@ -186,11 +234,13 @@ class Transaction:
         self.code = code
         self.transaction_date = transaction_date
         self.transaction_type = transaction_type  # 'buy' or 'sell'
+        self.detailed_type = ""  # '新規買い', '新規売り', '決済買い', '決済売り'
         self.quantity = quantity
         self.price = price
         self.commission = 0.0
         self.tax = 0.0
         self.total_amount = quantity * price
+        self.realized_profit = None  # 決済損益
         self.remarks = ""
         self.created_at = None
 
@@ -210,9 +260,9 @@ class Transaction:
                 SELECT t.id, t.user_id, t.code, t.transaction_date,
                        t.transaction_type, t.quantity, t.price, t.commission,
                        t.tax, t.total_amount, t.remarks, t.created_at,
-                       li.company_name
+                       li.company_name, t.detailed_type, t.realized_profit
                 FROM transactions t
-                LEFT JOIN listed_info li ON t.code = li.code
+                LEFT JOIN listed_info li ON (t.code || '0') = li.code
                 WHERE t.user_id = ?
             """
             params: list[Any] = [user_id]
@@ -249,7 +299,9 @@ class Transaction:
                 transaction.total_amount = row[9]
                 transaction.remarks = row[10] or ""
                 transaction.created_at = row[11]
-                # transaction.company_name = row[12]  # 追加情報（現在は未使用）
+                transaction.company_name = row[12]  # 追加情報
+                transaction.detailed_type = row[13] or ""
+                transaction.realized_profit = row[14]
                 transactions.append(transaction)
 
             return transactions
@@ -265,8 +317,8 @@ class Transaction:
                 """
                 INSERT INTO transactions
                 (user_id, code, transaction_date, transaction_type, quantity,
-                 price, commission, tax, total_amount, remarks)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 price, commission, tax, total_amount, remarks, detailed_type, realized_profit)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     self.user_id,
@@ -279,6 +331,8 @@ class Transaction:
                     self.tax,
                     self.total_amount,
                     self.remarks,
+                    self.detailed_type,
+                    self.realized_profit,
                 ),
             )
             self.id = cursor.lastrowid  # type: ignore[assignment]
@@ -303,37 +357,13 @@ class Transaction:
 
         try:
             for trans in transactions:
-                # 既存の取引をチェック
-                cursor.execute(
-                    """
-                    SELECT id FROM transactions
-                    WHERE user_id = ? AND code = ? AND transaction_date = ?
-                    AND transaction_type = ? AND quantity = ? AND price = ?
-                """,
-                    (
-                        trans["user_id"],
-                        trans["code"],
-                        trans["transaction_date"],
-                        trans["transaction_type"],
-                        trans["quantity"],
-                        trans["price"],
-                    ),
-                )
-
-                if cursor.fetchone():
-                    # 重複データはスキップ
-                    logger.debug(
-                        f"重複取引スキップ: {trans['transaction_date']} {trans['code']}"
-                    )
-                    continue
-
                 try:
                     cursor.execute(
                         """
                         INSERT INTO transactions
                         (user_id, code, transaction_date, transaction_type, quantity,
-                         price, commission, tax, total_amount, remarks)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         price, commission, tax, total_amount, remarks, detailed_type, realized_profit)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                         (
                             trans["user_id"],
@@ -346,13 +376,15 @@ class Transaction:
                             trans.get("tax", 0),
                             trans["total_amount"],
                             trans.get("remarks", ""),
+                            trans.get("detailed_type", ""),
+                            trans.get("realized_profit"),
                         ),
                     )
                     inserted_count += 1
-                except sqlite3.IntegrityError:
-                    # 重複データはスキップ
-                    logger.debug(
-                        f"重複取引スキップ: {trans['transaction_date']} {trans['code']}"
+                except sqlite3.Error as e:
+                    # エラーが発生した場合はログに記録
+                    logger.error(
+                        f"取引挿入エラー: {trans['transaction_date']} {trans['code']} - {str(e)}"
                     )
                     continue
 

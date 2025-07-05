@@ -33,8 +33,9 @@ from werkzeug.serving import WSGIRequestHandler
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from src.auth import AuthManager, login_required
+from src.auth.models import Session
 from src.config import DB_PATH
-from src.portfolio import Holding, PortfolioManager, SBICSVParser
+from src.portfolio import PortfolioManager, SBICSVParser
 from src.utils.file_utils import get_timestamped_output_path
 from src.utils.logging_config import get_logger
 
@@ -46,11 +47,27 @@ project_root = Path(__file__).resolve().parent.parent.parent
 template_dir = project_root / "templates"
 
 app = Flask(__name__, template_folder=str(template_dir))
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_urlsafe(32))
+
+# セキュアなシークレットキーの設定
+secret_key = os.environ.get("SECRET_KEY")
+if not secret_key:
+    # シークレットキーをファイルに保存して再利用
+    secret_key_file = project_root / "config" / ".secret_key"
+    if secret_key_file.exists():
+        secret_key = secret_key_file.read_text().strip()
+    else:
+        secret_key = secrets.token_urlsafe(32)
+        secret_key_file.parent.mkdir(exist_ok=True)
+        secret_key_file.write_text(secret_key)
+        secret_key_file.chmod(0o600)  # 所有者のみ読み書き可能
+
+app.config["SECRET_KEY"] = secret_key
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SECURE"] = False  # 本番環境ではTrue
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["PERMANENT_SESSION_LIFETIME"] = 3600 * 24 * 30  # 30日間
+app.config["SESSION_COOKIE_NAME"] = "swing_session"
 
 
 # CSRFトークン生成
@@ -193,11 +210,17 @@ def login():
     # POST: ログイン処理
     username_or_email = request.form.get("username", "").strip()
     password = request.form.get("password", "")
+    remember_me = request.form.get("remember_me") == "on"
 
-    user, session_id, error = AuthManager.login(username_or_email, password)
+    user, session_id, error = AuthManager.login(
+        username_or_email, password, remember_me
+    )
 
     if user and session_id:
         session["session_id"] = session_id
+        # Remember Meが有効な場合はセッションを永続化
+        if remember_me:
+            session.permanent = True
         # リダイレクト先の処理
         next_url = session.pop("next_url", None)
         return redirect(next_url or url_for("index"))
@@ -900,7 +923,7 @@ def get_holdings():
                 holdings_data.append(
                     {
                         "code": h.code,
-                        "company_name": getattr(h, "company_name", ""),
+                        "company_name": h.company_name or "",
                         "account_name": h.account_name,
                         "quantity": h.quantity,
                         "average_price": h.average_price,
@@ -908,6 +931,14 @@ def get_holdings():
                         "profit_loss": h.profit_loss,
                         "profit_loss_ratio": h.profit_loss_ratio,
                         "updated_at": h.updated_at,
+                        # 株価指標データ
+                        "expected_per": h.expected_per,
+                        "actual_pbr": h.actual_pbr,
+                        "dividend_yield": h.dividend_yield,
+                        "expected_eps": h.expected_eps,
+                        "actual_bps": h.actual_bps,
+                        "expected_dividend": h.expected_dividend,
+                        "lending_type": h.lending_type,
                     }
                 )
 
@@ -1000,28 +1031,51 @@ def get_transactions():
                 buy_amount = 0
                 sell_amount = t.quantity * t.price - (t.commission or 0) - (t.tax or 0)
 
-                # 売却時点での平均取得価格から実現損益を計算
-                # 注：現在の保有銘柄の平均取得価格は売却後の価格なので、
-                # 正確な計算には売却時点の価格が必要
-                # ここでは簡易的に現在の平均取得価格を使用
-                holding = Holding.find_by_user_and_code(request.current_user.id, t.code)
-                if holding and holding.average_price > 0:
-                    # 平均取得価格での取得金額（手数料は含まれている）
-                    cost_basis = t.quantity * holding.average_price
-                    # 実現損益 = 売却額 - 取得コスト
-                    realized_profit = sell_amount - cost_basis
-                else:
-                    # 保有していない銘柄の売却（デイトレードの可能性）
-                    # TODO: より正確な計算には取引履歴全体の分析が必要
-                    realized_profit = 0
+                # 売却時点での実現損益を計算
+                # 売却時点での平均取得価格を計算するため、この取引より前の履歴を参照
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                try:
+                    # この売却より前の取引で平均取得価格を計算
+                    cursor.execute(
+                        """
+                        SELECT
+                            SUM(CASE WHEN transaction_type = 'buy' THEN quantity ELSE -quantity END) as net_quantity,
+                            SUM(CASE WHEN transaction_type = 'buy' THEN quantity * price + COALESCE(commission, 0) ELSE 0 END) as total_cost
+                        FROM transactions
+                        WHERE user_id = ? AND code = ?
+                        AND (transaction_date < ? OR (transaction_date = ? AND id < ?))
+                    """,
+                        (
+                            request.current_user.id,
+                            t.code,
+                            t.transaction_date,
+                            t.transaction_date,
+                            t.id,
+                        ),
+                    )
+
+                    row = cursor.fetchone()
+                    if row and row[0] and row[0] > 0 and row[1]:
+                        # 売却時点での平均取得価格
+                        avg_cost_at_sell = row[1] / row[0]
+                        # 実現損益 = 売却額 - 取得コスト
+                        cost_basis = t.quantity * avg_cost_at_sell
+                        realized_profit = sell_amount - cost_basis
+                    else:
+                        # 保有していない銘柄の売却（デイトレードなど）
+                        realized_profit = 0
+                finally:
+                    conn.close()
 
             trans_data.append(
                 {
                     "id": t.id,
                     "code": t.code,
-                    "company_name": getattr(t, "company_name", ""),
+                    "company_name": getattr(t, "company_name", "") or "",
                     "transaction_date": t.transaction_date,
                     "transaction_type": t.transaction_type,
+                    "detailed_type": getattr(t, "detailed_type", "") or "",
                     "quantity": t.quantity,
                     "price": t.price,
                     "commission": t.commission,
@@ -1029,7 +1083,8 @@ def get_transactions():
                     "total_amount": t.total_amount,
                     "buy_amount": buy_amount,
                     "sell_amount": sell_amount,
-                    "realized_profit": realized_profit,
+                    "realized_profit": getattr(t, "realized_profit", None)
+                    or realized_profit,
                     "remarks": t.remarks,
                 }
             )
@@ -1057,21 +1112,68 @@ def upload_transactions():
         logger.info(f"取引履歴CSVアップロード開始: {file.filename}")
 
         # 解析（エンコーディング検出はパーサー側で実施）
-        transactions_data = SBICSVParser.parse_transactions_csv(csv_content)
+        try:
+            transactions_data = SBICSVParser.parse_transactions_csv(csv_content)
+            logger.info(f"CSV解析完了: {len(transactions_data)}件の取引を検出")
+        except Exception as e:
+            logger.error(f"CSV解析エラー: {str(e)}")
+            return jsonify(
+                {
+                    "success": False,
+                    "error": f"CSVファイルの解析に失敗しました: {str(e)}",
+                }
+            )
+
+        if not transactions_data:
+            return jsonify(
+                {"success": False, "error": "取引データが見つかりませんでした"}
+            )
 
         # 取引履歴をインポート
-        imported = PortfolioManager.import_transactions_from_csv(
-            request.current_user.id, transactions_data
-        )
+        try:
+            imported = PortfolioManager.import_transactions_from_csv(
+                request.current_user.id, transactions_data
+            )
+            logger.info(f"取引履歴インポート完了: {imported}件")
 
-        logger.info(f"取引履歴インポート完了: {imported}件")
-        return jsonify(
-            {
-                "success": True,
-                "message": f"取引履歴をインポートしました（{imported}件）",
-                "imported": imported,
-            }
-        )
+            # 部分的な成功も成功として扱う
+            if imported > 0:
+                total_count = len(transactions_data)
+                if imported < total_count:
+                    message = f"取引履歴を部分的にインポートしました（{imported}/{total_count}件）"
+                    logger.warning(
+                        f"一部の取引がインポートされませんでした: {total_count - imported}件"
+                    )
+                else:
+                    message = f"取引履歴をインポートしました（{imported}件）"
+
+                return jsonify(
+                    {
+                        "success": True,
+                        "message": message,
+                        "imported": imported,
+                        "total": total_count,
+                        "partial": imported < total_count,
+                    }
+                )
+            else:
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "取引をインポートできませんでした。データの形式を確認してください。",
+                        "imported": 0,
+                        "total": len(transactions_data),
+                    }
+                )
+        except Exception as e:
+            logger.error(f"インポート処理エラー: {str(e)}", exc_info=True)
+            return jsonify(
+                {
+                    "success": False,
+                    "error": f"インポート処理でエラーが発生しました: {str(e)}",
+                }
+            )
+
     except ValueError as e:
         logger.error(f"取引履歴アップロードエラー（値エラー）: {str(e)}")
         return jsonify({"success": False, "error": str(e)})
@@ -1152,6 +1254,14 @@ def get_accounts():
 
 
 if __name__ == "__main__":
+    # 期限切れセッションのクリーンアップ
+    try:
+        cleaned = Session.cleanup_expired()
+        if cleaned > 0:
+            logger.info(f"期限切れセッションを{cleaned}件削除しました")
+    except Exception as e:
+        logger.warning(f"セッションクリーンアップエラー: {str(e)}")
+
     # デバッグモードで起動（本番環境では無効にすること）
     logger.info("Web UIサーバーを起動します")
     logger.info("http://localhost:5000 でアクセスできます")

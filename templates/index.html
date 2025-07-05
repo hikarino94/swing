@@ -735,7 +735,7 @@
                                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
                             </div>
                             <div class="flex items-end space-x-2">
-                                <input type="file" @change="handleHoldingsFile" accept=".csv"
+                                <input type="file" id="holdings-file-input" @change="handleHoldingsFile" accept=".csv"
                                        class="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                                 <button @click="uploadHoldings()"
                                         :disabled="!portfolio.holdingsFile"
@@ -781,14 +781,54 @@
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">銘柄</th>
+                                    <th @click="sortHoldings('code')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                        銘柄
+                                        <span x-show="portfolio.sortKey === 'code'">
+                                            <span x-show="portfolio.sortDirection === 'asc'">▲</span>
+                                            <span x-show="portfolio.sortDirection === 'desc'">▼</span>
+                                        </span>
+                                    </th>
                                     <th x-show="!portfolio.aggregateView" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">口座</th>
                                     <th x-show="portfolio.aggregateView" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">口座数</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">保有数</th>
+                                    <th @click="sortHoldings('quantity')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                        保有数
+                                        <span x-show="portfolio.sortKey === 'quantity'">
+                                            <span x-show="portfolio.sortDirection === 'asc'">▲</span>
+                                            <span x-show="portfolio.sortDirection === 'desc'">▼</span>
+                                        </span>
+                                    </th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">取得単価</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">評価額</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">評価損益</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">損益率</th>
+                                    <th @click="sortHoldings('profit_loss_ratio')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                        損益率
+                                        <span x-show="portfolio.sortKey === 'profit_loss_ratio'">
+                                            <span x-show="portfolio.sortDirection === 'asc'">▲</span>
+                                            <span x-show="portfolio.sortDirection === 'desc'">▼</span>
+                                        </span>
+                                    </th>
+                                    <th @click="sortHoldings('expected_per')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                        PER
+                                        <span x-show="portfolio.sortKey === 'expected_per'">
+                                            <span x-show="portfolio.sortDirection === 'asc'">▲</span>
+                                            <span x-show="portfolio.sortDirection === 'desc'">▼</span>
+                                        </span>
+                                    </th>
+                                    <th @click="sortHoldings('actual_pbr')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                        PBR
+                                        <span x-show="portfolio.sortKey === 'actual_pbr'">
+                                            <span x-show="portfolio.sortDirection === 'asc'">▲</span>
+                                            <span x-show="portfolio.sortDirection === 'desc'">▼</span>
+                                        </span>
+                                    </th>
+                                    <th @click="sortHoldings('dividend_yield')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                        配当<br>利回り
+                                        <span x-show="portfolio.sortKey === 'dividend_yield'">
+                                            <span x-show="portfolio.sortDirection === 'asc'">▲</span>
+                                            <span x-show="portfolio.sortDirection === 'desc'">▼</span>
+                                        </span>
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">予想<br>配当</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -812,6 +852,21 @@
                                         <td class="px-6 py-4 whitespace-nowrap text-sm"
                                             :class="holding.profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'"
                                             x-text="formatPercentage(holding.profit_loss_ratio)"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <span x-text="holding.expected_per ? holding.expected_per.toFixed(2) : '-'"
+                                                  :class="holding.expected_per < 15 ? 'text-green-600' : (holding.expected_per > 30 ? 'text-red-600' : '')"></span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <span x-text="holding.actual_pbr ? holding.actual_pbr.toFixed(2) : '-'"
+                                                  :class="holding.actual_pbr < 1 ? 'text-green-600' : (holding.actual_pbr > 3 ? 'text-red-600' : '')"></span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <span x-text="holding.dividend_yield ? holding.dividend_yield.toFixed(2) + '%' : '-'"
+                                                  :class="holding.dividend_yield > 3 ? 'text-green-600' : ''"></span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <span x-text="holding.expected_dividend ? formatCurrency(holding.expected_dividend) : '-'"></span>
+                                        </td>
                                     </tr>
                                 </template>
                             </tbody>
@@ -838,12 +893,23 @@
                     </div>
 
                     <!-- フィルター -->
-                    <div class="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">銘柄コード</label>
                             <input type="text" x-model="portfolio.filter.code"
                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                                    placeholder="例: 7203">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">取引タイプ</label>
+                            <select x-model="portfolio.filter.transactionType"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                <option value="">全て</option>
+                                <option value="new_buy">新規買い</option>
+                                <option value="new_sell">新規売り</option>
+                                <option value="close_buy">決済買い</option>
+                                <option value="close_sell">決済売り</option>
+                            </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">開始日</label>
@@ -882,8 +948,13 @@
                                             <div class="text-sm text-gray-500" x-text="trans.company_name"></div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
-                                            <span x-text="trans.transaction_type === 'buy' ? '買付' : '売却'"
-                                                  :class="trans.transaction_type === 'buy' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'"
+                                            <span x-text="trans.detailed_type || (trans.transaction_type === 'buy' ? '買付' : '売却')"
+                                                  :class="{
+                                                      'bg-blue-100 text-blue-800': trans.detailed_type === '新規買い' || (!trans.detailed_type && trans.transaction_type === 'buy'),
+                                                      'bg-green-100 text-green-800': trans.detailed_type === '決済買い',
+                                                      'bg-red-100 text-red-800': trans.detailed_type === '新規売り',
+                                                      'bg-orange-100 text-orange-800': trans.detailed_type === '決済売り' || (!trans.detailed_type && trans.transaction_type === 'sell')
+                                                  }"
                                                   class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"></span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="trans.quantity.toLocaleString()"></td>
@@ -892,7 +963,7 @@
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="trans.sell_amount > 0 ? formatCurrency(trans.sell_amount) : '-'"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium"
                                             :class="trans.realized_profit >= 0 ? 'text-green-600' : 'text-red-600'"
-                                            x-text="trans.transaction_type === 'sell' ? formatCurrency(trans.realized_profit) : '-'"></td>
+                                            x-text="(trans.detailed_type === '決済売り' || trans.detailed_type === '決済買い' || (trans.transaction_type === 'sell' && trans.realized_profit !== null)) ? formatCurrency(trans.realized_profit) : '-'"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="trans.remarks || ''"></td>
                                     </tr>
                                 </template>
@@ -1024,13 +1095,16 @@ function swingApp() {
             summary: null,
             filter: {
                 code: '',
+                transactionType: '',
                 startDate: '',
                 endDate: ''
             },
             accountName: '',
             aggregateView: false,
             accounts: [],
-            deleteAccount: ''
+            deleteAccount: '',
+            sortKey: '',
+            sortDirection: 'asc'
         },
 
         // メソッド
@@ -1387,7 +1461,11 @@ function swingApp() {
                     await this.loadPortfolioSummary();
                     this.portfolio.holdingsFile = null;
                     this.portfolio.accountName = '';
-                    event.target.form.reset();
+                    // フォームのリセット
+                    const fileInput = document.querySelector('#holdings-file-input');
+                    if (fileInput) {
+                        fileInput.value = '';
+                    }
                 } else {
                     showNotification('error', result.error);
                 }
@@ -1431,22 +1509,115 @@ function swingApp() {
                 const result = await response.json();
 
                 if (result.success) {
-                    showNotification('success', result.message);
+                    // 部分的な成功の場合は警告色で表示
+                    const notificationType = result.partial ? 'warning' : 'success';
+                    showNotification(notificationType, result.message);
+
+                    // データを再読み込み
                     await this.loadTransactions();
                     await this.loadHoldings();
                     await this.loadPortfolioSummary();
                     this.portfolio.transactionsFile = null;
-                    event.target.form.reset();
+
+                    // フォームが存在する場合のみリセット
+                    const fileInput = document.querySelector('input[type="file"][accept=".csv"]');
+                    if (fileInput) {
+                        fileInput.value = '';
+                    }
                 } else {
-                    showNotification('error', result.error);
+                    // エラー詳細を表示
+                    let errorMessage = result.error || 'アップロードに失敗しました';
+                    if (result.imported !== undefined && result.total !== undefined) {
+                        errorMessage += ` (${result.imported}/${result.total}件処理)`;
+                    }
+                    showNotification('error', errorMessage);
                 }
             } catch (e) {
-                showNotification('error', 'アップロードに失敗しました');
+                console.error('アップロードエラー:', e);
+                showNotification('error', 'ネットワークエラーが発生しました。もう一度お試しください。');
             }
         },
 
         filteredTransactions() {
-            return this.portfolio.transactions;
+            let filtered = this.portfolio.transactions;
+
+            // 銘柄コードでフィルタ
+            if (this.portfolio.filter.code) {
+                filtered = filtered.filter(t => t.code.includes(this.portfolio.filter.code));
+            }
+
+            // 取引タイプでフィルタ
+            if (this.portfolio.filter.transactionType) {
+                switch (this.portfolio.filter.transactionType) {
+                    case 'new_buy':
+                        filtered = filtered.filter(t => t.detailed_type === '新規買い');
+                        break;
+                    case 'new_sell':
+                        filtered = filtered.filter(t => t.detailed_type === '新規売り');
+                        break;
+                    case 'close_buy':
+                        filtered = filtered.filter(t => t.detailed_type === '決済買い');
+                        break;
+                    case 'close_sell':
+                        filtered = filtered.filter(t => t.detailed_type === '決済売り');
+                        break;
+                }
+            }
+
+            // 日付でフィルタ
+            if (this.portfolio.filter.startDate) {
+                filtered = filtered.filter(t => t.transaction_date >= this.portfolio.filter.startDate);
+            }
+            if (this.portfolio.filter.endDate) {
+                filtered = filtered.filter(t => t.transaction_date <= this.portfolio.filter.endDate);
+            }
+
+            return filtered;
+        },
+
+        // 保有銘柄のソート機能
+        sortHoldings(key) {
+            if (this.portfolio.sortKey === key) {
+                // 同じキーの場合は逆順にする
+                this.portfolio.sortDirection = this.portfolio.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                // 新しいキーの場合は昇順にする
+                this.portfolio.sortKey = key;
+                this.portfolio.sortDirection = 'asc';
+            }
+
+            const direction = this.portfolio.sortDirection === 'asc' ? 1 : -1;
+
+            this.portfolio.holdings.sort((a, b) => {
+                let aVal, bVal;
+
+                switch (key) {
+                    case 'code':
+                        return (a.code > b.code ? 1 : -1) * direction;
+                    case 'quantity':
+                        aVal = a.quantity || a.total_quantity || 0;
+                        bVal = b.quantity || b.total_quantity || 0;
+                        return (aVal - bVal) * direction;
+                    case 'profit_loss_ratio':
+                        aVal = a.profit_loss_ratio || 0;
+                        bVal = b.profit_loss_ratio || 0;
+                        return (aVal - bVal) * direction;
+                    case 'expected_per':
+                        aVal = a.expected_per || 999;
+                        bVal = b.expected_per || 999;
+                        return (aVal - bVal) * direction;
+                    case 'actual_pbr':
+                        aVal = a.actual_pbr || 999;
+                        bVal = b.actual_pbr || 999;
+                        return (aVal - bVal) * direction;
+                    case 'dividend_yield':
+                        aVal = a.dividend_yield || 0;
+                        bVal = b.dividend_yield || 0;
+                        return (aVal - bVal) * direction;
+                    default:
+                        return 0;
+                }
+            });
         },
 
         // 初期化時の処理を追加

@@ -15,8 +15,9 @@ logger = get_logger("auth")
 class AuthManager:
     """認証管理クラス"""
 
-    # セッションの有効期限（24時間）
-    SESSION_EXPIRE_HOURS = 24
+    # セッションの有効期限
+    SESSION_EXPIRE_HOURS = 24  # 通常のセッション（24時間）
+    SESSION_EXPIRE_HOURS_REMEMBER = 24 * 30  # Remember Meセッション（30日間）
 
     @staticmethod
     def register_user(username: str, email: str, password: str) -> tuple[bool, str]:
@@ -63,7 +64,7 @@ class AuthManager:
 
     @staticmethod
     def login(
-        username_or_email: str, password: str
+        username_or_email: str, password: str, remember_me: bool = False
     ) -> tuple[User | None, str | None, str]:
         """
         ログイン処理
@@ -71,6 +72,7 @@ class AuthManager:
         Args:
             username_or_email: ユーザー名またはメールアドレス
             password: パスワード
+            remember_me: ログイン状態を保持するか
 
         Returns:
             (ユーザーオブジェクト, セッションID, エラーメッセージ)のタプル
@@ -97,14 +99,23 @@ class AuthManager:
             return None, None, "システムエラーが発生しました"
 
         session_id = secrets.token_urlsafe(32)
-        expires_at = datetime.now() + timedelta(hours=AuthManager.SESSION_EXPIRE_HOURS)
+        # Remember Meが有効な場合は長期間有効なセッションを作成
+        expire_hours = (
+            AuthManager.SESSION_EXPIRE_HOURS_REMEMBER
+            if remember_me
+            else AuthManager.SESSION_EXPIRE_HOURS
+        )
+        expires_at = datetime.now() + timedelta(hours=expire_hours)
 
         session = Session(
             session_id=session_id, user_id=user.id, expires_at=expires_at.isoformat()
         )
 
+        # Remember Meフラグも保存
+        session.remember_me = remember_me
+
         if session.save():
-            logger.info(f"ログイン成功: {user.username}")
+            logger.info(f"ログイン成功: {user.username} (Remember Me: {remember_me})")
             return user, session_id, ""
         else:
             return None, None, "セッション作成に失敗しました"
