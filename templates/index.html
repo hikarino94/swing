@@ -756,6 +756,9 @@
                             <button @click="loadHoldings()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 text-sm">
                                 更新
                             </button>
+                            <button @click="showAddHoldingModal()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm">
+                                手動追加
+                            </button>
                         </div>
 
                         <!-- 削除機能 -->
@@ -829,6 +832,7 @@
                                         </span>
                                     </th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">予想<br>配当</th>
+                                    <th x-show="!portfolio.aggregateView" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -867,6 +871,10 @@
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                             <span x-text="holding.expected_dividend ? formatCurrency(holding.expected_dividend) : '-'"></span>
                                         </td>
+                                        <td x-show="!portfolio.aggregateView" class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <button @click="showEditHoldingModal(holding)" class="text-blue-600 hover:text-blue-900 mr-3">編集</button>
+                                            <button @click="deleteSingleHolding(holding.code, holding.account_name)" class="text-red-600 hover:text-red-900">削除</button>
+                                        </td>
                                     </tr>
                                 </template>
                             </tbody>
@@ -888,6 +896,9 @@
                             </button>
                             <button @click="loadTransactions()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 text-sm">
                                 更新
+                            </button>
+                            <button @click="showAddTransactionModal()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm">
+                                手動追加
                             </button>
                         </div>
                     </div>
@@ -937,6 +948,7 @@
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">売却金額</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">実現損益</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">備考</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -965,11 +977,230 @@
                                             :class="trans.realized_profit >= 0 ? 'text-green-600' : 'text-red-600'"
                                             x-text="(trans.detailed_type === '決済売り' || trans.detailed_type === '決済買い' || (trans.transaction_type === 'sell' && trans.realized_profit !== null)) ? formatCurrency(trans.realized_profit) : '-'"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="trans.remarks || ''"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <button @click="showEditTransactionModal(trans)" class="text-blue-600 hover:text-blue-900 mr-3">編集</button>
+                                            <button @click="deleteTransaction(trans.id)" class="text-red-600 hover:text-red-900">削除</button>
+                                        </td>
                                     </tr>
                                 </template>
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- モーダルウィンドウ -->
+    <!-- 保有銘柄追加/編集モーダル -->
+    <div x-show="portfolio.showHoldingModal" x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         @keydown.escape.window="portfolio.showHoldingModal = false">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <!-- 背景オーバーレイ -->
+            <div class="fixed inset-0 transition-opacity" aria-hidden="true" @click="portfolio.showHoldingModal = false">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+
+            <!-- モーダル本体 -->
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-visible shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4"
+                        x-text="portfolio.editingHolding ? '保有銘柄を編集' : '保有銘柄を追加'"></h3>
+
+                    <!-- 銘柄検索 (新規追加時のみ) -->
+                    <div x-show="!portfolio.editingHolding" class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">銘柄検索</label>
+                        <div class="relative">
+                            <input type="text" x-model="portfolio.stockSearchQuery"
+                                   @input="searchStocks()"
+                                   placeholder="銘柄コードまたは会社名"
+                                   class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <!-- 検索結果ドロップダウン -->
+                            <div x-show="portfolio.stockSearchResults.length > 0"
+                                 x-transition
+                                 class="absolute z-50 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                 style="z-index: 9999;">
+                                <div x-show="portfolio.stockSearchResults.length === 0" class="px-4 py-2 text-gray-500">
+                                    検索中...
+                                </div>
+                                <template x-for="stock in portfolio.stockSearchResults" :key="stock.full_code">
+                                    <div @click="selectStock(stock)" class="cursor-pointer hover:bg-gray-100 px-4 py-2">
+                                        <div class="font-medium" x-text="`${stock.code} - ${stock.company_name}`"></div>
+                                        <div class="text-xs text-gray-500" x-text="`${stock.market_name} / ${stock.sector17_name}`"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 既存の場合は銘柄情報表示 -->
+                    <div x-show="portfolio.editingHolding" class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">銘柄</label>
+                        <div class="p-2 bg-gray-100 rounded">
+                            <span x-text="portfolio.holdingForm.code"></span>
+                            <span x-text="portfolio.holdingForm.company_name" class="ml-2 text-gray-600"></span>
+                        </div>
+                    </div>
+
+                    <!-- 口座名 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">口座名</label>
+                        <input type="text" x-model="portfolio.holdingForm.account_name"
+                               :disabled="portfolio.editingHolding"
+                               placeholder="例: SBI証券、楽天証券（省略時: default）"
+                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                               :class="{'bg-gray-100': portfolio.editingHolding}">
+                    </div>
+
+                    <!-- 数量 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">数量</label>
+                        <input type="number" x-model.number="portfolio.holdingForm.quantity"
+                               min="1"
+                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <!-- 平均取得価格 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">平均取得価格</label>
+                        <input type="number" x-model.number="portfolio.holdingForm.average_price"
+                               min="0.01" step="0.01"
+                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button @click="saveHolding()"
+                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        保存
+                    </button>
+                    <button @click="portfolio.showHoldingModal = false"
+                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        キャンセル
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 取引履歴追加/編集モーダル -->
+    <div x-show="portfolio.showTransactionModal" x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         @keydown.escape.window="portfolio.showTransactionModal = false">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <!-- 背景オーバーレイ -->
+            <div class="fixed inset-0 transition-opacity" aria-hidden="true" @click="portfolio.showTransactionModal = false">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+
+            <!-- モーダル本体 -->
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-visible shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4"
+                        x-text="portfolio.editingTransaction ? '取引を編集' : '取引を追加'"></h3>
+
+                    <!-- 銘柄検索 (新規追加時のみ) -->
+                    <div x-show="!portfolio.editingTransaction" class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">銘柄検索</label>
+                        <div class="relative">
+                            <input type="text" x-model="portfolio.transactionStockSearchQuery"
+                                   @input="searchTransactionStocks()"
+                                   placeholder="銘柄コードまたは会社名"
+                                   class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <!-- 検索結果ドロップダウン -->
+                            <div x-show="portfolio.transactionStockSearchResults.length > 0"
+                                 x-transition
+                                 class="absolute z-50 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                 style="z-index: 9999;">
+                                <div x-show="portfolio.transactionStockSearchResults.length === 0" class="px-4 py-2 text-gray-500">
+                                    検索中...
+                                </div>
+                                <template x-for="stock in portfolio.transactionStockSearchResults" :key="stock.full_code">
+                                    <div @click="selectTransactionStock(stock)" class="cursor-pointer hover:bg-gray-100 px-4 py-2">
+                                        <div class="font-medium" x-text="`${stock.code} - ${stock.company_name}`"></div>
+                                        <div class="text-xs text-gray-500" x-text="`${stock.market_name} / ${stock.sector17_name}`"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 既存の場合は銘柄情報表示 -->
+                    <div x-show="portfolio.editingTransaction" class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">銘柄</label>
+                        <div class="p-2 bg-gray-100 rounded">
+                            <span x-text="portfolio.transactionForm.code"></span>
+                            <span x-text="portfolio.transactionForm.company_name" class="ml-2 text-gray-600"></span>
+                        </div>
+                    </div>
+
+                    <!-- 取引日 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">取引日</label>
+                        <input type="date" x-model="portfolio.transactionForm.transaction_date"
+                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <!-- 取引種別 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">取引種別</label>
+                        <select x-model="portfolio.transactionForm.transaction_type"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="buy">買付</option>
+                            <option value="sell">売却</option>
+                        </select>
+                    </div>
+
+                    <!-- 数量 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">数量</label>
+                        <input type="number" x-model.number="portfolio.transactionForm.quantity"
+                               min="1"
+                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <!-- 単価 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">単価</label>
+                        <input type="number" x-model.number="portfolio.transactionForm.price"
+                               min="0.01" step="0.01"
+                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <!-- 手数料 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">手数料</label>
+                        <input type="number" x-model.number="portfolio.transactionForm.commission"
+                               min="0" step="0.01"
+                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <!-- 税金 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">税金</label>
+                        <input type="number" x-model.number="portfolio.transactionForm.tax"
+                               min="0" step="0.01"
+                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <!-- 備考 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">備考</label>
+                        <input type="text" x-model="portfolio.transactionForm.remarks"
+                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button @click="saveTransaction()"
+                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        保存
+                    </button>
+                    <button @click="portfolio.showTransactionModal = false"
+                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        キャンセル
+                    </button>
                 </div>
             </div>
         </div>
@@ -1104,7 +1335,35 @@ function swingApp() {
             accounts: [],
             deleteAccount: '',
             sortKey: '',
-            sortDirection: 'asc'
+            sortDirection: 'asc',
+            // モーダル関連
+            showHoldingModal: false,
+            showTransactionModal: false,
+            editingHolding: false,
+            editingTransaction: false,
+            holdingForm: {
+                code: '',
+                company_name: '',
+                account_name: 'default',
+                quantity: 0,
+                average_price: 0
+            },
+            transactionForm: {
+                id: null,
+                code: '',
+                company_name: '',
+                transaction_date: '',
+                transaction_type: 'buy',
+                quantity: 0,
+                price: 0,
+                commission: 0,
+                tax: 0,
+                remarks: ''
+            },
+            stockSearchQuery: '',
+            stockSearchResults: [],
+            transactionStockSearchQuery: '',
+            transactionStockSearchResults: []
         },
 
         // メソッド
@@ -1620,6 +1879,270 @@ function swingApp() {
             });
         },
 
+        // 手動データ管理関連のメソッド
+        showAddHoldingModal() {
+            this.portfolio.editingHolding = false;
+            this.portfolio.holdingForm = {
+                code: '',
+                company_name: '',
+                account_name: 'default',
+                quantity: 0,
+                average_price: 0
+            };
+            this.portfolio.stockSearchQuery = '';
+            this.portfolio.stockSearchResults = [];
+            this.portfolio.showHoldingModal = true;
+        },
+
+        showEditHoldingModal(holding) {
+            this.portfolio.editingHolding = true;
+            this.portfolio.holdingForm = {
+                code: holding.code,
+                company_name: holding.company_name || '',
+                account_name: holding.account_name || 'default',
+                quantity: holding.quantity,
+                average_price: holding.average_price
+            };
+            this.portfolio.showHoldingModal = true;
+        },
+
+        async searchStocks() {
+            const query = this.portfolio.stockSearchQuery;
+            if (!query || query.length < 1) {
+                this.portfolio.stockSearchResults = [];
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/portfolio/stocks/search?q=${encodeURIComponent(query)}`, {
+                    method: 'GET',
+                    credentials: 'same-origin', // クッキーを送信
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                const result = await response.json();
+                console.log('銘柄検索結果:', result); // デバッグ用
+                if (result.success) {
+                    this.portfolio.stockSearchResults = result.stocks;
+                    console.log('検索結果件数:', this.portfolio.stockSearchResults.length); // デバッグ用
+                } else {
+                    console.error('銘柄検索エラー:', result.error);
+                    this.portfolio.stockSearchResults = [];
+                }
+            } catch (e) {
+                console.error('銘柄検索エラー:', e);
+                this.portfolio.stockSearchResults = [];
+            }
+        },
+
+        selectStock(stock) {
+            this.portfolio.holdingForm.code = stock.code;
+            this.portfolio.holdingForm.company_name = stock.company_name;
+            this.portfolio.stockSearchQuery = `${stock.code} - ${stock.company_name}`;
+            this.portfolio.stockSearchResults = [];
+        },
+
+        async saveHolding() {
+            const form = this.portfolio.holdingForm;
+
+            // バリデーション
+            if (!form.code) {
+                showNotification('error', '銘柄を選択してください');
+                return;
+            }
+            if (!form.quantity || form.quantity <= 0) {
+                showNotification('error', '数量は正の数を入力してください');
+                return;
+            }
+            if (!form.average_price || form.average_price <= 0) {
+                showNotification('error', '平均取得価格は正の数を入力してください');
+                return;
+            }
+
+            try {
+                const endpoint = this.portfolio.editingHolding
+                    ? '/portfolio/holdings/update'
+                    : '/portfolio/holdings/add';
+
+                const result = await apiCall(endpoint, form);
+
+                if (result.success) {
+                    showNotification('success', result.message);
+                    this.portfolio.showHoldingModal = false;
+                    await this.loadHoldings();
+                    await this.loadPortfolioSummary();
+                    await this.loadAccounts();
+                } else {
+                    showNotification('error', result.error);
+                }
+            } catch (e) {
+                showNotification('error', '保存に失敗しました');
+            }
+        },
+
+        async deleteSingleHolding(code, accountName) {
+            if (!confirm(`${code}（口座: ${accountName}）を削除しますか？`)) return;
+
+            try {
+                const response = await fetch(`/api/portfolio/holdings/delete/${encodeURIComponent(code)}/${encodeURIComponent(accountName)}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('success', result.message);
+                    await this.loadHoldings();
+                    await this.loadPortfolioSummary();
+                    await this.loadAccounts();
+                } else {
+                    showNotification('error', result.error);
+                }
+            } catch (e) {
+                showNotification('error', '削除に失敗しました');
+            }
+        },
+
+        showAddTransactionModal() {
+            this.portfolio.editingTransaction = false;
+            this.portfolio.transactionForm = {
+                id: null,
+                code: '',
+                company_name: '',
+                transaction_date: new Date().toISOString().split('T')[0],
+                transaction_type: 'buy',
+                quantity: 0,
+                price: 0,
+                commission: 0,
+                tax: 0,
+                remarks: ''
+            };
+            this.portfolio.transactionStockSearchQuery = '';
+            this.portfolio.transactionStockSearchResults = [];
+            this.portfolio.showTransactionModal = true;
+        },
+
+        showEditTransactionModal(transaction) {
+            this.portfolio.editingTransaction = true;
+            this.portfolio.transactionForm = {
+                id: transaction.id,
+                code: transaction.code,
+                company_name: transaction.company_name || '',
+                transaction_date: transaction.transaction_date,
+                transaction_type: transaction.transaction_type,
+                quantity: transaction.quantity,
+                price: transaction.price,
+                commission: transaction.commission || 0,
+                tax: transaction.tax || 0,
+                remarks: transaction.remarks || ''
+            };
+            this.portfolio.showTransactionModal = true;
+        },
+
+        async searchTransactionStocks() {
+            const query = this.portfolio.transactionStockSearchQuery;
+            if (!query || query.length < 1) {
+                this.portfolio.transactionStockSearchResults = [];
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/portfolio/stocks/search?q=${encodeURIComponent(query)}`, {
+                    method: 'GET',
+                    credentials: 'same-origin', // クッキーを送信
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                const result = await response.json();
+                if (result.success) {
+                    this.portfolio.transactionStockSearchResults = result.stocks;
+                } else {
+                    console.error('銘柄検索エラー:', result.error);
+                    this.portfolio.transactionStockSearchResults = [];
+                }
+            } catch (e) {
+                console.error('銘柄検索エラー:', e);
+                this.portfolio.transactionStockSearchResults = [];
+            }
+        },
+
+        selectTransactionStock(stock) {
+            this.portfolio.transactionForm.code = stock.code;
+            this.portfolio.transactionForm.company_name = stock.company_name;
+            this.portfolio.transactionStockSearchQuery = `${stock.code} - ${stock.company_name}`;
+            this.portfolio.transactionStockSearchResults = [];
+        },
+
+        async saveTransaction() {
+            const form = this.portfolio.transactionForm;
+
+            // バリデーション
+            if (!form.code) {
+                showNotification('error', '銘柄を選択してください');
+                return;
+            }
+            if (!form.transaction_date) {
+                showNotification('error', '取引日を入力してください');
+                return;
+            }
+            if (!form.quantity || form.quantity <= 0) {
+                showNotification('error', '数量は正の数を入力してください');
+                return;
+            }
+            if (!form.price || form.price <= 0) {
+                showNotification('error', '単価は正の数を入力してください');
+                return;
+            }
+
+            try {
+                let endpoint, method;
+                if (this.portfolio.editingTransaction) {
+                    endpoint = `/portfolio/transactions/update/${form.id}`;
+                    method = 'POST';
+                } else {
+                    endpoint = '/portfolio/transactions/add';
+                    method = 'POST';
+                }
+
+                const result = await apiCall(endpoint, form);
+
+                if (result.success) {
+                    showNotification('success', result.message);
+                    this.portfolio.showTransactionModal = false;
+                    await this.loadTransactions();
+                    await this.loadHoldings();
+                    await this.loadPortfolioSummary();
+                } else {
+                    showNotification('error', result.error);
+                }
+            } catch (e) {
+                showNotification('error', '保存に失敗しました');
+            }
+        },
+
+        async deleteTransaction(transactionId) {
+            if (!confirm('この取引を削除しますか？')) return;
+
+            try {
+                const response = await fetch(`/api/portfolio/transactions/delete/${transactionId}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('success', result.message);
+                    await this.loadTransactions();
+                    await this.loadHoldings();
+                    await this.loadPortfolioSummary();
+                } else {
+                    showNotification('error', result.error);
+                }
+            } catch (e) {
+                showNotification('error', '削除に失敗しました');
+            }
+        },
+
         // 初期化時の処理を追加
         init() {
             if (this.isLoggedIn) {
@@ -1631,4 +2154,5 @@ function swingApp() {
     }
 }
 </script>
+
 {% endblock %}

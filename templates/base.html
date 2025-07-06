@@ -149,6 +149,7 @@
             try {
                 const options = {
                     method: method,
+                    credentials: 'same-origin', // クッキーを送信
                     headers: {
                         'Content-Type': 'application/json',
                     }

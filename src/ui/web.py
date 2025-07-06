@@ -1253,6 +1253,468 @@ def get_accounts():
         return jsonify({"success": False, "error": str(e)})
 
 
+@app.route("/api/portfolio/stocks/search", methods=["GET"])
+@login_required
+def search_stocks():
+    """銘柄検索API（listed_infoテーブルから部分一致検索）"""
+    try:
+        query = request.args.get("q", "").strip()
+        if not query:
+            return jsonify(
+                {"success": False, "error": "検索キーワードを入力してください"}
+            )
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # 銘柄コードまたは会社名で部分一致検索
+        # 4桁コードの検索にも対応（末尾0埋めを考慮）
+        cursor.execute(
+            """
+            SELECT code, company_name, market_code, market_name,
+                   sector17_code, sector17_name, sector33_code, sector33_name
+            FROM listed_info
+            WHERE delete_flag = 0
+            AND (
+                code LIKE ? OR
+                code LIKE ? OR
+                company_name LIKE ?
+            )
+            ORDER BY
+                CASE
+                    WHEN code = ? THEN 1
+                    WHEN code = ? THEN 2
+                    WHEN code LIKE ? THEN 3
+                    WHEN code LIKE ? THEN 4
+                    ELSE 5
+                END,
+                code
+            LIMIT 50
+            """,
+            (
+                f"{query}%",  # 銘柄コードの前方一致
+                f"{query}0",  # 4桁コードに0を付けた完全一致
+                f"%{query}%",  # 会社名の部分一致
+                query,  # 完全一致を優先
+                f"{query}0",  # 4桁に0を付けた完全一致
+                f"{query}%",  # 前方一致
+                f"{query}0%",  # 4桁に0を付けた前方一致
+            ),
+        )
+
+        stocks = []
+        for row in cursor.fetchall():
+            # 銘柄コードから末尾の0を除去して4桁表示
+            display_code = row[0].rstrip("0") if row[0].endswith("0") else row[0]
+            stocks.append(
+                {
+                    "code": display_code,
+                    "full_code": row[0],  # 5桁のフルコード（DB用）
+                    "company_name": row[1] or "",
+                    "market_code": row[2] or "",
+                    "market_name": row[3] or "",
+                    "sector17_code": row[4] or "",
+                    "sector17_name": row[5] or "",
+                    "sector33_code": row[6] or "",
+                    "sector33_name": row[7] or "",
+                }
+            )
+
+        conn.close()
+
+        return jsonify({"success": True, "stocks": stocks})
+    except Exception as e:
+        logger.error(f"銘柄検索エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/portfolio/holdings/add", methods=["POST"])
+@login_required
+def add_holding():
+    """保有銘柄を手動で追加"""
+    try:
+        data = request.json
+        code = data.get("code", "").strip()
+        account_name = data.get("account_name", "default").strip()
+        quantity = data.get("quantity")
+        average_price = data.get("average_price")
+
+        # バリデーション
+        if not code:
+            return jsonify({"success": False, "error": "銘柄コードは必須です"})
+        if not quantity or quantity <= 0:
+            return jsonify(
+                {"success": False, "error": "数量は正の数を入力してください"}
+            )
+        if not average_price or average_price <= 0:
+            return jsonify(
+                {"success": False, "error": "平均取得価格は正の数を入力してください"}
+            )
+
+        # 既存の保有銘柄をチェック
+        from src.portfolio.models import Holding
+
+        existing = Holding.find_by_user_code_and_account(
+            request.current_user.id, code, account_name
+        )
+
+        if existing:
+            # 既存の保有銘柄がある場合は数量と平均価格を更新
+            total_quantity = existing.quantity + quantity
+            total_cost = (existing.quantity * existing.average_price) + (
+                quantity * average_price
+            )
+            existing.quantity = total_quantity
+            existing.average_price = total_cost / total_quantity
+        else:
+            # 新規追加
+            existing = Holding(
+                user_id=request.current_user.id, code=code, account_name=account_name
+            )
+            existing.quantity = quantity
+            existing.average_price = average_price
+
+        # 保存
+        if existing.save():
+            # 時価評価を更新
+            PortfolioManager.update_market_values(request.current_user.id)
+            logger.info(
+                f"保有銘柄追加成功: {code} {quantity}株 @{average_price}円 (口座: {account_name})"
+            )
+            return jsonify({"success": True, "message": "保有銘柄を追加しました"})
+        else:
+            return jsonify({"success": False, "error": "保有銘柄の保存に失敗しました"})
+
+    except Exception as e:
+        logger.error(f"保有銘柄追加エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/portfolio/holdings/update", methods=["POST"])
+@login_required
+def update_holding():
+    """保有銘柄を編集"""
+    try:
+        data = request.json
+        code = data.get("code", "").strip()
+        account_name = data.get("account_name", "").strip()
+        quantity = data.get("quantity")
+        average_price = data.get("average_price")
+
+        # バリデーション
+        if not code or not account_name:
+            return jsonify({"success": False, "error": "銘柄コードと口座名は必須です"})
+        if quantity is not None and quantity < 0:
+            return jsonify({"success": False, "error": "数量は0以上を入力してください"})
+        if average_price is not None and average_price <= 0:
+            return jsonify(
+                {"success": False, "error": "平均取得価格は正の数を入力してください"}
+            )
+
+        from src.portfolio.models import Holding
+
+        holding = Holding.find_by_user_code_and_account(
+            request.current_user.id, code, account_name
+        )
+
+        if not holding:
+            return jsonify(
+                {"success": False, "error": "指定された保有銘柄が見つかりません"}
+            )
+
+        # 更新
+        if quantity is not None:
+            holding.quantity = quantity
+        if average_price is not None:
+            holding.average_price = average_price
+
+        # 保存
+        if holding.save():
+            # 時価評価を更新
+            PortfolioManager.update_market_values(request.current_user.id)
+            logger.info(
+                f"保有銘柄更新成功: {code} {holding.quantity}株 @{holding.average_price}円 (口座: {account_name})"
+            )
+            return jsonify({"success": True, "message": "保有銘柄を更新しました"})
+        else:
+            return jsonify({"success": False, "error": "保有銘柄の更新に失敗しました"})
+
+    except Exception as e:
+        logger.error(f"保有銘柄更新エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/portfolio/holdings/delete/<code>/<account_name>", methods=["DELETE"])
+@login_required
+def delete_single_holding(code, account_name):
+    """特定の保有銘柄を削除"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            DELETE FROM holdings
+            WHERE user_id = ? AND code = ? AND account_name = ?
+            """,
+            (request.current_user.id, code, account_name),
+        )
+
+        deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+
+        if deleted > 0:
+            logger.info(f"保有銘柄削除成功: {code} (口座: {account_name})")
+            return jsonify({"success": True, "message": "保有銘柄を削除しました"})
+        else:
+            return jsonify(
+                {"success": False, "error": "指定された保有銘柄が見つかりません"}
+            )
+
+    except Exception as e:
+        logger.error(f"保有銘柄削除エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/portfolio/transactions/add", methods=["POST"])
+@login_required
+def add_transaction():
+    """取引履歴を手動で追加"""
+    try:
+        data = request.json
+        code = data.get("code", "").strip()
+        transaction_date = data.get("transaction_date", "").strip()
+        transaction_type = data.get("transaction_type", "").strip()
+        quantity = data.get("quantity")
+        price = data.get("price")
+        commission = data.get("commission", 0)
+        tax = data.get("tax", 0)
+        remarks = data.get("remarks", "").strip()
+
+        # バリデーション
+        if not code:
+            return jsonify({"success": False, "error": "銘柄コードは必須です"})
+        if not transaction_date:
+            return jsonify({"success": False, "error": "取引日は必須です"})
+        if transaction_type not in ["buy", "sell"]:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "取引種別は buy または sell を指定してください",
+                }
+            )
+        if not quantity or quantity <= 0:
+            return jsonify(
+                {"success": False, "error": "数量は正の数を入力してください"}
+            )
+        if not price or price <= 0:
+            return jsonify(
+                {"success": False, "error": "価格は正の数を入力してください"}
+            )
+
+        # 取引を作成
+        from src.portfolio.models import Transaction
+
+        transaction = Transaction(
+            user_id=request.current_user.id,
+            code=code,
+            transaction_date=transaction_date,
+            transaction_type=transaction_type,
+            quantity=quantity,
+            price=price,
+        )
+        transaction.commission = commission
+        transaction.tax = tax
+        transaction.total_amount = quantity * price
+        transaction.remarks = remarks
+
+        # 詳細タイプを設定
+        if transaction_type == "buy":
+            transaction.detailed_type = "新規買い"
+        else:
+            transaction.detailed_type = "新規売り"
+
+        # 保存
+        if transaction.save():
+            logger.info(
+                f"取引追加成功: {transaction_date} {code} {transaction_type} {quantity}株 @{price}円"
+            )
+            return jsonify({"success": True, "message": "取引を追加しました"})
+        else:
+            return jsonify({"success": False, "error": "取引の保存に失敗しました"})
+
+    except Exception as e:
+        logger.error(f"取引追加エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/portfolio/transactions/update/<int:transaction_id>", methods=["POST"])
+@login_required
+def update_transaction(transaction_id):
+    """取引履歴を編集"""
+    try:
+        data = request.json
+
+        # バリデーション
+        transaction_type = data.get("transaction_type")
+        if transaction_type and transaction_type not in ["buy", "sell"]:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "取引種別は buy または sell を指定してください",
+                }
+            )
+
+        quantity = data.get("quantity")
+        if quantity is not None and quantity <= 0:
+            return jsonify(
+                {"success": False, "error": "数量は正の数を入力してください"}
+            )
+
+        price = data.get("price")
+        if price is not None and price <= 0:
+            return jsonify(
+                {"success": False, "error": "価格は正の数を入力してください"}
+            )
+
+        # 取引を取得して所有者を確認
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT user_id FROM transactions
+            WHERE id = ?
+            """,
+            (transaction_id,),
+        )
+
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return jsonify(
+                {"success": False, "error": "指定された取引が見つかりません"}
+            )
+
+        if row[0] != request.current_user.id:
+            conn.close()
+            return jsonify(
+                {"success": False, "error": "この取引を編集する権限がありません"}
+            )
+
+        # 更新クエリを構築
+        update_fields = []
+        update_values = []
+
+        if data.get("transaction_date"):
+            update_fields.append("transaction_date = ?")
+            update_values.append(data["transaction_date"])
+
+        if transaction_type:
+            update_fields.append("transaction_type = ?")
+            update_values.append(transaction_type)
+            # 詳細タイプも更新
+            update_fields.append("detailed_type = ?")
+            update_values.append(
+                "新規買い" if transaction_type == "buy" else "新規売り"
+            )
+
+        if quantity is not None:
+            update_fields.append("quantity = ?")
+            update_values.append(quantity)
+
+        if price is not None:
+            update_fields.append("price = ?")
+            update_values.append(price)
+
+        if "commission" in data:
+            update_fields.append("commission = ?")
+            update_values.append(data["commission"])
+
+        if "tax" in data:
+            update_fields.append("tax = ?")
+            update_values.append(data["tax"])
+
+        if "remarks" in data:
+            update_fields.append("remarks = ?")
+            update_values.append(data["remarks"])
+
+        # total_amountを再計算
+        if quantity is not None or price is not None:
+            # 現在の値を取得
+            cursor.execute(
+                "SELECT quantity, price FROM transactions WHERE id = ?",
+                (transaction_id,),
+            )
+            current = cursor.fetchone()
+            calc_quantity = quantity if quantity is not None else current[0]
+            calc_price = price if price is not None else current[1]
+            update_fields.append("total_amount = ?")
+            update_values.append(calc_quantity * calc_price)
+
+        if not update_fields:
+            conn.close()
+            return jsonify({"success": False, "error": "更新する項目がありません"})
+
+        # 更新実行
+        update_values.append(transaction_id)
+        cursor.execute(
+            f"""
+            UPDATE transactions
+            SET {', '.join(update_fields)}
+            WHERE id = ?
+            """,
+            update_values,
+        )
+
+        conn.commit()
+        conn.close()
+
+        logger.info(f"取引更新成功: ID={transaction_id}")
+        return jsonify({"success": True, "message": "取引を更新しました"})
+
+    except Exception as e:
+        logger.error(f"取引更新エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route(
+    "/api/portfolio/transactions/delete/<int:transaction_id>", methods=["DELETE"]
+)
+@login_required
+def delete_transaction(transaction_id):
+    """取引履歴を削除"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # 所有者確認と削除を同時に実行
+        cursor.execute(
+            """
+            DELETE FROM transactions
+            WHERE id = ? AND user_id = ?
+            """,
+            (transaction_id, request.current_user.id),
+        )
+
+        deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+
+        if deleted > 0:
+            logger.info(f"取引削除成功: ID={transaction_id}")
+            return jsonify({"success": True, "message": "取引を削除しました"})
+        else:
+            return jsonify(
+                {"success": False, "error": "指定された取引が見つかりません"}
+            )
+
+    except Exception as e:
+        logger.error(f"取引削除エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
 if __name__ == "__main__":
     # 期限切れセッションのクリーンアップ
     try:
