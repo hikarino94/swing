@@ -138,16 +138,6 @@ def authenticated_client(tmp_path):
             sess["session_id"] = session_id
             sess["_user_id"] = str(user_id)
 
-        # before_requestで適切にユーザーがセットされるようにする
-        @app.before_request
-        def set_test_user():
-            from flask import request, session
-
-            if "session_id" in session and session["session_id"] == session_id:
-                from src.auth import AuthManager
-
-                request.current_user = AuthManager.get_user_by_session(session_id)
-
         yield client
 
 
