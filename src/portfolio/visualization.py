@@ -89,26 +89,26 @@ class PortfolioVisualizer:
                         textposition="inside",
                         textinfo="text",
                         hole=0.3,
-                        marker=dict(line=dict(color="white", width=2)),
+                        marker={"line": {"color": "white", "width": 2}},
                     )
                 ]
             )
             stock_fig.update_layout(
                 title={"text": "銘柄別構成比", "x": 0.5, "xanchor": "center"},
-                font=dict(
-                    family="Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif",
-                    size=12,
-                ),
+                font={
+                    "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif",
+                    "size": 12,
+                },
                 showlegend=True,
-                legend=dict(
-                    orientation="v",
-                    yanchor="top",
-                    y=0.95,
-                    xanchor="left",
-                    x=1.02,
-                    font=dict(size=10),
-                ),
-                margin=dict(l=20, r=150, t=60, b=20),
+                legend={
+                    "orientation": "v",
+                    "yanchor": "top",
+                    "y": 0.95,
+                    "xanchor": "left",
+                    "x": 1.02,
+                    "font": {"size": 10},
+                },
+                margin={"l": 20, "r": 150, "t": 60, "b": 20},
                 autosize=True,
                 height=400,
             )
@@ -131,7 +131,7 @@ class PortfolioVisualizer:
                         textposition="inside",
                         textinfo="text",
                         hole=0.3,
-                        marker=dict(line=dict(color="white", width=2)),
+                        marker={"line": {"color": "white", "width": 2}},
                     )
                 ]
             )
@@ -141,20 +141,20 @@ class PortfolioVisualizer:
                     "x": 0.5,
                     "xanchor": "center",
                 },
-                font=dict(
-                    family="Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif",
-                    size=12,
-                ),
+                font={
+                    "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif",
+                    "size": 12,
+                },
                 showlegend=True,
-                legend=dict(
-                    orientation="v",
-                    yanchor="top",
-                    y=0.95,
-                    xanchor="left",
-                    x=1.02,
-                    font=dict(size=10),
-                ),
-                margin=dict(l=20, r=150, t=60, b=20),
+                legend={
+                    "orientation": "v",
+                    "yanchor": "top",
+                    "y": 0.95,
+                    "xanchor": "left",
+                    "x": 1.02,
+                    "font": {"size": 10},
+                },
+                margin={"l": 20, "r": 150, "t": 60, "b": 20},
                 autosize=True,
                 height=400,
             )
@@ -175,26 +175,26 @@ class PortfolioVisualizer:
                         textposition="inside",
                         textinfo="text",
                         hole=0.3,
-                        marker=dict(line=dict(color="white", width=2)),
+                        marker={"line": {"color": "white", "width": 2}},
                     )
                 ]
             )
             market_fig.update_layout(
                 title={"text": "市場別構成比", "x": 0.5, "xanchor": "center"},
-                font=dict(
-                    family="Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif",
-                    size=12,
-                ),
+                font={
+                    "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif",
+                    "size": 12,
+                },
                 showlegend=True,
-                legend=dict(
-                    orientation="v",
-                    yanchor="top",
-                    y=0.95,
-                    xanchor="left",
-                    x=1.02,
-                    font=dict(size=10),
-                ),
-                margin=dict(l=20, r=150, t=60, b=20),
+                legend={
+                    "orientation": "v",
+                    "yanchor": "top",
+                    "y": 0.95,
+                    "xanchor": "left",
+                    "x": 1.02,
+                    "font": {"size": 10},
+                },
+                margin={"l": 20, "r": 150, "t": 60, "b": 20},
                 autosize=True,
                 height=400,
             )
@@ -217,26 +217,26 @@ class PortfolioVisualizer:
                         textposition="inside",
                         textinfo="text",
                         hole=0.3,
-                        marker=dict(line=dict(color="white", width=2)),
+                        marker={"line": {"color": "white", "width": 2}},
                     )
                 ]
             )
             account_fig.update_layout(
                 title={"text": "口座別構成比", "x": 0.5, "xanchor": "center"},
-                font=dict(
-                    family="Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif",
-                    size=12,
-                ),
+                font={
+                    "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif",
+                    "size": 12,
+                },
                 showlegend=True,
-                legend=dict(
-                    orientation="v",
-                    yanchor="top",
-                    y=0.95,
-                    xanchor="left",
-                    x=1.02,
-                    font=dict(size=10),
-                ),
-                margin=dict(l=20, r=150, t=60, b=20),
+                legend={
+                    "orientation": "v",
+                    "yanchor": "top",
+                    "y": 0.95,
+                    "xanchor": "left",
+                    "x": 1.02,
+                    "font": {"size": 10},
+                },
+                margin={"l": 20, "r": 150, "t": 60, "b": 20},
                 autosize=True,
                 height=400,
             )
@@ -331,7 +331,7 @@ class PortfolioVisualizer:
                         x=["現在"],
                         y=[total_value],
                         mode="markers",
-                        marker=dict(size=10),
+                        marker={"size": 10},
                         name="資産総額",
                     )
                 )
@@ -339,10 +339,10 @@ class PortfolioVisualizer:
                     title="資産総額（現在）",
                     xaxis_title="",
                     yaxis_title="金額（円）",
-                    font=dict(
-                        family="Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
-                    ),
-                    yaxis=dict(tickformat=","),
+                    font={
+                        "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
+                    },
+                    yaxis={"tickformat": ","},
                 )
 
                 # 損益率
@@ -358,9 +358,9 @@ class PortfolioVisualizer:
                 fig_profit.update_layout(
                     title="損益率",
                     yaxis_title="損益率（%）",
-                    font=dict(
-                        family="Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
-                    ),
+                    font={
+                        "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
+                    },
                     showlegend=False,
                 )
 
@@ -446,7 +446,7 @@ class PortfolioVisualizer:
                     y=performance_df["value"],
                     mode="lines",
                     name="評価額",
-                    line=dict(width=2),
+                    line={"width": 2},
                 )
             )
             fig_value.add_trace(
@@ -455,17 +455,17 @@ class PortfolioVisualizer:
                     y=performance_df["cost"],
                     mode="lines",
                     name="取得コスト",
-                    line=dict(width=2, dash="dash"),
+                    line={"width": 2, "dash": "dash"},
                 )
             )
             fig_value.update_layout(
                 title=f"資産総額の推移（過去{days}日間）",
                 xaxis_title="日付",
                 yaxis_title="金額（円）",
-                font=dict(
-                    family="Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
-                ),
-                yaxis=dict(tickformat=","),
+                font={
+                    "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
+                },
+                yaxis={"tickformat": ","},
                 hovermode="x unified",
             )
 
@@ -477,7 +477,7 @@ class PortfolioVisualizer:
                     y=performance_df["profit_ratio"],
                     mode="lines",
                     name="損益率",
-                    line=dict(width=2),
+                    line={"width": 2},
                     fill="tozeroy",
                 )
             )
@@ -485,11 +485,11 @@ class PortfolioVisualizer:
                 title=f"損益率の推移（過去{days}日間）",
                 xaxis_title="日付",
                 yaxis_title="損益率（%）",
-                font=dict(
-                    family="Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
-                ),
+                font={
+                    "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
+                },
                 hovermode="x unified",
-                yaxis=dict(zeroline=True, zerolinewidth=2, zerolinecolor="gray"),
+                yaxis={"zeroline": True, "zerolinewidth": 2, "zerolinecolor": "gray"},
             )
 
             # 3. ベンチマーク比較（TOPIX）
@@ -501,7 +501,7 @@ class PortfolioVisualizer:
                     y=performance_df["profit_ratio"],
                     mode="lines",
                     name="ポートフォリオ",
-                    line=dict(width=2),
+                    line={"width": 2},
                 )
             )
             # TOPIXデータがあれば追加
@@ -509,9 +509,9 @@ class PortfolioVisualizer:
                 title="ベンチマーク比較",
                 xaxis_title="日付",
                 yaxis_title="リターン（%）",
-                font=dict(
-                    family="Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
-                ),
+                font={
+                    "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
+                },
                 hovermode="x unified",
             )
 
@@ -576,15 +576,15 @@ class PortfolioVisualizer:
                     parents=[""] * len(stock_labels),
                     text=[f"{val:.1f}%" for val in stock_values],
                     textposition="middle center",
-                    marker=dict(
-                        colorscale="RdYlGn",
-                        cmid=0,
-                        colorbar=dict(title="損益率(%)"),
-                        line=dict(width=2),
-                        cmin=-20,
-                        cmax=20,
-                        colorbar_thickness=15,
-                    ),
+                    marker={
+                        "colorscale": "RdYlGn",
+                        "cmid": 0,
+                        "colorbar": {"title": "損益率(%)"},
+                        "line": {"width": 2},
+                        "cmin": -20,
+                        "cmax": 20,
+                        "colorbar_thickness": 15,
+                    },
                     customdata=stock_values,
                     hovertemplate="<b>%{label}</b><br>損益率: %{customdata:.1f}%<br>評価額: ¥%{value:,.0f}<extra></extra>",
                 )
@@ -592,10 +592,10 @@ class PortfolioVisualizer:
             fig_stocks.update_traces(marker_colorbar_thickness=15)
             fig_stocks.update_layout(
                 title="銘柄別損益率ヒートマップ（上位20銘柄）",
-                font=dict(
-                    family="Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
-                ),
-                margin=dict(t=50, l=25, r=25, b=25),
+                font={
+                    "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
+                },
+                margin={"t": 50, "l": 25, "r": 25, "b": 25},
             )
 
             # 2. セクター別パフォーマンスヒートマップ
@@ -613,24 +613,24 @@ class PortfolioVisualizer:
                     parents=[""] * len(sector_perf),
                     text=[f"{val:.1f}%" for val in sector_perf["profit_loss_ratio"]],
                     textposition="middle center",
-                    marker=dict(
-                        colorscale="RdYlGn",
-                        cmid=0,
-                        colorbar=dict(title="平均損益率(%)"),
-                        line=dict(width=2),
-                        cmin=-10,
-                        cmax=10,
-                    ),
+                    marker={
+                        "colorscale": "RdYlGn",
+                        "cmid": 0,
+                        "colorbar": {"title": "平均損益率(%)"},
+                        "line": {"width": 2},
+                        "cmin": -10,
+                        "cmax": 10,
+                    },
                     customdata=sector_perf["profit_loss_ratio"],
                     hovertemplate="<b>%{label}</b><br>平均損益率: %{customdata:.1f}%<br>評価額合計: ¥%{value:,.0f}<extra></extra>",
                 )
             )
             fig_sectors.update_layout(
                 title="セクター別パフォーマンスヒートマップ",
-                font=dict(
-                    family="Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
-                ),
-                margin=dict(t=50, l=25, r=25, b=25),
+                font={
+                    "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
+                },
+                margin={"t": 50, "l": 25, "r": 25, "b": 25},
             )
 
             # 3. 損益分布ヒストグラム
@@ -648,9 +648,9 @@ class PortfolioVisualizer:
                 title="損益率分布",
                 xaxis_title="損益率（%）",
                 yaxis_title="銘柄数",
-                font=dict(
-                    family="Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
-                ),
+                font={
+                    "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
+                },
                 bargap=0.1,
             )
             fig_dist.add_vline(x=0, line_dash="dash", line_color="gray")

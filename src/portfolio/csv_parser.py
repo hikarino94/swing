@@ -170,9 +170,13 @@ class SBICSVParser:
             if quantity is not None and price is not None:
                 base_amount = float(quantity) * float(price)
                 if transaction_type == "buy":
-                    transaction["total_amount"] = base_amount + float(commission) + float(tax)
+                    transaction["total_amount"] = (
+                        base_amount + float(commission) + float(tax)
+                    )
                 else:
-                    transaction["total_amount"] = base_amount - float(commission) - float(tax)
+                    transaction["total_amount"] = (
+                        base_amount - float(commission) - float(tax)
+                    )
 
             transactions.append(transaction)
             logger.debug(
@@ -255,9 +259,13 @@ class SBICSVParser:
             if quantity is not None and price is not None:
                 base_amount = float(quantity) * float(price)
                 if transaction_type == "buy":
-                    transaction["total_amount"] = base_amount + float(commission) + float(tax)
+                    transaction["total_amount"] = (
+                        base_amount + float(commission) + float(tax)
+                    )
                 else:
-                    transaction["total_amount"] = base_amount - float(commission) - float(tax)
+                    transaction["total_amount"] = (
+                        base_amount - float(commission) - float(tax)
+                    )
 
             transactions.append(transaction)
             logger.debug(
@@ -405,9 +413,13 @@ class SBICSVParser:
             if quantity is not None and price is not None:
                 base_amount = float(quantity) * float(price)
                 if transaction_type == "buy":
-                    transaction["total_amount"] = base_amount + float(commission) + float(tax)
+                    transaction["total_amount"] = (
+                        base_amount + float(commission) + float(tax)
+                    )
                 else:
-                    transaction["total_amount"] = base_amount - float(commission) - float(tax)
+                    transaction["total_amount"] = (
+                        base_amount - float(commission) - float(tax)
+                    )
 
             transactions.append(transaction)
             logger.debug(

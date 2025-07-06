@@ -86,25 +86,27 @@ def authenticated_client(tmp_path):
     # テスト用の一時データベースパスを設定
     test_db_path = tmp_path / "test_stock.db"
     os.environ["DATABASE_PATH"] = str(test_db_path)
-    
-    from src.ui.web import app
+
     from werkzeug.security import generate_password_hash
-    
+
+    from src.ui.web import app
+
     app.config["TESTING"] = True
     app.config["WTF_CSRF_ENABLED"] = False
-    
+
     with app.test_client() as client:
         # テスト用データベースを初期化
         from db.db_schema import init_schema
+
         init_schema(test_db_path)
-        
+
         # テストユーザーを作成
         conn = sqlite3.connect(test_db_path)
         cursor = conn.cursor()
-        
+
         # 既存のユーザーを削除（念のため）
         cursor.execute("DELETE FROM users WHERE email = ?", ("test@example.com",))
-        
+
         cursor.execute(
             """
             INSERT INTO users (username, email, password_hash, role)
@@ -114,11 +116,11 @@ def authenticated_client(tmp_path):
                 "testuser",
                 "test@example.com",
                 generate_password_hash("testpass123"),
-                "admin"
-            )
+                "admin",
+            ),
         )
         user_id = cursor.lastrowid
-        
+
         # セッションを作成
         session_id = "test-session-id"
         cursor.execute(
@@ -126,24 +128,26 @@ def authenticated_client(tmp_path):
             INSERT INTO sessions (id, user_id, expires_at)
             VALUES (?, ?, datetime('now', '+1 day'))
             """,
-            (session_id, user_id)
+            (session_id, user_id),
         )
         conn.commit()
         conn.close()
-        
+
         # セッションクッキーを設定
         with client.session_transaction() as sess:
             sess["session_id"] = session_id
             sess["_user_id"] = str(user_id)
-        
+
         # before_requestで適切にユーザーがセットされるようにする
         @app.before_request
         def set_test_user():
-            from flask import session, request
+            from flask import request, session
+
             if "session_id" in session and session["session_id"] == session_id:
                 from src.auth import AuthManager
+
                 request.current_user = AuthManager.get_user_by_session(session_id)
-        
+
         yield client
 
 

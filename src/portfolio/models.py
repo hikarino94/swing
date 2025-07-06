@@ -195,7 +195,7 @@ class Holding:
                         self.lending_type,
                     ),
                 )
-                self.id = cursor.lastrowid  # type: ignore[assignment]
+                self.id = cursor.lastrowid
             else:
                 # 更新
                 cursor.execute(
@@ -238,17 +238,13 @@ class Holding:
         if self.quantity > 0 and current_price > 0:
             self.market_value = float(self.quantity * current_price)
             total_cost = self.quantity * self.average_price
-            if self.market_value is not None:
-                self.profit_loss = float(self.market_value - total_cost)
-                if total_cost > 0:
-                    self.profit_loss_ratio = float(
-                        (self.profit_loss / total_cost) * 100
-                    )
-                else:
-                    self.profit_loss_ratio = 0.0
+            self.profit_loss = float(self.market_value - total_cost)
+            if total_cost > 0:
+                self.profit_loss_ratio = float(
+                    (self.profit_loss / total_cost) * 100
+                )
             else:
-                self.profit_loss = None
-                self.profit_loss_ratio = None
+                self.profit_loss_ratio = 0.0
 
 
 class Transaction:

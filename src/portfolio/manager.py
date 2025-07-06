@@ -425,7 +425,7 @@ class PortfolioManager:
             conn.commit()
 
             logger.info(f"保有銘柄削除完了: {count}件")
-            return int(count)  # type: ignore[no-any-return]
+            return int(count)
 
         except sqlite3.Error as e:
             logger.error(f"保有銘柄削除エラー: {e}")
@@ -463,7 +463,7 @@ class PortfolioManager:
             conn.commit()
 
             logger.info(f"保有銘柄削除完了: {count}件（口座: {account_name}）")
-            return int(count)  # type: ignore[no-any-return]
+            return int(count)
 
         except sqlite3.Error as e:
             logger.error(f"保有銘柄削除エラー: {e}")
