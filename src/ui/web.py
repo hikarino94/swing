@@ -1758,6 +1758,64 @@ def delete_transaction(transaction_id):
         return jsonify({"success": False, "error": str(e)})
 
 
+@app.route("/api/portfolio/visualize/composition", methods=["GET"])
+@login_required
+def get_portfolio_composition():
+    """ポートフォリオ構成円グラフを取得"""
+    try:
+        from src.portfolio.visualization import PortfolioVisualizer
+
+        visualizer = PortfolioVisualizer(request.current_user.id)
+        result = visualizer.create_composition_pie_charts()
+
+        if "error" in result:
+            return jsonify({"success": False, "error": result["error"]})
+
+        return jsonify({"success": True, "data": result})
+    except Exception as e:
+        logger.error(f"ポートフォリオ構成グラフ取得エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/portfolio/visualize/performance", methods=["GET"])
+@login_required
+def get_portfolio_performance():
+    """ポートフォリオパフォーマンス推移を取得"""
+    try:
+        from src.portfolio.visualization import PortfolioVisualizer
+
+        days = request.args.get("days", 180, type=int)
+        visualizer = PortfolioVisualizer(request.current_user.id)
+        result = visualizer.create_performance_charts(days)
+
+        if "error" in result:
+            return jsonify({"success": False, "error": result["error"]})
+
+        return jsonify({"success": True, "data": result})
+    except Exception as e:
+        logger.error(f"パフォーマンス推移取得エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/portfolio/visualize/heatmap", methods=["GET"])
+@login_required
+def get_portfolio_heatmap():
+    """ポートフォリオヒートマップを取得"""
+    try:
+        from src.portfolio.visualization import PortfolioVisualizer
+
+        visualizer = PortfolioVisualizer(request.current_user.id)
+        result = visualizer.create_heatmap()
+
+        if "error" in result:
+            return jsonify({"success": False, "error": result["error"]})
+
+        return jsonify({"success": True, "data": result})
+    except Exception as e:
+        logger.error(f"ヒートマップ取得エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
 if __name__ == "__main__":
     # 期限切れセッションのクリーンアップ
     try:
