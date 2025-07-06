@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent))
 
 from db.db_schema import init_schema
+from src.auth.admin_setup import create_admin_from_env
 from src.config import DB_PATH
 
 
@@ -22,6 +23,10 @@ def main():
     print(f"Initializing database at: {db_path}")
     init_schema(db_path)
     print("Database initialized successfully!")
+
+    # 環境変数から管理者ユーザーを作成
+    print("Creating admin user from environment variables...")
+    create_admin_from_env()
 
 
 if __name__ == "__main__":

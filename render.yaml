@@ -11,3 +11,10 @@ services:
         value: production
       - key: DATABASE_PATH
         value: /opt/render/project/src/db/stock.db
+      # 管理者ユーザー設定（ダッシュボードで設定）
+      # - key: ADMIN_USERNAME
+      #   sync: false
+      # - key: ADMIN_EMAIL
+      #   sync: false
+      # - key: ADMIN_PASSWORD
+      #   sync: false

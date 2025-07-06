@@ -35,6 +35,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 # データベース初期化のインポート
 from db.db_schema import init_schema
 from src.auth import AuthManager, admin_required, login_required
+from src.auth.admin_setup import create_admin_from_env
 from src.auth.models import Session
 from src.config import DB_PATH
 from src.portfolio import PortfolioManager, SBICSVParser
@@ -98,6 +99,9 @@ def init_database():
         except Exception as e:
             logger.error(f"データベースチェックでエラー: {e}")
             init_schema(db_path)
+
+    # 環境変数から管理者ユーザーを作成
+    create_admin_from_env()
 
 
 # アプリケーション起動時にデータベースを初期化

@@ -132,7 +132,41 @@ class Holding:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         try:
-            if self.id is None:
+            # 既存のレコードをチェック
+            existing = self.find_by_user_code_and_account(
+                self.user_id, self.code, self.account_name
+            )
+
+            if existing:
+                # 既存レコードがある場合は更新
+                self.id = existing.id
+                cursor.execute(
+                    """
+                    UPDATE holdings
+                    SET quantity = ?, average_price = ?, market_value = ?,
+                        profit_loss = ?, profit_loss_ratio = ?,
+                        expected_per = ?, actual_pbr = ?, dividend_yield = ?,
+                        expected_eps = ?, actual_bps = ?, expected_dividend = ?,
+                        lending_type = ?, updated_at = datetime('now')
+                    WHERE id = ?
+                """,
+                    (
+                        self.quantity,
+                        self.average_price,
+                        self.market_value,
+                        self.profit_loss,
+                        self.profit_loss_ratio,
+                        self.expected_per,
+                        self.actual_pbr,
+                        self.dividend_yield,
+                        self.expected_eps,
+                        self.actual_bps,
+                        self.expected_dividend,
+                        self.lending_type,
+                        self.id,
+                    ),
+                )
+            elif self.id is None:
                 # 新規作成
                 cursor.execute(
                     """
