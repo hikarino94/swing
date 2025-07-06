@@ -32,6 +32,8 @@ from werkzeug.serving import WSGIRequestHandler
 # プロジェクトルートをPYTHONPATHに追加
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
+# データベース初期化のインポート
+from db.db_schema import init_schema
 from src.auth import AuthManager, admin_required, login_required
 from src.auth.models import Session
 from src.config import DB_PATH
@@ -68,6 +70,38 @@ app.config["SESSION_COOKIE_SECURE"] = False  # 本番環境ではTrue
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["PERMANENT_SESSION_LIFETIME"] = 3600 * 24 * 30  # 30日間
 app.config["SESSION_COOKIE_NAME"] = "swing_session"
+
+
+# データベース初期化
+def init_database():
+    """データベースが存在しない場合は初期化"""
+    db_path = Path(DB_PATH)
+    if not db_path.exists():
+        logger.info("データベースが存在しません。初期化を開始します...")
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        init_schema(db_path)
+        logger.info("データベースの初期化が完了しました")
+    else:
+        # テーブルが存在するか確認
+        try:
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
+                )
+                if not cursor.fetchone():
+                    logger.info(
+                        "usersテーブルが存在しません。スキーマを再作成します..."
+                    )
+                    init_schema(db_path)
+                    logger.info("スキーマの再作成が完了しました")
+        except Exception as e:
+            logger.error(f"データベースチェックでエラー: {e}")
+            init_schema(db_path)
+
+
+# アプリケーション起動時にデータベースを初期化
+init_database()
 
 
 # CSRFトークン生成

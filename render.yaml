@@ -2,7 +2,7 @@ services:
   - type: web
     name: swing-web
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && python init_db.py
     startCommand: gunicorn --bind 0.0.0.0:$PORT --worker-class eventlet -w 1 src.ui.web:app
     envVars:
       - key: PYTHONPATH

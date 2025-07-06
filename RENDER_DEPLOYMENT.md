@@ -4,7 +4,7 @@
 
 ### Build Command
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt && python init_db.py
 ```
 
 ### Pre-Deploy Command
