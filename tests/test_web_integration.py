@@ -11,11 +11,9 @@ from src.ui.web import app
 
 
 @pytest.fixture
-def client():
-    """Flask テストクライアントを作成"""
-    app.config["TESTING"] = True
-    with app.test_client() as client:
-        yield client
+def client(authenticated_client):
+    """Flask テストクライアントを作成（認証済み）"""
+    return authenticated_client
 
 
 @pytest.fixture
@@ -202,7 +200,7 @@ class TestIntegrationWorkflow:
         """データ取得→スクリーニング→バックテストの完全なワークフロー"""
         monkeypatch.chdir(test_environment)
 
-        # 1. インデックスページが正常に表示される
+        # 1. インデックスページが正常に表示される（認証済みなのでリダイレクトなし）
         response = client.get("/")
         assert response.status_code == 200
 

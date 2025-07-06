@@ -17,11 +17,9 @@ from src.ui.web import app
 
 
 @pytest.fixture
-def client():
-    """Flask テストクライアントを作成"""
-    app.config["TESTING"] = True
-    with app.test_client() as client:
-        yield client
+def client(authenticated_client):
+    """Flask テストクライアントを作成（認証済み）"""
+    return authenticated_client
 
 
 class TestAdditionalScreeningCoverage:

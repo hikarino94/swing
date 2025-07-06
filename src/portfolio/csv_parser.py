@@ -62,7 +62,7 @@ class SBICSVParser:
                 # フォールバック
                 for enc in ["utf-8-sig", "shift_jis", "cp932", "utf-8"]:
                     try:
-                        csv_content = csv_content.decode(enc)
+                        csv_content = csv_content.decode(enc)  # type: ignore[union-attr]
                         logger.info(
                             f"フォールバックエンコーディング {enc} でデコード成功"
                         )
@@ -168,11 +168,11 @@ class SBICSVParser:
             tax = transaction["tax"] or 0
 
             if quantity is not None and price is not None:
-                base_amount = quantity * price
+                base_amount = float(quantity) * float(price)
                 if transaction_type == "buy":
-                    transaction["total_amount"] = base_amount + commission + tax
+                    transaction["total_amount"] = base_amount + float(commission) + float(tax)
                 else:
-                    transaction["total_amount"] = base_amount - commission - tax
+                    transaction["total_amount"] = base_amount - float(commission) - float(tax)
 
             transactions.append(transaction)
             logger.debug(
@@ -253,11 +253,11 @@ class SBICSVParser:
             tax = transaction["tax"] or 0
 
             if quantity is not None and price is not None:
-                base_amount = quantity * price
+                base_amount = float(quantity) * float(price)
                 if transaction_type == "buy":
-                    transaction["total_amount"] = base_amount + commission + tax
+                    transaction["total_amount"] = base_amount + float(commission) + float(tax)
                 else:
-                    transaction["total_amount"] = base_amount - commission - tax
+                    transaction["total_amount"] = base_amount - float(commission) - float(tax)
 
             transactions.append(transaction)
             logger.debug(
@@ -403,11 +403,11 @@ class SBICSVParser:
             tax = transaction["tax"] or 0
 
             if quantity is not None and price is not None:
-                base_amount = quantity * price
+                base_amount = float(quantity) * float(price)
                 if transaction_type == "buy":
-                    transaction["total_amount"] = base_amount + commission + tax
+                    transaction["total_amount"] = base_amount + float(commission) + float(tax)
                 else:
-                    transaction["total_amount"] = base_amount - commission - tax
+                    transaction["total_amount"] = base_amount - float(commission) - float(tax)
 
             transactions.append(transaction)
             logger.debug(
@@ -563,7 +563,7 @@ class SBICSVParser:
                 # フォールバック
                 for enc in ["utf-8-sig", "shift_jis", "cp932", "utf-8"]:
                     try:
-                        csv_content = csv_content.decode(enc)
+                        csv_content = csv_content.decode(enc)  # type: ignore[union-attr]
                         logger.info(
                             f"フォールバックエンコーディング {enc} でデコード成功"
                         )
