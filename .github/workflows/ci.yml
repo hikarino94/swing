@@ -92,6 +92,9 @@ jobs:
 
     - name: Create test database
       run: |
+        # テスト用の環境変数を設定
+        export TESTING=1
+        export FLASK_ENV=testing
         python db/db_schema.py
 
     - name: Setup Python Path
@@ -117,19 +120,17 @@ jobs:
         export PYTHONPATH="${PYTHONPATH}:${PWD}"
         export PYTHONWARNINGS="ignore::DeprecationWarning:numpy"
         export PYTHONWARNINGS="ignore::UserWarning"
+        export TESTING=1
+        export FLASK_ENV=testing
         # デバッグ情報を出力
         echo "Current directory: $(pwd)"
         echo "PYTHONPATH: $PYTHONPATH"
         echo "Python version: $(python --version)"
-        # conftest.pyの存在確認
-        echo "conftest.py exists: $([ -f conftest.py ] && echo 'yes' || echo 'no')"
-        cat conftest.py || true
-        # テスト実行（最初のエラーで停止）
-        pytest tests/test_web.py::TestTimestampedPath::test_timestamped_path_basic -v --tb=long || {
+        echo "TESTING: $TESTING"
+        echo "FLASK_ENV: $FLASK_ENV"
+        # 全テストを実行（カバレッジ付き）
+        pytest -v --tb=short --cov=. --cov-report=xml --cov-report=term || {
           echo "::error::Test failed with exit code: $?"
-          echo "Trying to run a simple import test..."
-          python -c "import sys; print('Python paths:'); [print(p) for p in sys.path]"
-          python -c "from src.ui.web import timestamped_path"
           exit 1
         }
 
