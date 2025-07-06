@@ -5,6 +5,7 @@
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -182,7 +183,8 @@ class Config:
 config = Config()
 
 # よく使う値を直接エクスポート
-DB_PATH = config.db_path
+# DB_PATHは環境変数DATABASE_PATHをサポート（テスト環境用）
+DB_PATH = os.environ.get("DATABASE_PATH", config.db_path)
 API_BASE_URL = config.api_base_url
 API_RATE_LIMIT_SLEEP = config.api_rate_limit_sleep
 OUTPUT_BASE_DIR = config.output_base_dir
