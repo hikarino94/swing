@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: swing-web
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --worker-class eventlet -w 1 src.ui.web:app
+    envVars:
+      - key: PYTHONPATH
+        value: /opt/render/project/src
+      - key: FLASK_ENV
+        value: production
+      - key: DATABASE_PATH
+        value: /opt/render/project/src/db/stock.db
