@@ -20,7 +20,9 @@ class AuthManager:
     SESSION_EXPIRE_HOURS_REMEMBER = 24 * 30  # Remember Meセッション（30日間）
 
     @staticmethod
-    def register_user(username: str, email: str, password: str) -> tuple[bool, str]:
+    def register_user(
+        username: str, email: str, password: str, role: str = "admin"
+    ) -> tuple[bool, str]:
         """
         新規ユーザー登録
 
@@ -28,6 +30,7 @@ class AuthManager:
             username: ユーザー名
             email: メールアドレス
             password: パスワード（平文）
+            role: ユーザーロール（admin or portfolio_only）
 
         Returns:
             (成功/失敗, メッセージ)のタプル
@@ -54,6 +57,7 @@ class AuthManager:
             username=username,
             email=email,
             password_hash=generate_password_hash(password),
+            role=role,
         )
 
         if user.save():

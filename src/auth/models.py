@@ -18,11 +18,13 @@ class User:
         username: str = "",
         email: str = "",
         password_hash: str = "",  # nosec: B107
+        role: str = "admin",
     ):
         self.id = id
         self.username = username
         self.email = email
         self.password_hash = password_hash
+        self.role = role
         self.created_at = None
         self.updated_at = None
 
@@ -34,7 +36,7 @@ class User:
         try:
             cursor.execute(
                 """
-                SELECT id, username, email, password_hash, created_at, updated_at
+                SELECT id, username, email, password_hash, created_at, updated_at, role
                 FROM users WHERE username = ?
             """,
                 (username,),
@@ -42,7 +44,11 @@ class User:
             row = cursor.fetchone()
             if row:
                 user = cls(
-                    id=row[0], username=row[1], email=row[2], password_hash=row[3]
+                    id=row[0],
+                    username=row[1],
+                    email=row[2],
+                    password_hash=row[3],
+                    role=row[6] if len(row) > 6 else "admin",
                 )
                 user.created_at = row[4]
                 user.updated_at = row[5]
@@ -59,7 +65,7 @@ class User:
         try:
             cursor.execute(
                 """
-                SELECT id, username, email, password_hash, created_at, updated_at
+                SELECT id, username, email, password_hash, created_at, updated_at, role
                 FROM users WHERE email = ?
             """,
                 (email,),
@@ -67,7 +73,11 @@ class User:
             row = cursor.fetchone()
             if row:
                 user = cls(
-                    id=row[0], username=row[1], email=row[2], password_hash=row[3]
+                    id=row[0],
+                    username=row[1],
+                    email=row[2],
+                    password_hash=row[3],
+                    role=row[6] if len(row) > 6 else "admin",
                 )
                 user.created_at = row[4]
                 user.updated_at = row[5]
@@ -84,7 +94,7 @@ class User:
         try:
             cursor.execute(
                 """
-                SELECT id, username, email, password_hash, created_at, updated_at
+                SELECT id, username, email, password_hash, created_at, updated_at, role
                 FROM users WHERE id = ?
             """,
                 (user_id,),
@@ -92,7 +102,11 @@ class User:
             row = cursor.fetchone()
             if row:
                 user = cls(
-                    id=row[0], username=row[1], email=row[2], password_hash=row[3]
+                    id=row[0],
+                    username=row[1],
+                    email=row[2],
+                    password_hash=row[3],
+                    role=row[6] if len(row) > 6 else "admin",
                 )
                 user.created_at = row[4]
                 user.updated_at = row[5]
@@ -110,21 +124,21 @@ class User:
                 # 新規作成
                 cursor.execute(
                     """
-                    INSERT INTO users (username, email, password_hash)
-                    VALUES (?, ?, ?)
+                    INSERT INTO users (username, email, password_hash, role)
+                    VALUES (?, ?, ?, ?)
                 """,
-                    (self.username, self.email, self.password_hash),
+                    (self.username, self.email, self.password_hash, self.role),
                 )
                 self.id = cursor.lastrowid
             else:
                 # 更新
                 cursor.execute(
                     """
-                    UPDATE users SET username = ?, email = ?, password_hash = ?,
+                    UPDATE users SET username = ?, email = ?, password_hash = ?, role = ?,
                     updated_at = datetime('now')
                     WHERE id = ?
                 """,
-                    (self.username, self.email, self.password_hash, self.id),
+                    (self.username, self.email, self.password_hash, self.role, self.id),
                 )
 
             conn.commit()

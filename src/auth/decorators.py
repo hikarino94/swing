@@ -91,16 +91,22 @@ def admin_required(f):
                 session["next_url"] = request.url
                 return redirect(url_for("login"))
 
-        # 管理者権限チェック（将来的にusersテーブルにis_adminフラグを追加する場合）
-        # if not user.is_admin:
-        #     if request.path.startswith("/api/"):
-        #         return jsonify({
-        #             "success": False,
-        #             "error": "管理者権限が必要です",
-        #             "code": "FORBIDDEN"
-        #         }), 403
-        #     else:
-        #         return "アクセス権限がありません", 403
+        # 管理者権限チェック
+        if user.role == "portfolio_only":
+            logger.warning(f"管理者権限なしアクセス: {request.path} by {user.username}")
+            if request.path.startswith("/api/"):
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "管理者権限が必要です",
+                            "code": "FORBIDDEN",
+                        }
+                    ),
+                    403,
+                )
+            else:
+                return "アクセス権限がありません", 403
 
         request.current_user = user
         return f(*args, **kwargs)

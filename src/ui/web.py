@@ -32,7 +32,7 @@ from werkzeug.serving import WSGIRequestHandler
 # プロジェクトルートをPYTHONPATHに追加
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
-from src.auth import AuthManager, login_required
+from src.auth import AuthManager, admin_required, login_required
 from src.auth.models import Session
 from src.config import DB_PATH
 from src.portfolio import PortfolioManager, SBICSVParser
@@ -189,11 +189,21 @@ def run_command(command, description="コマンド実行中"):
 def index():
     """メインページ"""
     logger.info("メインページへのアクセス")
-    # ログインしている場合はユーザー情報を渡す
-    user = None
-    if "session_id" in session:
-        user = AuthManager.get_user_by_session(session["session_id"])
-    return render_template("index.html", user=user)
+    # 未ログインの場合はログインページへリダイレクト
+    if "session_id" not in session:
+        return redirect(url_for("login"))
+
+    user = AuthManager.get_user_by_session(session["session_id"])
+    if not user:
+        session.clear()
+        return redirect(url_for("login"))
+
+    # ポートフォリオ専用ユーザーの場合は権限をチェック
+    if user.role == "portfolio_only":
+        # ポートフォリオタブのみ表示するようにユーザー情報を渡す
+        return render_template("index.html", user=user, portfolio_only=True)
+
+    return render_template("index.html", user=user, portfolio_only=False)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -244,7 +254,10 @@ def register():
     if password != password_confirm:
         return render_template("register.html", error="パスワードが一致しません")
 
-    success, message = AuthManager.register_user(username, email, password)
+    # 新規登録ユーザーは常にポートフォリオ専用ユーザーとして作成
+    success, message = AuthManager.register_user(
+        username, email, password, role="portfolio_only"
+    )
 
     if success:
         # 登録成功したら自動的にログイン
@@ -267,6 +280,8 @@ def logout():
 
 
 @app.route("/api/fetch/quotes", methods=["POST"])
+@login_required
+@admin_required
 def fetch_quotes():
     """株価データ取得"""
     logger.info("株価データ取得APIが呼び出されました")
@@ -303,6 +318,8 @@ def fetch_quotes():
 
 
 @app.route("/api/fetch/listed", methods=["POST"])
+@login_required
+@admin_required
 def fetch_listed():
     """上場情報取得"""
     logger.info("上場情報取得APIが呼び出されました")
@@ -330,6 +347,8 @@ def fetch_listed():
 
 
 @app.route("/api/fetch/statements", methods=["POST"])
+@login_required
+@admin_required
 def fetch_statements():
     """財務諸表取得"""
     logger.info("財務諸表取得APIが呼び出されました")
@@ -370,6 +389,8 @@ def fetch_statements():
 
 
 @app.route("/api/screen/fundamental", methods=["POST"])
+@login_required
+@admin_required
 def screen_fundamental():
     """ファンダメンタルスクリーニング"""
     data = request.json
@@ -435,6 +456,8 @@ def screen_fundamental():
 
 
 @app.route("/api/screen/technical", methods=["POST"])
+@login_required
+@admin_required
 def screen_technical():
     """テクニカルスクリーニング"""
     logger.info("テクニカルスクリーニングAPIが呼び出されました")
@@ -525,6 +548,8 @@ def screen_technical():
 
 
 @app.route("/api/screen/ml", methods=["POST"])
+@login_required
+@admin_required
 def screen_ml():
     """MLスクリーニング"""
     data = request.json
@@ -552,6 +577,8 @@ def screen_ml():
 
 
 @app.route("/api/backtest/fundamental", methods=["POST"])
+@login_required
+@admin_required
 def backtest_fundamental():
     """ファンダメンタルバックテスト"""
     data = request.json
@@ -577,6 +604,8 @@ def backtest_fundamental():
 
 
 @app.route("/api/backtest/technical", methods=["POST"])
+@login_required
+@admin_required
 def backtest_technical():
     """テクニカルバックテスト"""
     data = request.json
@@ -602,6 +631,8 @@ def backtest_technical():
 
 
 @app.route("/api/backtest/ml", methods=["POST"])
+@login_required
+@admin_required
 def backtest_ml():
     """MLバックテスト"""
     data = request.json
@@ -625,6 +656,8 @@ def backtest_ml():
 
 
 @app.route("/api/utils/update_token", methods=["POST"])
+@login_required
+@admin_required
 def update_token():
     """IDトークン更新"""
     logger.info("IDトークン更新APIが呼び出されました")
@@ -688,6 +721,8 @@ def update_token():
 
 
 @app.route("/api/utils/db_summary", methods=["GET"])
+@login_required
+@admin_required
 def db_summary():
     """DBサマリー取得"""
     logger.info("DBサマリー取得APIが呼び出されました")
@@ -708,6 +743,8 @@ def db_summary():
 
 
 @app.route("/api/utils/list_signals", methods=["POST"])
+@login_required
+@admin_required
 def list_signals():
     """シグナル一覧取得"""
     logger.info("シグナル一覧取得APIが呼び出されました")
@@ -742,6 +779,8 @@ def list_signals():
 
 
 @app.route("/api/utils/analyze_json", methods=["POST"])
+@login_required
+@admin_required
 def analyze_json():
     """JSON分析"""
     logger.info("JSON分析APIが呼び出されました")
@@ -807,6 +846,8 @@ def analyze_json():
 
 
 @app.route("/api/utils/thresholds", methods=["GET", "POST"])
+@login_required
+@admin_required
 def thresholds():
     """閾値設定の取得/更新"""
     threshold_file = "screening/thresholds.json"
@@ -829,6 +870,7 @@ def thresholds():
 
 
 @app.route("/api/results/list", methods=["GET"])
+@login_required
 def list_results():
     """結果ファイル一覧取得"""
     result_types = request.args.get("types", "xlsx,json").split(",")
@@ -875,6 +917,7 @@ def list_results():
 
 
 @app.route("/api/results/download/<path:filepath>")
+@login_required
 def download_result(filepath):
     """結果ファイルダウンロード"""
     logger.info(f"結果ファイルダウンロードが要求されました: {filepath}")

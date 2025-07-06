@@ -17,13 +17,13 @@
             <select x-model="activeTab"
                     @change="checkTabChange($event.target.value)"
                     class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                <option value="data">📊 データ取得</option>
-                <option value="screening">🔍 スクリーニング</option>
-                <option value="backtest">📈 バックテスト</option>
+                <option value="data" x-show="!isPortfolioOnly">📊 データ取得</option>
+                <option value="screening" x-show="!isPortfolioOnly">🔍 スクリーニング</option>
+                <option value="backtest" x-show="!isPortfolioOnly">📈 バックテスト</option>
                 <option value="portfolio" x-show="isLoggedIn">💼 ポートフォリオ</option>
-                <option value="utilities">🛠️ ユーティリティ</option>
-                <option value="results">📁 結果閲覧</option>
-                <option value="settings">⚙️ 設定</option>
+                <option value="utilities" x-show="!isPortfolioOnly">🛠️ ユーティリティ</option>
+                <option value="results" x-show="!isPortfolioOnly">📁 結果閲覧</option>
+                <option value="settings" x-show="!isPortfolioOnly">⚙️ 設定</option>
             </select>
         </div>
     </div>
@@ -31,37 +31,43 @@
     <!-- デスクトップ用タブナビゲーション -->
     <div class="hidden sm:block border-b border-gray-200">
         <nav class="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
-            <button @click="checkTabChange('data')"
+            <button x-show="!isPortfolioOnly"
+                    @click="checkTabChange('data')"
                     :class="{'tab-active': activeTab === 'data'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'data' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 📊 データ取得
             </button>
-            <button @click="checkTabChange('screening')"
+            <button x-show="!isPortfolioOnly"
+                    @click="checkTabChange('screening')"
                     :class="{'tab-active': activeTab === 'screening'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'screening' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 🔍 スクリーニング
             </button>
-            <button @click="checkTabChange('backtest')"
+            <button x-show="!isPortfolioOnly"
+                    @click="checkTabChange('backtest')"
                     :class="{'tab-active': activeTab === 'backtest'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'backtest' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 📈 バックテスト
             </button>
-            <button @click="checkTabChange('utilities')"
+            <button x-show="!isPortfolioOnly"
+                    @click="checkTabChange('utilities')"
                     :class="{'tab-active': activeTab === 'utilities'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'utilities' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 🛠️ ユーティリティ
             </button>
-            <button @click="checkTabChange('results')"
+            <button x-show="!isPortfolioOnly"
+                    @click="checkTabChange('results')"
                     :class="{'tab-active': activeTab === 'results'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'results' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 📁 結果閲覧
             </button>
-            <button @click="checkTabChange('settings')"
+            <button x-show="!isPortfolioOnly"
+                    @click="checkTabChange('settings')"
                     :class="{'tab-active': activeTab === 'settings'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'settings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
@@ -1210,11 +1216,12 @@
 <script>
 function swingApp() {
     return {
-        activeTab: 'data',
+        activeTab: '{{ "portfolio" if portfolio_only else "data" }}',
         isLoading: false,
         isProcessing: false,
         processingMessage: '',
         isLoggedIn: {{ 'true' if user else 'false' }},
+        isPortfolioOnly: {{ 'true' if portfolio_only else 'false' }},
         processingStates: {
             data: false,
             screening: false,
