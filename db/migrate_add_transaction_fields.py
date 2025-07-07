@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from src.config import DB_PATH
+from src.config import get_db_path
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 def migrate():
     """取引テーブルに新しいフィールドを追加"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
     cursor = conn.cursor()
 
     try:

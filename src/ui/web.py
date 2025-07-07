@@ -37,7 +37,7 @@ from db.db_schema import init_schema
 from src.auth import AuthManager, admin_required, login_required
 from src.auth.admin_setup import create_admin_from_env
 from src.auth.models import Session
-from src.config import DB_PATH
+from src.config import get_db_path
 from src.portfolio import PortfolioManager, SBICSVParser
 from src.utils.file_utils import get_timestamped_output_path
 from src.utils.logging_config import get_logger
@@ -76,7 +76,7 @@ app.config["SESSION_COOKIE_NAME"] = "swing_session"
 # データベース初期化
 def init_database():
     """データベースが存在しない場合は初期化"""
-    db_path = Path(DB_PATH)
+    db_path = Path(get_db_path())
     if not db_path.exists():
         logger.info("データベースが存在しません。初期化を開始します...")
         db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -461,7 +461,7 @@ def screen_fundamental():
     if result["success"]:
         try:
             output_file = timestamped_path("screening", "fundamental", ".xlsx")
-            conn = sqlite3.connect(DB_PATH)
+            conn = sqlite3.connect(get_db_path())
 
             # 最新のシグナルを取得
             query = """
@@ -534,7 +534,7 @@ def screen_technical():
         if result["success"] and action == "screen":
             try:
                 output_file = timestamped_path("screening", "technical", ".xlsx")
-                conn = sqlite3.connect(DB_PATH)
+                conn = sqlite3.connect(get_db_path())
 
                 # 最新のシグナルを取得
                 as_of_date = data.get("as_of")
@@ -1128,7 +1128,7 @@ def get_transactions():
 
                 # 売却時点での実現損益を計算
                 # 売却時点での平均取得価格を計算するため、この取引より前の履歴を参照
-                conn = sqlite3.connect(DB_PATH)
+                conn = sqlite3.connect(get_db_path())
                 cursor = conn.cursor()
                 try:
                     # この売却より前の取引で平均取得価格を計算
@@ -1326,7 +1326,7 @@ def delete_holdings():
 def get_accounts():
     """口座名一覧を取得"""
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
         cursor.execute(
@@ -1359,7 +1359,7 @@ def search_stocks():
                 {"success": False, "error": "検索キーワードを入力してください"}
             )
 
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
         # 銘柄コードまたは会社名で部分一致検索
@@ -1544,7 +1544,7 @@ def update_holding():
 def delete_single_holding(code, account_name):
     """特定の保有銘柄を削除"""
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
         cursor.execute(
@@ -1674,7 +1674,7 @@ def update_transaction(transaction_id):
             )
 
         # 取引を取得して所有者を確認
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
         cursor.execute(
@@ -1781,7 +1781,7 @@ def update_transaction(transaction_id):
 def delete_transaction(transaction_id):
     """取引履歴を削除"""
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
         # 所有者確認と削除を同時に実行

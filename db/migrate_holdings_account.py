@@ -4,15 +4,18 @@
 """
 
 import sqlite3
+import sys
 from pathlib import Path
 
-# データベースパスを取得
-DB_PATH = Path(__file__).parent.parent / "db" / "stock.db"
+# プロジェクトルートをPYTHONPATHに追加
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
+from src.config import get_db_path
 
 
 def migrate():
     """既存のholdingsテーブルにaccount_nameカラムを追加"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
     cursor = conn.cursor()
 
     try:
@@ -86,7 +89,8 @@ def migrate():
 
 
 if __name__ == "__main__":
-    if DB_PATH.exists():
+    db_path = Path(get_db_path())
+    if db_path.exists():
         migrate()
     else:
-        print(f"データベースファイルが見つかりません: {DB_PATH}")
+        print(f"データベースファイルが見つかりません: {db_path}")

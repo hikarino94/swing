@@ -40,7 +40,7 @@ from requests import Session
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from src.config import DB_PATH, config  # noqa: E402
+from src.config import config, get_db_path  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Config & logging
@@ -325,7 +325,7 @@ def main(mode: str, start_date: str | None, end_date: str | None) -> None:
     idtoken = _load_token()
     start = time.perf_counter()
     logger.info("モード%sで処理を開始します", mode)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
     try:
         if mode == "1":
             cur = conn.execute("SELECT code FROM listed_info WHERE delete_flag = 0")

@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from src.config import DB_PATH
+from src.config import get_db_path
 from src.utils.logging_config import get_logger
 
 from .models import Holding, Transaction
@@ -111,7 +111,7 @@ class PortfolioManager:
         Args:
             user_id: ユーザーID
         """
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
         try:
@@ -258,7 +258,7 @@ class PortfolioManager:
         holdings = Holding.find_all_by_user(user_id)
         updated_count = 0
 
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
         try:
@@ -332,7 +332,7 @@ class PortfolioManager:
         Returns:
             集約された保有銘柄のリスト
         """
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
         try:
@@ -412,7 +412,7 @@ class PortfolioManager:
         Returns:
             削除件数
         """
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
         try:
@@ -446,7 +446,7 @@ class PortfolioManager:
         Returns:
             削除件数
         """
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
         try:
@@ -483,7 +483,7 @@ class PortfolioManager:
         Returns:
             サマリー情報の辞書
         """
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
         try:

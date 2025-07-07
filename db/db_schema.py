@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from src.config import DB_PATH
+from src.config import get_db_path
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
@@ -341,8 +341,8 @@ def init_schema(db_path: str | Path) -> None:
 
 
 def main() -> None:  # pragma: no cover
-    init_schema(DB_PATH)
-    logger.info("Schema created or verified at %s", DB_PATH)
+    init_schema(get_db_path())
+    logger.info("Schema created or verified at %s", get_db_path())
 
 
 if __name__ == "__main__":

@@ -10,12 +10,12 @@ sys.path.append(str(Path(__file__).resolve().parent))
 
 from db.db_schema import init_schema
 from src.auth.admin_setup import create_admin_from_env
-from src.config import DB_PATH
+from src.config import get_db_path
 
 
 def main():
     """データベースを初期化"""
-    db_path = Path(DB_PATH)
+    db_path = Path(get_db_path())
 
     # ディレクトリが存在しない場合は作成
     db_path.parent.mkdir(parents=True, exist_ok=True)

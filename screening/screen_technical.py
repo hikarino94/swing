@@ -35,7 +35,7 @@ from screening.thresholds import (  # noqa: E402
     SIGNAL_COUNT_MIN,
     log_thresholds,
 )
-from src.config import DB_PATH  # noqa: E402
+from src.config import get_db_path  # noqa: E402
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
@@ -413,7 +413,7 @@ if __name__ == "__main__":
         description="スイングトレード向けテクニカルシグナルツール"
     )
     parser.add_argument("command", choices=["indicators", "screen"])
-    parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
+    parser.add_argument("--db", default=get_db_path(), help="SQLite DB のパス")
     parser.add_argument("--as-of", help="計算またはスクリーニング対象日 YYYY-MM-DD")
     parser.add_argument(
         "--lookback",

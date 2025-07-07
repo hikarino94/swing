@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from src.config import DB_PATH  # noqa: E402
+from src.config import get_db_path  # noqa: E402
 
 TABLES = {
     "fund": ("fundamental_signals", "DisclosedAt"),
@@ -25,7 +25,7 @@ def main() -> None:
         description="Show recent screening signals from the DB"
     )
     parser.add_argument("kind", choices=TABLES.keys(), help="fund or tech")
-    parser.add_argument("--db", default=DB_PATH, help="SQLite DB path")
+    parser.add_argument("--db", default=get_db_path(), help="SQLite DB path")
     parser.add_argument("--start", help="開始日 YYYY-MM-DD")
     parser.add_argument("--end", help="終了日 YYYY-MM-DD")
     parser.add_argument(

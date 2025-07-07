@@ -43,7 +43,7 @@ from screening.thresholds import (  # noqa: E402
     TREASURY_DELTA_MAX,
     log_thresholds,
 )
-from src.config import DB_PATH  # noqa: E402
+from src.config import get_db_path  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ from src.config import DB_PATH  # noqa: E402
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Config:
-    db_path: Path = Path(DB_PATH)
+    db_path: Path = Path(get_db_path())
     lookback_days: int = 365 * 3  # 3 年分ロード
     recent_days: int = 7  # 開示から何日以内を対象にするか
     as_of: date = field(default_factory=date.today)  # 処理基準日
@@ -201,7 +201,7 @@ def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
         return g
 
     # groupbyでcodeカラムを保持するようにgroup_keysをTrueに変更
-    result = df.groupby("code", group_keys=True).apply(_add, include_groups=False)
+    result = df.groupby("code", group_keys=True).apply(_add)
 
     # マルチインデックスの場合は、codeレベルをカラムに戻す
     if isinstance(result.index, pd.MultiIndex):

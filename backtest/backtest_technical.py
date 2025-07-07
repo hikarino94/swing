@@ -50,7 +50,7 @@ from screening.thresholds import (  # noqa: E402
     SIGNAL_COUNT_MIN,
     log_thresholds,
 )
-from src.config import DB_PATH  # noqa: E402
+from src.config import get_db_path  # noqa: E402
 from src.utils.file_utils import get_timestamped_output_path  # noqa: E402
 
 CAPITAL_DEFAULT = 1_000_000
@@ -397,8 +397,6 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: Path | str) -> N
                     width = max(10, int(max_len * 1.1))
                 else:
                     width = 15  # デフォルト幅
-            else:
-                width = 15  # DataFrameが空の場合のデフォルト幅
             sheet.set_column(i, i, width)
 
 
@@ -477,7 +475,7 @@ def run_backtest_range(
 def parse_args(args=None):
     """コマンドライン引数をパース"""
     parser = argparse.ArgumentParser(description="スイングトレードのバックテストツール")
-    parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
+    parser.add_argument("--db", default=get_db_path(), help="SQLite DB のパス")
     default_xlsx, default_json = _result_paths("technical")
     parser.add_argument("--start", required=True, help="エントリー開始日 YYYY-MM-DD")
     parser.add_argument("--end", help="エントリー終了日 YYYY-MM-DD")

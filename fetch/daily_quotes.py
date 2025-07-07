@@ -40,7 +40,7 @@ import requests
 from requests import Response, Session
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from src.config import DB_PATH, config  # noqa: E402
+from src.config import config, get_db_path  # noqa: E402
 
 API_URL = config.get_api_endpoint("daily_quotes")
 RATE_SLEEP = config.api_rate_limit_sleep
@@ -317,7 +317,7 @@ def _get_optimized_connection() -> sqlite3.Connection:
 
     パフォーマンス向上のためのPRAGMA設定を適用します。
     """
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
 
     # パフォーマンス最適化設定
     conn.execute("PRAGMA cache_size = -64000")  # 64MBのキャッシュ
@@ -419,7 +419,7 @@ def fetch_and_load(start: str | None, end: str | None) -> None:
         try:
             conn.rollback()
         except Exception:
-            pass
+            pass  # nosec B110 - ロールバックのエラーは無視
         logger.error("予期しないエラー: %s", exc)
         raise
     finally:

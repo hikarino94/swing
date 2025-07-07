@@ -30,7 +30,7 @@ SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
 sys.path.append(str(SCREENING_DIR))
 
 from screening.thresholds import log_thresholds  # noqa: E402
-from src.config import DB_PATH  # noqa: E402
+from src.config import get_db_path  # noqa: E402
 from src.utils.file_utils import get_timestamped_output_path  # noqa: E402
 
 TD_FMT = "%Y-%m-%d"
@@ -254,7 +254,7 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: Path | str):
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    p.add_argument("--db", default=DB_PATH, help="SQLite DB ファイル")
+    p.add_argument("--db", default=get_db_path(), help="SQLite DB ファイル")
     p.add_argument("--hold", type=int, default=40, help="保有期間（日数）")
     p.add_argument(
         "--entry-offset", type=int, default=1, help="エントリー日のオフセット"

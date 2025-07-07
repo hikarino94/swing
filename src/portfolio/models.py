@@ -3,7 +3,7 @@
 import sqlite3
 from typing import Any, Optional
 
-from src.config import DB_PATH
+from src.config import get_db_path
 from src.utils.logging_config import get_logger
 
 logger = get_logger("portfolio.models")
@@ -44,7 +44,7 @@ class Holding:
         cls, user_id: int, code: str, account_name: str
     ) -> Optional["Holding"]:
         """ユーザーID、銘柄コード、口座名で保有銘柄を検索"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             cursor.execute(
@@ -84,7 +84,7 @@ class Holding:
     @classmethod
     def find_all_by_user(cls, user_id: int) -> list["Holding"]:
         """ユーザーの全保有銘柄を取得"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             cursor.execute(
@@ -129,7 +129,7 @@ class Holding:
 
     def save(self) -> bool:
         """保有銘柄情報を保存"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             # 既存のレコードをチェック
@@ -240,9 +240,7 @@ class Holding:
             total_cost = self.quantity * self.average_price
             self.profit_loss = float(self.market_value - total_cost)
             if total_cost > 0:
-                self.profit_loss_ratio = float(
-                    (self.profit_loss / total_cost) * 100
-                )
+                self.profit_loss_ratio = float((self.profit_loss / total_cost) * 100)
             else:
                 self.profit_loss_ratio = 0.0
 
@@ -285,7 +283,7 @@ class Transaction:
         end_date: str | None = None,
     ) -> list["Transaction"]:
         """ユーザーの取引履歴を取得"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             query = """
@@ -342,7 +340,7 @@ class Transaction:
 
     def save(self) -> bool:
         """取引情報を保存"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             cursor.execute(
@@ -383,7 +381,7 @@ class Transaction:
     @staticmethod
     def bulk_insert(transactions: list[dict]) -> int:
         """複数の取引を一括挿入"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         inserted_count = 0
 

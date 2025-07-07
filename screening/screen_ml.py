@@ -29,7 +29,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from src.config import DB_PATH  # noqa: E402
+from src.config import get_db_path  # noqa: E402
 
 # -----------------------------------------------------------------------------
 # pandas future‑proof settings & logger
@@ -305,7 +305,7 @@ def _train_model(df: pd.DataFrame):
 def cli():
     p = argparse.ArgumentParser(description="ML‑based swing‑trade screener")
     p.add_argument("cmd", choices=["train", "screen"], help="Command")
-    p.add_argument("--db", default=DB_PATH, help="SQLite DB path")
+    p.add_argument("--db", default=get_db_path(), help="SQLite DB path")
     p.add_argument(
         "--lookback", type=int, default=LOOKBACK_DAYS, help="History days for training"
     )

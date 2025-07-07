@@ -30,7 +30,7 @@ from screening.screen_ml import (
     _merge_features,
     _train_model,
 )
-from src.config import DB_PATH
+from src.config import get_db_path
 from src.utils.file_utils import get_timestamped_output_path
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
@@ -215,7 +215,7 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: Path | str) -> N
 def parse_args(args=None):
     """コマンドライン引数をパース"""
     parser = argparse.ArgumentParser(description="ML back-test")
-    parser.add_argument("--db", default=DB_PATH, help="SQLite DB path")
+    parser.add_argument("--db", default=get_db_path(), help="SQLite DB path")
     parser.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     parser.add_argument("--end", help="End date YYYY-MM-DD")
     parser.add_argument("--top", type=int, default=10, help="Top N picks per day")

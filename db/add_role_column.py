@@ -10,12 +10,12 @@ from pathlib import Path
 # プロジェクトルートをPYTHONPATHに追加
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from src.config import DB_PATH
+from src.config import get_db_path
 
 
 def add_role_column():
     """usersテーブルにroleカラムを追加"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
     cursor = conn.cursor()
 
     try:

@@ -3,7 +3,7 @@
 import sqlite3
 from typing import Optional
 
-from src.config import DB_PATH
+from src.config import get_db_path
 from src.utils.logging_config import get_logger
 
 logger = get_logger("auth.models")
@@ -31,7 +31,7 @@ class User:
     @classmethod
     def find_by_username(cls, username: str) -> Optional["User"]:
         """ユーザー名でユーザーを検索"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             cursor.execute(
@@ -60,7 +60,7 @@ class User:
     @classmethod
     def find_by_email(cls, email: str) -> Optional["User"]:
         """メールアドレスでユーザーを検索"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             cursor.execute(
@@ -89,7 +89,7 @@ class User:
     @classmethod
     def find_by_id(cls, user_id: int) -> Optional["User"]:
         """IDでユーザーを検索"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             cursor.execute(
@@ -117,7 +117,7 @@ class User:
 
     def save(self) -> bool:
         """ユーザー情報を保存（新規作成または更新）"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             if self.id is None:
@@ -164,7 +164,7 @@ class Session:
     @classmethod
     def find_by_id(cls, session_id: str) -> Optional["Session"]:
         """セッションIDでセッションを検索"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             from datetime import datetime
@@ -190,7 +190,7 @@ class Session:
 
     def save(self) -> bool:
         """セッション情報を保存"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             # テーブルのremember_meカラムが存在するか確認
@@ -226,7 +226,7 @@ class Session:
 
     def delete(self) -> bool:
         """セッションを削除"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             cursor.execute("DELETE FROM sessions WHERE id = ?", (self.id,))
@@ -242,7 +242,7 @@ class Session:
     @classmethod
     def cleanup_expired(cls) -> int:
         """期限切れセッションをクリーンアップ"""
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             from datetime import datetime

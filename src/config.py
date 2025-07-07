@@ -182,9 +182,18 @@ class Config:
 # グローバル設定インスタンス
 config = Config()
 
+
 # よく使う値を直接エクスポート
 # DB_PATHは環境変数DATABASE_PATHをサポート（テスト環境用）
-DB_PATH = os.environ.get("DATABASE_PATH", config.db_path)
+def get_db_path() -> str:
+    """データベースパスを取得（環境変数DATABASE_PATHを優先）"""
+    return os.environ.get("DATABASE_PATH", config.db_path)
+
+
+# 後方互換性のため、最初の評価時の値も保持
+DB_PATH = get_db_path()
+
+# 他の設定値
 API_BASE_URL = config.api_base_url
 API_RATE_LIMIT_SLEEP = config.api_rate_limit_sleep
 OUTPUT_BASE_DIR = config.output_base_dir

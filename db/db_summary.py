@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from src.config import DB_PATH
+from src.config import get_db_path
 
 TABLES = {
     "prices": "date",
@@ -20,7 +20,7 @@ TABLES = {
 
 
 def main() -> None:
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(get_db_path()) as conn:
         for table, date_col in TABLES.items():
             cur = conn.execute(
                 f"SELECT COUNT(*), MIN({date_col}), MAX({date_col}) FROM {table}"

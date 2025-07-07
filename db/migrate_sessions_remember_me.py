@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from src.config import DB_PATH
+from src.config import get_db_path
 from src.utils.logging_config import get_logger
 
 logger = get_logger("db_migration")
@@ -17,7 +17,7 @@ logger = get_logger("db_migration")
 def add_remember_me_column():
     """既存のsessionsテーブルにremember_meカラムを追加"""
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
         # カラムが既に存在するか確認

@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from src.config import DB_PATH
+from src.config import get_db_path
 from src.utils.logging_config import get_logger
 
 logger = get_logger("migrate_stock_indicators")
@@ -32,7 +32,7 @@ def add_stock_indicator_columns():
     ]
 
     try:
-        with sqlite3.connect(DB_PATH) as conn:
+        with sqlite3.connect(get_db_path()) as conn:
             cursor = conn.cursor()
 
             # 既存のカラムを確認
@@ -59,7 +59,7 @@ def add_stock_indicator_columns():
 def verify_schema():
     """スキーマが正しく更新されたか確認"""
     try:
-        with sqlite3.connect(DB_PATH) as conn:
+        with sqlite3.connect(get_db_path()) as conn:
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(holdings)")
             columns = cursor.fetchall()
