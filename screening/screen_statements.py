@@ -200,19 +200,22 @@ def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
         g.drop(columns="q_num", inplace=True)
         return g
 
-    # groupbyでcodeカラムを保持するようにgroup_keysをTrueに変更
-    # pandas 2.2.0以降ではinclude_groups=Falseが必要
-    try:
-        result = df.groupby("code", group_keys=True).apply(_add, include_groups=False)  # type: ignore[call-overload]
-    except TypeError:
-        # 古いバージョンのpandasの場合
-        result = df.groupby("code", group_keys=True).apply(_add)
+    # groupbyでcodeカラムを保持する
+    # pandas 2.2.0以降の変更に対応
+    grouped = df.groupby("code", group_keys=False)
+    result_list = []
 
-    # インデックスをリセット
-    if "code" not in result.columns:
-        result = result.reset_index()
+    for code, group in grouped:
+        processed = _add(group)
+        processed["code"] = code
+        result_list.append(processed)
 
-    return result  # type: ignore[no-any-return]
+    if result_list:
+        result = pd.concat(result_list, ignore_index=True)
+    else:
+        result = pd.DataFrame()
+
+    return result
 
 
 # ---------------------------------------------------------------------------
