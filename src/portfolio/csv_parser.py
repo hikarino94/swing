@@ -487,6 +487,10 @@ class SBICSVParser:
         try:
             value_str = str(value).strip()
 
+            # 矢印記号の場合はデフォルト値を返す
+            if value_str in ["↑", "↓", "→", "←"]:
+                return default
+
             # カンマを除去
             value_str = value_str.replace(",", "")
 
@@ -519,7 +523,9 @@ class SBICSVParser:
 
             return float(value_str)
         except (ValueError, AttributeError):
-            logger.warning(f"数値解析エラー: {value}")
+            # 矢印記号はエラーログを出さない
+            if str(value).strip() not in ["↑", "↓", "→", "←"]:
+                logger.warning(f"数値解析エラー: {value}")
             return default
 
     @staticmethod
@@ -595,7 +601,10 @@ class SBICSVParser:
             return []
 
         # 保有証券_現物形式の判定（「銘柄」が複数回出現、またはBOMがある場合）
-        if lines and (lines[0].count("銘柄") >= 4 or lines[0].startswith("﻿銘柄")):
+        # またはカラム数が非常に多い場合（20以上）
+        first_line_cols = len(lines[0].split(",")) if lines else 0
+        if lines and (lines[0].count("銘柄") >= 2 or lines[0].startswith("﻿銘柄") or first_line_cols > 20):
+            logger.debug(f"詳細形式と判定: 銘柄数={lines[0].count('銘柄')}, カラム数={first_line_cols}")
             return SBICSVParser._parse_holdings_detailed_format(csv_content)
         # SaveFile形式の判定（「保有証券一覧」などのヘッダーがある）
         elif "保有証券一覧" in csv_content or "評価額合計" in csv_content:
@@ -625,9 +634,23 @@ class SBICSVParser:
                 if not code:
                     continue
 
+                # 口座タイプの判定（NISA/特定/つみたてNISA等）
+                account_type = "特定"  # デフォルト
+                account_type_col = row.get("口座区分") or row.get("預り") or row.get("預り区分") or ""
+                if "NISA" in account_type_col:
+                    if "つみたて" in account_type_col:
+                        account_type = "つみたてNISA"
+                    else:
+                        account_type = "NISA"
+                elif "特定" in account_type_col:
+                    account_type = "特定"
+                elif "一般" in account_type_col:
+                    account_type = "一般"
+
                 holding = {
                     "code": code,
                     "name": row.get("銘柄名", "").strip(),
+                    "account_type": account_type,
                     "quantity": SBICSVParser._parse_number(
                         row.get("保有数量") or row.get("保有株数") or row.get("数量")
                     ),
@@ -652,7 +675,7 @@ class SBICSVParser:
                 if holding["code"] and holding["quantity"] is not None:
                     holdings.append(holding)
                     logger.debug(
-                        f"保有銘柄解析: {holding['code']} - {holding['quantity']}株"
+                        f"保有銘柄解析: {holding['code']} - {holding['quantity']}株 ({account_type})"
                     )
 
             logger.info(f"保有銘柄CSV解析完了（標準形式）: {len(holdings)}銘柄")
@@ -747,6 +770,84 @@ class SBICSVParser:
             if len(lines) < 2:
                 return holdings
 
+            # ヘッダー行を解析してカラム位置を特定
+            header_line = lines[0]
+            reader = csv.reader(io.StringIO(header_line))
+            headers = next(reader, [])
+
+            # カラムインデックスのマッピングを作成
+            col_map = {}
+
+            # 特殊なパターン: 銘柄が連続して出現する場合
+            # 例: 銘柄,銘柄,銘柄,銘柄,銘柄,銘柄,銘柄,預り区分,保有株数...
+            if len(headers) > 10 and headers[0] == "銘柄" and headers[1] == "銘柄":
+                # 固定位置でマッピング
+                # 5列目（インデックス4）が銘柄コード
+                col_map['code'] = 4
+                # 6列目（インデックス5）が銘柄名
+                col_map['name'] = 5
+                # 残りのカラムを通常通り検索
+                for i in range(7, len(headers)):
+                    header = headers[i]
+                    if "保有株数" in header:
+                        col_map['quantity'] = i
+                    elif "取得単価" in header:
+                        col_map['average_price'] = i
+                    elif "現在値" in header and 'current_price' not in col_map:
+                        col_map['current_price'] = i
+                    elif "評価損益" in header and "率" not in header and 'profit_loss' not in col_map:
+                        col_map['profit_loss'] = i
+                    elif "評価損益(%)" in header:
+                        col_map['profit_loss_ratio'] = i
+                    elif "評価額" in header and 'market_value' not in col_map:
+                        col_map['market_value'] = i
+                    elif "預り区分" in header:
+                        col_map['account_type'] = i
+                    elif "予想PER" in header:
+                        col_map['expected_per'] = i
+                    elif "実績PBR" in header:
+                        col_map['actual_pbr'] = i
+                    elif "配当利回り" in header:
+                        col_map['dividend_yield'] = i
+                    elif "予想1株配当" in header:
+                        col_map['expected_dividend'] = i
+            else:
+                # 通常のパターン
+                for i, header in enumerate(headers):
+                    # 銘柄コードを探す（「銘柄(コード)」「銘柄コード」など）
+                    if ("銘柄" in header and "コード" in header) or header == "コード":
+                        col_map['code'] = i
+                    # 銘柄名を探す（「銘柄(名称)」「銘柄名」など）
+                    elif ("銘柄" in header and ("名" in header or "称" in header)) or (header == "銘柄" and 'name' not in col_map):
+                        col_map['name'] = i
+                    elif "株数" in header or "保有数量" in header or "数量" in header:
+                        col_map['quantity'] = i
+                    elif "取得" in header and "単価" in header:
+                        col_map['average_price'] = i
+                    elif "現在値" in header:
+                        col_map['current_price'] = i
+                    elif "評価額" in header:
+                        col_map['market_value'] = i
+                    elif "評価損益" in header and "率" not in header:
+                        col_map['profit_loss'] = i
+                    elif "評価損益率" in header:
+                        col_map['profit_loss_ratio'] = i
+                    elif "預り" in header or "口座" in header:
+                        col_map['account_type'] = i
+                    elif "予想PER" in header:
+                        col_map['expected_per'] = i
+                    elif "実績PBR" in header:
+                        col_map['actual_pbr'] = i
+                    elif "配当利回り" in header:
+                        col_map['dividend_yield'] = i
+                    elif "予想1株配当" in header:
+                        col_map['expected_dividend'] = i
+
+            logger.debug(f"カラムマッピング: {col_map}")
+            logger.debug(f"ヘッダー数: {len(headers)}")
+            if len(headers) > 0:
+                logger.debug(f"最初の10ヘッダー: {headers[:10]}")
+
             # データ行をパース（ヘッダー行をスキップ）
             for line in lines[1:]:
                 if not line.strip():
@@ -755,64 +856,64 @@ class SBICSVParser:
                 # CSVとして解析
                 reader = csv.reader(io.StringIO(line))
                 row = next(reader, None)
-                if not row or len(row) < 20:
+                if not row:
                     continue
 
-                # 4列目が銘柄コード
-                code = SBICSVParser._normalize_code(row[4]) if len(row) > 4 else ""
+                # カラムマッピングに基づいてデータを取得
+                code = ""
+                if 'code' in col_map and col_map['code'] < len(row):
+                    code = SBICSVParser._normalize_code(row[col_map['code']])
+                elif len(row) > 4:  # フォールバック
+                    code = SBICSVParser._normalize_code(row[4])
+
                 if not code:
                     continue
 
+                # 口座タイプの判定
+                account_type = "特定"  # デフォルト
+                if 'account_type' in col_map and col_map['account_type'] < len(row):
+                    account_type_val = row[col_map['account_type']].strip()
+                    if "NISA" in account_type_val:
+                        if "つみたて" in account_type_val:
+                            account_type = "つみたてNISA"
+                        else:
+                            account_type = "NISA"
+                    elif "特定" in account_type_val:
+                        account_type = "特定"
+                    elif "一般" in account_type_val:
+                        account_type = "一般"
+
                 holding = {
                     "code": code,
-                    "name": row[5].strip() if len(row) > 5 else "",  # 5列目が銘柄名
-                    "quantity": (
-                        SBICSVParser._parse_number(row[8]) if len(row) > 8 else None
-                    ),  # 8列目が保有株数
-                    "average_price": (
-                        SBICSVParser._parse_number(row[10]) if len(row) > 10 else None
-                    ),  # 10列目が取得単価
-                    "current_price": (
-                        SBICSVParser._parse_number(row[11]) if len(row) > 11 else None
-                    ),  # 11列目が現在値
-                    "market_value": (
-                        SBICSVParser._parse_number(row[16]) if len(row) > 16 else None
-                    ),  # 16列目が評価額
-                    "profit_loss": (
-                        SBICSVParser._parse_number(row[13]) if len(row) > 13 else None
-                    ),  # 13列目が評価損益
-                    "profit_loss_ratio": (
-                        SBICSVParser._parse_number(row[14]) if len(row) > 14 else None
-                    ),  # 14列目が評価損益率
-                    # 株価指標データ
-                    "expected_per": (
-                        SBICSVParser._parse_number(row[27]) if len(row) > 27 else None
-                    ),  # 27列目が予想PER
-                    "actual_pbr": (
-                        SBICSVParser._parse_number(row[28]) if len(row) > 28 else None
-                    ),  # 28列目が実績PBR
-                    "dividend_yield": (
-                        SBICSVParser._parse_number(row[29]) if len(row) > 29 else None
-                    ),  # 29列目が予想配当利回り
-                    "expected_eps": (
-                        SBICSVParser._parse_number(row[30]) if len(row) > 30 else None
-                    ),  # 30列目が予想EPS
-                    "actual_bps": (
-                        SBICSVParser._parse_number(row[31]) if len(row) > 31 else None
-                    ),  # 31列目が実績BPS
-                    "expected_dividend": (
-                        SBICSVParser._parse_number(row[32]) if len(row) > 32 else None
-                    ),  # 32列目が予想1株配当
-                    "lending_type": (
-                        row[33].strip() if len(row) > 33 else ""
-                    ),  # 33列目が貸借区分
+                    "name": row[col_map['name']].strip() if 'name' in col_map and col_map['name'] < len(row) else "",
+                    "account_type": account_type,
+                    "quantity": SBICSVParser._parse_number(row[col_map['quantity']]) if 'quantity' in col_map and col_map['quantity'] < len(row) else None,
+                    "average_price": SBICSVParser._parse_number(row[col_map['average_price']]) if 'average_price' in col_map and col_map['average_price'] < len(row) else None,
+                    "current_price": SBICSVParser._parse_number(row[col_map['current_price']]) if 'current_price' in col_map and col_map['current_price'] < len(row) else None,
+                    "market_value": SBICSVParser._parse_number(row[col_map['market_value']]) if 'market_value' in col_map and col_map['market_value'] < len(row) else None,
+                    "profit_loss": SBICSVParser._parse_number(row[col_map['profit_loss']]) if 'profit_loss' in col_map and col_map['profit_loss'] < len(row) else None,
+                    "profit_loss_ratio": SBICSVParser._parse_number(row[col_map['profit_loss_ratio']]) if 'profit_loss_ratio' in col_map and col_map['profit_loss_ratio'] < len(row) else None,
                 }
+
+                # 株価指標データ（オプション）
+                if 'expected_per' in col_map and col_map['expected_per'] < len(row):
+                    holding['expected_per'] = SBICSVParser._parse_number(row[col_map['expected_per']])
+                if 'actual_pbr' in col_map and col_map['actual_pbr'] < len(row):
+                    holding['actual_pbr'] = SBICSVParser._parse_number(row[col_map['actual_pbr']])
+                if 'dividend_yield' in col_map and col_map['dividend_yield'] < len(row):
+                    holding['dividend_yield'] = SBICSVParser._parse_number(row[col_map['dividend_yield']])
+                if 'expected_dividend' in col_map and col_map['expected_dividend'] < len(row):
+                    holding['expected_dividend'] = SBICSVParser._parse_number(row[col_map['expected_dividend']])
 
                 # 必須フィールドのチェック
                 if holding["code"] and holding["quantity"] is not None:
                     holdings.append(holding)
                     logger.debug(
-                        f"保有銘柄解析（詳細形式）: {holding['code']} - {holding['quantity']}株"
+                        f"保有銘柄解析（詳細形式）: {holding['code']} - {holding['quantity']}株 ({account_type})"
+                    )
+                else:
+                    logger.debug(
+                        f"保有銘柄スキップ: code={holding.get('code')}, quantity={holding.get('quantity')}"
                     )
 
             logger.info(f"保有銘柄CSV解析完了（詳細形式）: {len(holdings)}銘柄")

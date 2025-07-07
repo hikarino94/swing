@@ -32,9 +32,15 @@ class PortfolioManager:
         new_count = 0
 
         for data in holdings_data:
+            # 口座タイプを取得（デフォルトは"特定"）
+            account_type = data.get("account_type", "特定")
+
             # 新規作成（重複チェックなし - ユーザーの要望により常に新規追加）
             holding = Holding(
-                user_id=user_id, code=data["code"], account_name=account_name
+                user_id=user_id,
+                code=data["code"],
+                account_name=account_name,
+                account_type=account_type
             )
             new_count += 1
 
@@ -50,7 +56,7 @@ class PortfolioManager:
 
             if csv_market_value is not None and csv_profit_loss is not None:
                 logger.debug(
-                    f"CSV損益データ: {data['code']} - "
+                    f"CSV損益データ: {data['code']} ({account_type}) - "
                     f"評価額: {csv_market_value}, 損益: {csv_profit_loss}, "
                     f"損益率: {csv_profit_loss_ratio}%"
                 )
@@ -71,7 +77,7 @@ class PortfolioManager:
 
             # 保存
             if not holding.save():
-                logger.error(f"保有銘柄の保存に失敗: {data['code']}")
+                logger.error(f"保有銘柄の保存に失敗: {data['code']} ({account_type})")
 
         logger.info(f"保有銘柄追加完了: {new_count}件（口座: {account_name}）")
         return updated_count, new_count

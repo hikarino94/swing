@@ -12,11 +12,12 @@ logger = get_logger("portfolio.models")
 class Holding:
     """保有銘柄モデル"""
 
-    def __init__(self, user_id: int, code: str, account_name: str = "default"):
+    def __init__(self, user_id: int, code: str, account_name: str = "default", account_type: str = "特定"):
         self.id: int | None = None
         self.user_id: int = user_id
         self.code: str = code
         self.account_name: str = account_name
+        self.account_type: str = account_type  # 特定/NISA/つみたてNISA等
         self.quantity: int = 0
         self.average_price: float = 0.0
         self.market_value: float | None = None
@@ -41,41 +42,77 @@ class Holding:
 
     @classmethod
     def find_by_user_code_and_account(
-        cls, user_id: int, code: str, account_name: str
+        cls, user_id: int, code: str, account_name: str, account_type: str = None
     ) -> Optional["Holding"]:
-        """ユーザーID、銘柄コード、口座名で保有銘柄を検索"""
+        """ユーザーID、銘柄コード、口座名（、口座タイプ）で保有銘柄を検索"""
         conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
-            cursor.execute(
-                """
-                SELECT id, user_id, code, account_name, quantity, average_price,
-                       market_value, profit_loss, profit_loss_ratio, updated_at,
-                       expected_per, actual_pbr, dividend_yield, expected_eps,
-                       actual_bps, expected_dividend, lending_type
-                FROM holdings
-                WHERE user_id = ? AND code = ? AND account_name = ?
-            """,
-                (user_id, code, account_name),
-            )
+            # account_typeカラムが存在するか確認
+            cursor.execute("PRAGMA table_info(holdings)")
+            columns = [col[1] for col in cursor.fetchall()]
+            has_account_type = 'account_type' in columns
+
+            if has_account_type and account_type:
+                cursor.execute(
+                    """
+                    SELECT id, user_id, code, account_name, account_type, quantity, average_price,
+                           market_value, profit_loss, profit_loss_ratio, updated_at,
+                           expected_per, actual_pbr, dividend_yield, expected_eps,
+                           actual_bps, expected_dividend, lending_type
+                    FROM holdings
+                    WHERE user_id = ? AND code = ? AND account_name = ? AND account_type = ?
+                """,
+                    (user_id, code, account_name, account_type),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT id, user_id, code, account_name, quantity, average_price,
+                           market_value, profit_loss, profit_loss_ratio, updated_at,
+                           expected_per, actual_pbr, dividend_yield, expected_eps,
+                           actual_bps, expected_dividend, lending_type
+                    FROM holdings
+                    WHERE user_id = ? AND code = ? AND account_name = ?
+                """,
+                    (user_id, code, account_name),
+                )
             row = cursor.fetchone()
             if row:
-                holding = cls(user_id=row[1], code=row[2], account_name=row[3])
-                holding.id = row[0]
-                holding.quantity = row[4]
-                holding.average_price = row[5]
-                holding.market_value = row[6]
-                holding.profit_loss = row[7]
-                holding.profit_loss_ratio = row[8]
-                holding.updated_at = row[9]
-                # 株価指標データ
-                holding.expected_per = row[10]
-                holding.actual_pbr = row[11]
-                holding.dividend_yield = row[12]
-                holding.expected_eps = row[13]
-                holding.actual_bps = row[14]
-                holding.expected_dividend = row[15]
-                holding.lending_type = row[16]
+                if has_account_type and account_type:
+                    holding = cls(user_id=row[1], code=row[2], account_name=row[3], account_type=row[4])
+                    holding.id = row[0]
+                    holding.quantity = row[5]
+                    holding.average_price = row[6]
+                    holding.market_value = row[7]
+                    holding.profit_loss = row[8]
+                    holding.profit_loss_ratio = row[9]
+                    holding.updated_at = row[10]
+                    # 株価指標データ
+                    holding.expected_per = row[11]
+                    holding.actual_pbr = row[12]
+                    holding.dividend_yield = row[13]
+                    holding.expected_eps = row[14]
+                    holding.actual_bps = row[15]
+                    holding.expected_dividend = row[16]
+                    holding.lending_type = row[17]
+                else:
+                    holding = cls(user_id=row[1], code=row[2], account_name=row[3])
+                    holding.id = row[0]
+                    holding.quantity = row[4]
+                    holding.average_price = row[5]
+                    holding.market_value = row[6]
+                    holding.profit_loss = row[7]
+                    holding.profit_loss_ratio = row[8]
+                    holding.updated_at = row[9]
+                    # 株価指標データ
+                    holding.expected_per = row[10]
+                    holding.actual_pbr = row[11]
+                    holding.dividend_yield = row[12]
+                    holding.expected_eps = row[13]
+                    holding.actual_bps = row[14]
+                    holding.expected_dividend = row[15]
+                    holding.lending_type = row[16]
                 return holding
             return None
         finally:
@@ -87,40 +124,114 @@ class Holding:
         conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
-            cursor.execute(
-                """
-                SELECT h.id, h.user_id, h.code, h.account_name, h.quantity, h.average_price,
-                       h.market_value, h.profit_loss, h.profit_loss_ratio, h.updated_at,
-                       h.expected_per, h.actual_pbr, h.dividend_yield, h.expected_eps,
-                       h.actual_bps, h.expected_dividend, h.lending_type,
-                       li.company_name
-                FROM holdings h
-                LEFT JOIN listed_info li ON (h.code || '0') = li.code
-                WHERE h.user_id = ? AND h.quantity > 0
-                ORDER BY h.code, h.account_name
-            """,
-                (user_id,),
-            )
+            # account_typeカラムが存在するか確認
+            cursor.execute("PRAGMA table_info(holdings)")
+            columns = [col[1] for col in cursor.fetchall()]
+            has_account_type = 'account_type' in columns
+
+            # listed_infoテーブルが存在するか確認
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='listed_info'")
+            has_listed_info = cursor.fetchone() is not None
+
+            if has_account_type:
+                if has_listed_info:
+                    cursor.execute(
+                        """
+                        SELECT h.id, h.user_id, h.code, h.account_name, h.account_type, h.quantity, h.average_price,
+                               h.market_value, h.profit_loss, h.profit_loss_ratio, h.updated_at,
+                               h.expected_per, h.actual_pbr, h.dividend_yield, h.expected_eps,
+                               h.actual_bps, h.expected_dividend, h.lending_type,
+                               li.company_name
+                        FROM holdings h
+                        LEFT JOIN listed_info li ON (h.code || '0') = li.code
+                        WHERE h.user_id = ? AND h.quantity > 0
+                        ORDER BY h.code, h.account_name, h.account_type
+                    """,
+                        (user_id,),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT h.id, h.user_id, h.code, h.account_name, h.account_type, h.quantity, h.average_price,
+                               h.market_value, h.profit_loss, h.profit_loss_ratio, h.updated_at,
+                               h.expected_per, h.actual_pbr, h.dividend_yield, h.expected_eps,
+                               h.actual_bps, h.expected_dividend, h.lending_type,
+                               NULL as company_name
+                        FROM holdings h
+                        WHERE h.user_id = ? AND h.quantity > 0
+                        ORDER BY h.code, h.account_name, h.account_type
+                    """,
+                        (user_id,),
+                    )
+            else:
+                if has_listed_info:
+                    cursor.execute(
+                        """
+                        SELECT h.id, h.user_id, h.code, h.account_name, h.quantity, h.average_price,
+                               h.market_value, h.profit_loss, h.profit_loss_ratio, h.updated_at,
+                               h.expected_per, h.actual_pbr, h.dividend_yield, h.expected_eps,
+                               h.actual_bps, h.expected_dividend, h.lending_type,
+                               li.company_name
+                        FROM holdings h
+                        LEFT JOIN listed_info li ON (h.code || '0') = li.code
+                        WHERE h.user_id = ? AND h.quantity > 0
+                        ORDER BY h.code, h.account_name
+                    """,
+                        (user_id,),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT h.id, h.user_id, h.code, h.account_name, h.quantity, h.average_price,
+                               h.market_value, h.profit_loss, h.profit_loss_ratio, h.updated_at,
+                               h.expected_per, h.actual_pbr, h.dividend_yield, h.expected_eps,
+                               h.actual_bps, h.expected_dividend, h.lending_type,
+                               NULL as company_name
+                        FROM holdings h
+                        WHERE h.user_id = ? AND h.quantity > 0
+                        ORDER BY h.code, h.account_name
+                    """,
+                        (user_id,),
+                    )
 
             holdings = []
             for row in cursor.fetchall():
-                holding = cls(user_id=row[1], code=row[2], account_name=row[3])
-                holding.id = row[0]
-                holding.quantity = row[4]
-                holding.average_price = row[5]
-                holding.market_value = row[6]
-                holding.profit_loss = row[7]
-                holding.profit_loss_ratio = row[8]
-                holding.updated_at = row[9]
-                # 株価指標データ
-                holding.expected_per = row[10]
-                holding.actual_pbr = row[11]
-                holding.dividend_yield = row[12]
-                holding.expected_eps = row[13]
-                holding.actual_bps = row[14]
-                holding.expected_dividend = row[15]
-                holding.lending_type = row[16]
-                holding.company_name = row[17]  # 追加情報
+                if has_account_type:
+                    holding = cls(user_id=row[1], code=row[2], account_name=row[3], account_type=row[4])
+                    holding.id = row[0]
+                    holding.quantity = row[5]
+                    holding.average_price = row[6]
+                    holding.market_value = row[7]
+                    holding.profit_loss = row[8]
+                    holding.profit_loss_ratio = row[9]
+                    holding.updated_at = row[10]
+                    # 株価指標データ
+                    holding.expected_per = row[11]
+                    holding.actual_pbr = row[12]
+                    holding.dividend_yield = row[13]
+                    holding.expected_eps = row[14]
+                    holding.actual_bps = row[15]
+                    holding.expected_dividend = row[16]
+                    holding.lending_type = row[17]
+                    holding.company_name = row[18]  # 追加情報
+                else:
+                    holding = cls(user_id=row[1], code=row[2], account_name=row[3])
+                    holding.id = row[0]
+                    holding.quantity = row[4]
+                    holding.average_price = row[5]
+                    holding.market_value = row[6]
+                    holding.profit_loss = row[7]
+                    holding.profit_loss_ratio = row[8]
+                    holding.updated_at = row[9]
+                    # 株価指標データ
+                    holding.expected_per = row[10]
+                    holding.actual_pbr = row[11]
+                    holding.dividend_yield = row[12]
+                    holding.expected_eps = row[13]
+                    holding.actual_bps = row[14]
+                    holding.expected_dividend = row[15]
+                    holding.lending_type = row[16]
+                    holding.company_name = row[17]  # 追加情報
                 holdings.append(holding)
 
             return holdings
@@ -134,67 +245,136 @@ class Holding:
         try:
             # 既存のレコードをチェック
             existing = self.find_by_user_code_and_account(
-                self.user_id, self.code, self.account_name
+                self.user_id, self.code, self.account_name, self.account_type
             )
 
             if existing:
                 # 既存レコードがある場合は更新
                 self.id = existing.id
-                cursor.execute(
-                    """
-                    UPDATE holdings
-                    SET quantity = ?, average_price = ?, market_value = ?,
-                        profit_loss = ?, profit_loss_ratio = ?,
-                        expected_per = ?, actual_pbr = ?, dividend_yield = ?,
-                        expected_eps = ?, actual_bps = ?, expected_dividend = ?,
-                        lending_type = ?, updated_at = datetime('now')
-                    WHERE id = ?
-                """,
-                    (
-                        self.quantity,
-                        self.average_price,
-                        self.market_value,
-                        self.profit_loss,
-                        self.profit_loss_ratio,
-                        self.expected_per,
-                        self.actual_pbr,
-                        self.dividend_yield,
-                        self.expected_eps,
-                        self.actual_bps,
-                        self.expected_dividend,
-                        self.lending_type,
-                        self.id,
-                    ),
-                )
+                # account_typeカラムが存在するか確認
+                cursor.execute("PRAGMA table_info(holdings)")
+                columns = [col[1] for col in cursor.fetchall()]
+                has_account_type = 'account_type' in columns
+
+                if has_account_type:
+                    cursor.execute(
+                        """
+                        UPDATE holdings
+                        SET quantity = ?, average_price = ?, market_value = ?,
+                            profit_loss = ?, profit_loss_ratio = ?, account_type = ?,
+                            expected_per = ?, actual_pbr = ?, dividend_yield = ?,
+                            expected_eps = ?, actual_bps = ?, expected_dividend = ?,
+                            lending_type = ?, updated_at = datetime('now')
+                        WHERE id = ?
+                    """,
+                        (
+                            self.quantity,
+                            self.average_price,
+                            self.market_value,
+                            self.profit_loss,
+                            self.profit_loss_ratio,
+                            self.account_type,
+                            self.expected_per,
+                            self.actual_pbr,
+                            self.dividend_yield,
+                            self.expected_eps,
+                            self.actual_bps,
+                            self.expected_dividend,
+                            self.lending_type,
+                            self.id,
+                        ),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        UPDATE holdings
+                        SET quantity = ?, average_price = ?, market_value = ?,
+                            profit_loss = ?, profit_loss_ratio = ?,
+                            expected_per = ?, actual_pbr = ?, dividend_yield = ?,
+                            expected_eps = ?, actual_bps = ?, expected_dividend = ?,
+                            lending_type = ?, updated_at = datetime('now')
+                        WHERE id = ?
+                    """,
+                        (
+                            self.quantity,
+                            self.average_price,
+                            self.market_value,
+                            self.profit_loss,
+                            self.profit_loss_ratio,
+                            self.expected_per,
+                            self.actual_pbr,
+                            self.dividend_yield,
+                            self.expected_eps,
+                            self.actual_bps,
+                            self.expected_dividend,
+                            self.lending_type,
+                            self.id,
+                        ),
+                    )
             elif self.id is None:
                 # 新規作成
-                cursor.execute(
-                    """
-                    INSERT INTO holdings
-                    (user_id, code, account_name, quantity, average_price, market_value,
-                     profit_loss, profit_loss_ratio, expected_per, actual_pbr,
-                     dividend_yield, expected_eps, actual_bps, expected_dividend,
-                     lending_type)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        self.user_id,
-                        self.code,
-                        self.account_name,
-                        self.quantity,
-                        self.average_price,
-                        self.market_value,
-                        self.profit_loss,
-                        self.profit_loss_ratio,
-                        self.expected_per,
-                        self.actual_pbr,
-                        self.dividend_yield,
-                        self.expected_eps,
-                        self.actual_bps,
-                        self.expected_dividend,
-                        self.lending_type,
-                    ),
-                )
+                # account_typeカラムが存在するか確認
+                cursor.execute("PRAGMA table_info(holdings)")
+                columns = [col[1] for col in cursor.fetchall()]
+                has_account_type = 'account_type' in columns
+
+                if has_account_type:
+                    cursor.execute(
+                        """
+                        INSERT INTO holdings
+                        (user_id, code, account_name, account_type, quantity, average_price, market_value,
+                         profit_loss, profit_loss_ratio, expected_per, actual_pbr,
+                         dividend_yield, expected_eps, actual_bps, expected_dividend,
+                         lending_type)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                        (
+                            self.user_id,
+                            self.code,
+                            self.account_name,
+                            self.account_type,
+                            self.quantity,
+                            self.average_price,
+                            self.market_value,
+                            self.profit_loss,
+                            self.profit_loss_ratio,
+                            self.expected_per,
+                            self.actual_pbr,
+                            self.dividend_yield,
+                            self.expected_eps,
+                            self.actual_bps,
+                            self.expected_dividend,
+                            self.lending_type,
+                        ),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO holdings
+                        (user_id, code, account_name, quantity, average_price, market_value,
+                         profit_loss, profit_loss_ratio, expected_per, actual_pbr,
+                         dividend_yield, expected_eps, actual_bps, expected_dividend,
+                         lending_type)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                        (
+                            self.user_id,
+                            self.code,
+                            self.account_name,
+                            self.quantity,
+                            self.average_price,
+                            self.market_value,
+                            self.profit_loss,
+                            self.profit_loss_ratio,
+                            self.expected_per,
+                            self.actual_pbr,
+                            self.dividend_yield,
+                            self.expected_eps,
+                            self.actual_bps,
+                            self.expected_dividend,
+                            self.lending_type,
+                        ),
+                    )
                 self.id = cursor.lastrowid
             else:
                 # 更新
