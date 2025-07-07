@@ -201,15 +201,18 @@ def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
         return g
 
     # groupbyでcodeカラムを保持するようにgroup_keysをTrueに変更
-    result = df.groupby("code", group_keys=True).apply(_add)
+    # pandas 2.2.0以降ではinclude_groups=Falseが必要
+    try:
+        result = df.groupby("code", group_keys=True).apply(_add, include_groups=False)  # type: ignore[call-overload]
+    except TypeError:
+        # 古いバージョンのpandasの場合
+        result = df.groupby("code", group_keys=True).apply(_add)
 
-    # マルチインデックスの場合は、codeレベルをカラムに戻す
-    if isinstance(result.index, pd.MultiIndex):
-        result = result.reset_index(level=0)
-    else:
+    # インデックスをリセット
+    if "code" not in result.columns:
         result = result.reset_index()
 
-    return result
+    return result  # type: ignore[no-any-return]
 
 
 # ---------------------------------------------------------------------------
