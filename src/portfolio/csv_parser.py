@@ -693,65 +693,98 @@ class SBICSVParser:
         try:
             lines = csv_content.strip().split("\n")
 
-            # ヘッダー行を探す（文字化けしている可能性があるので、列数で判定）
-            header_index = -1
-            for i, line in enumerate(lines):
-                # CSVの列数をチェック
-                reader = csv.reader(io.StringIO(line))
-                row = next(reader, None)
-                if row and len(row) >= 9:  # 保有銘柄データは9列以上
-                    # 最初のデータ行を見つける（"で始まる行）
-                    if line.strip().startswith('"'):
-                        header_index = i - 1
-                        break
+            # 現在のセクション（口座タイプ）を追跡
+            current_account_type = "特定"  # デフォルト
 
-            if header_index == -1:
-                logger.error("保有銘柄のデータ行が見つかりません")
-                return holdings
+            # セクション見出しと口座タイプのマッピング
+            section_mapping = {
+                "株式（特定預り）": "特定",
+                "株式（NISA預り（成長投資枠））": "NISA",
+                "株式（旧NISA預り）": "旧NISA",
+                # TODO: 投資信託セクションは現在スキップ対象
+                "投資信託（金額/NISA預り（つみたて投資枠））": "つみたてNISA",
+            }
 
-            # データ行を処理
-            for i in range(header_index + 1, len(lines)):
+            # 各行を処理
+            i = 0
+            while i < len(lines):
                 line = lines[i].strip()
-                if not line or not line.startswith('"'):
+
+                # セクション見出しをチェック
+                if line in section_mapping:
+                    current_account_type = section_mapping[line]
+                    logger.debug(f"セクション検出: {line} -> 口座タイプ: {current_account_type}")
+                    i += 1
                     continue
 
-                # CSVとして解析
-                reader = csv.reader(io.StringIO(line))
-                row = next(reader, None)
-                if not row or len(row) < 8:
-                    continue
+                # データ行の判定（"で始まる行）
+                if line.startswith('"'):
+                    # CSVとして解析
+                    reader = csv.reader(io.StringIO(line))
+                    row = next(reader, None)
+                    if row and len(row) >= 8:
+                        # 投資信託セクションかどうか判定
+                        is_fund = "つみたてNISA" in current_account_type and len(row) >= 9
 
-                code = SBICSVParser._normalize_code(row[0])
-                if not code:
-                    continue
+                        if is_fund:
+                            # 投資信託の場合
+                            fund_name = row[0].strip() if row[0] else ""
+                            if fund_name:
+                                # TODO: 投資信託の取り込み機能を実装する
+                                # 現在の課題:
+                                # 1. 投資信託には標準的な4桁銘柄コードが存在しない
+                                # 2. ファンド名のみでの識別となるため、名称変更時の追跡が困難
+                                # 3. 複数の販売会社で同一ファンドが異なるコードで管理される
+                                #
+                                # 実装案:
+                                # - ISINコードやファンドコードなど一意識別子の利用を検討
+                                # - ファンド名のマスターテーブルを作成し、名称変更に対応
+                                # - 投資信託専用のテーブル（fund_holdings）を作成
+                                # - 銘柄コードの代わりにファンドIDを使用
+                                # - ファンド名とハッシュ値のマッピングテーブルを管理
+                                #
+                                # 一時的に投資信託のインポートをスキップ
+                                logger.warning(
+                                    f"投資信託のインポートはスキップされました: {fund_name} "
+                                    f"(口座: {current_account_type})"
+                                )
+                                continue
+                        else:
+                            # 株式の場合（既存の処理）
+                            code = SBICSVParser._normalize_code(row[0])
+                            if code:
+                                holding = {
+                                    "code": code,
+                                    "name": row[1].strip() if len(row) > 1 else "",
+                                    "account_type": current_account_type,  # 現在のセクションの口座タイプを設定
+                                    "quantity": (
+                                        SBICSVParser._parse_number(row[2]) if len(row) > 2 else None
+                                    ),
+                                    "average_price": (
+                                        SBICSVParser._parse_number(row[4]) if len(row) > 4 else None
+                                    ),
+                                    "current_price": (
+                                        SBICSVParser._parse_number(row[5]) if len(row) > 5 else None
+                                    ),
+                                    "market_value": (
+                                        SBICSVParser._parse_number(row[7]) if len(row) > 7 else None
+                                    ),
+                                    "profit_loss": (
+                                        SBICSVParser._parse_number(row[8]) if len(row) > 8 else None
+                                    ),
+                                    "profit_loss_ratio": None,  # SaveFile形式には評価損益率がない
+                                    "is_fund": False,  # 株式フラグ
+                                }
 
-                holding = {
-                    "code": code,
-                    "name": row[1].strip() if len(row) > 1 else "",
-                    "quantity": (
-                        SBICSVParser._parse_number(row[2]) if len(row) > 2 else None
-                    ),
-                    "average_price": (
-                        SBICSVParser._parse_number(row[4]) if len(row) > 4 else None
-                    ),
-                    "current_price": (
-                        SBICSVParser._parse_number(row[5]) if len(row) > 5 else None
-                    ),
-                    "market_value": (
-                        SBICSVParser._parse_number(row[7]) if len(row) > 7 else None
-                    ),
-                    "profit_loss": (
-                        SBICSVParser._parse_number(row[8]) if len(row) > 8 else None
-                    ),
-                    "profit_loss_ratio": None,  # SaveFile形式には評価損益率がない
-                }
+                                # 必須フィールドのチェック
+                                if holding["code"] and holding["quantity"] is not None:
+                                    holdings.append(holding)
+                                    logger.debug(
+                                        f"保有銘柄解析（SaveFile形式）: {holding['code']} - "
+                                        f"{holding['quantity']}株 ({current_account_type})"
+                                    )
 
-                # 必須フィールドのチェック
-                if holding["code"] and holding["quantity"] is not None:
-                    holdings.append(holding)
-                    logger.debug(
-                        f"保有銘柄解析（SaveFile形式）: {holding['code']} - {holding['quantity']}株"
-                    )
+                i += 1
 
             logger.info(f"保有銘柄CSV解析完了（SaveFile形式）: {len(holdings)}銘柄")
             return holdings
