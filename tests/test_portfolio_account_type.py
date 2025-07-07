@@ -22,7 +22,8 @@ class TestPortfolioAccountType:
         # テーブル作成
         conn = sqlite3.connect(path)
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE holdings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
@@ -43,7 +44,8 @@ class TestPortfolioAccountType:
                 lending_type TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
         conn.commit()
         conn.close()
 
@@ -82,9 +84,7 @@ class TestPortfolioAccountType:
         ]
 
         updated, new = PortfolioManager.update_holdings_from_csv(
-            user_id=1,
-            holdings_data=holdings_data,
-            account_name="SBI証券"
+            user_id=1, holdings_data=holdings_data, account_name="SBI証券"
         )
 
         assert new == 3
@@ -92,12 +92,14 @@ class TestPortfolioAccountType:
         # データベースから確認
         conn = sqlite3.connect(temp_db)
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT code, account_type, quantity, account_name
             FROM holdings
             WHERE user_id = 1
             ORDER BY code, account_type
-        """)
+        """
+        )
         rows = cursor.fetchall()
         conn.close()
 
@@ -117,13 +119,17 @@ class TestPortfolioAccountType:
         monkeypatch.setattr("src.portfolio.models.get_db_path", lambda: temp_db)
 
         # 特定口座の保有を作成
-        holding1 = Holding(user_id=1, code="9984", account_name="SBI証券", account_type="特定")
+        holding1 = Holding(
+            user_id=1, code="9984", account_name="SBI証券", account_type="特定"
+        )
         holding1.quantity = 100
         holding1.average_price = 1000
         assert holding1.save()
 
         # NISA口座の保有を作成
-        holding2 = Holding(user_id=1, code="9984", account_name="SBI証券", account_type="NISA")
+        holding2 = Holding(
+            user_id=1, code="9984", account_name="SBI証券", account_type="NISA"
+        )
         holding2.quantity = 50
         holding2.average_price = 1200
         assert holding2.save()
@@ -149,11 +155,15 @@ class TestPortfolioAccountType:
         monkeypatch.setattr("src.portfolio.models.get_db_path", lambda: temp_db)
 
         # 同一銘柄を異なる口座タイプで保存
-        holding1 = Holding(user_id=1, code="9984", account_name="SBI証券", account_type="特定")
+        holding1 = Holding(
+            user_id=1, code="9984", account_name="SBI証券", account_type="特定"
+        )
         holding1.quantity = 100
         holding1.save()
 
-        holding2 = Holding(user_id=1, code="9984", account_name="SBI証券", account_type="NISA")
+        holding2 = Holding(
+            user_id=1, code="9984", account_name="SBI証券", account_type="NISA"
+        )
         holding2.quantity = 50
         holding2.save()
 

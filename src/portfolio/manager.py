@@ -40,7 +40,7 @@ class PortfolioManager:
                 user_id=user_id,
                 code=data["code"],
                 account_name=account_name,
-                account_type=account_type
+                account_type=account_type,
             )
             new_count += 1
 

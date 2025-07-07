@@ -12,7 +12,13 @@ logger = get_logger("portfolio.models")
 class Holding:
     """保有銘柄モデル"""
 
-    def __init__(self, user_id: int, code: str, account_name: str = "default", account_type: str = "特定"):
+    def __init__(
+        self,
+        user_id: int,
+        code: str,
+        account_name: str = "default",
+        account_type: str = "特定",
+    ):
         self.id: int | None = None
         self.user_id: int = user_id
         self.code: str = code
@@ -51,7 +57,7 @@ class Holding:
             # account_typeカラムが存在するか確認
             cursor.execute("PRAGMA table_info(holdings)")
             columns = [col[1] for col in cursor.fetchall()]
-            has_account_type = 'account_type' in columns
+            has_account_type = "account_type" in columns
 
             if has_account_type and account_type:
                 cursor.execute(
@@ -80,7 +86,12 @@ class Holding:
             row = cursor.fetchone()
             if row:
                 if has_account_type and account_type:
-                    holding = cls(user_id=row[1], code=row[2], account_name=row[3], account_type=row[4])
+                    holding = cls(
+                        user_id=row[1],
+                        code=row[2],
+                        account_name=row[3],
+                        account_type=row[4],
+                    )
                     holding.id = row[0]
                     holding.quantity = row[5]
                     holding.average_price = row[6]
@@ -127,10 +138,12 @@ class Holding:
             # account_typeカラムが存在するか確認
             cursor.execute("PRAGMA table_info(holdings)")
             columns = [col[1] for col in cursor.fetchall()]
-            has_account_type = 'account_type' in columns
+            has_account_type = "account_type" in columns
 
             # listed_infoテーブルが存在するか確認
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='listed_info'")
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='listed_info'"
+            )
             has_listed_info = cursor.fetchone() is not None
 
             if has_account_type:
@@ -197,7 +210,12 @@ class Holding:
             holdings = []
             for row in cursor.fetchall():
                 if has_account_type:
-                    holding = cls(user_id=row[1], code=row[2], account_name=row[3], account_type=row[4])
+                    holding = cls(
+                        user_id=row[1],
+                        code=row[2],
+                        account_name=row[3],
+                        account_type=row[4],
+                    )
                     holding.id = row[0]
                     holding.quantity = row[5]
                     holding.average_price = row[6]
@@ -254,17 +272,23 @@ class Holding:
                 # account_typeカラムが存在するか確認
                 cursor.execute("PRAGMA table_info(holdings)")
                 columns = [col[1] for col in cursor.fetchall()]
-                has_account_type = 'account_type' in columns
+                has_account_type = "account_type" in columns
 
                 if has_account_type:
+                    # 財務情報の上書き防止：既存値を保持する場合
                     cursor.execute(
                         """
                         UPDATE holdings
                         SET quantity = ?, average_price = ?, market_value = ?,
                             profit_loss = ?, profit_loss_ratio = ?, account_type = ?,
-                            expected_per = ?, actual_pbr = ?, dividend_yield = ?,
-                            expected_eps = ?, actual_bps = ?, expected_dividend = ?,
-                            lending_type = ?, updated_at = datetime('now')
+                            expected_per = COALESCE(?, expected_per),
+                            actual_pbr = COALESCE(?, actual_pbr),
+                            dividend_yield = COALESCE(?, dividend_yield),
+                            expected_eps = COALESCE(?, expected_eps),
+                            actual_bps = COALESCE(?, actual_bps),
+                            expected_dividend = COALESCE(?, expected_dividend),
+                            lending_type = COALESCE(?, lending_type),
+                            updated_at = datetime('now')
                         WHERE id = ?
                     """,
                         (
@@ -285,14 +309,20 @@ class Holding:
                         ),
                     )
                 else:
+                    # 財務情報の上書き防止：既存値を保持する場合
                     cursor.execute(
                         """
                         UPDATE holdings
                         SET quantity = ?, average_price = ?, market_value = ?,
                             profit_loss = ?, profit_loss_ratio = ?,
-                            expected_per = ?, actual_pbr = ?, dividend_yield = ?,
-                            expected_eps = ?, actual_bps = ?, expected_dividend = ?,
-                            lending_type = ?, updated_at = datetime('now')
+                            expected_per = COALESCE(?, expected_per),
+                            actual_pbr = COALESCE(?, actual_pbr),
+                            dividend_yield = COALESCE(?, dividend_yield),
+                            expected_eps = COALESCE(?, expected_eps),
+                            actual_bps = COALESCE(?, actual_bps),
+                            expected_dividend = COALESCE(?, expected_dividend),
+                            lending_type = COALESCE(?, lending_type),
+                            updated_at = datetime('now')
                         WHERE id = ?
                     """,
                         (
@@ -316,7 +346,7 @@ class Holding:
                 # account_typeカラムが存在するか確認
                 cursor.execute("PRAGMA table_info(holdings)")
                 columns = [col[1] for col in cursor.fetchall()]
-                has_account_type = 'account_type' in columns
+                has_account_type = "account_type" in columns
 
                 if has_account_type:
                     cursor.execute(

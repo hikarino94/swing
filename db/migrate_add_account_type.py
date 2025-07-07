@@ -19,19 +19,23 @@ def add_account_type_column():
         columns = [col[1] for col in cursor.fetchall()]
 
         # account_typeカラムが存在しない場合のみ追加
-        if 'account_type' not in columns:
+        if "account_type" not in columns:
             logger.info("account_typeカラムを追加します")
-            cursor.execute("""
+            cursor.execute(
+                """
                 ALTER TABLE holdings
                 ADD COLUMN account_type TEXT DEFAULT '特定'
-            """)
+            """
+            )
 
             # 既存レコードのaccount_typeを設定
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE holdings
                 SET account_type = '特定'
                 WHERE account_type IS NULL
-            """)
+            """
+            )
 
             conn.commit()
             logger.info("account_typeカラムの追加が完了しました")

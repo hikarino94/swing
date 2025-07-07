@@ -1020,7 +1020,9 @@ def get_holdings():
                         "code": h.code,
                         "company_name": h.company_name or "",
                         "account_name": h.account_name,
-                        "account_type": getattr(h, 'account_type', '特定'),  # デフォルトは特定
+                        "account_type": getattr(
+                            h, "account_type", "特定"
+                        ),  # デフォルトは特定
                         "quantity": h.quantity,
                         "average_price": h.average_price,
                         "market_value": h.market_value,
