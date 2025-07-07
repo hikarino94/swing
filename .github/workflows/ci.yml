@@ -94,10 +94,19 @@ jobs:
       env:
         TESTING: "1"
         FLASK_ENV: "testing"
-        DATABASE_PATH: "test_stock.db"
+        DATABASE_PATH: "${{ github.workspace }}/test_stock.db"
       run: |
         # テスト用の環境変数を設定
+        echo "Creating test database at: $DATABASE_PATH"
         python db/db_schema.py
+        # データベースファイルの存在確認
+        if [ -f "$DATABASE_PATH" ]; then
+          echo "Database created successfully"
+          ls -la "$DATABASE_PATH"
+        else
+          echo "::error::Database file not created"
+          exit 1
+        fi
 
     - name: Setup Python Path
       run: |
@@ -108,13 +117,24 @@ jobs:
         cat $GITHUB_ENV
 
     - name: Debug Import Issues
+      env:
+        PYTHONPATH: "${{ github.workspace }}"
+        TESTING: "1"
+        FLASK_ENV: "testing"
+        DATABASE_PATH: "${{ github.workspace }}/test_stock.db"
       run: |
         # インポートの問題をデバッグ
         echo "Testing module imports..."
-        python -c "import sys; print('sys.path:', sys.path)"
-        python -c "from src.config import Config; print('Config import: OK')" || true
-        python -c "from src.ui.web import app; print('Web app import: OK')" || true
-        python -c "from fetch import daily_quotes; print('Fetch module import: OK')" || true
+        echo "Current directory: $(pwd)"
+        echo "Directory structure:"
+        ls -la
+        echo "Python path:"
+        python -c "import sys; print('\n'.join(sys.path))"
+        echo "Testing imports:"
+        python -c "from src.config import Config; print('Config import: OK')" || echo "Config import failed"
+        python -c "from src.ui.web import app; print('Web app import: OK')" || echo "Web app import failed"
+        python -c "from fetch import daily_quotes; print('Fetch module import: OK')" || echo "Fetch module import failed"
+        python -c "from screening import screen_statements; print('Screening module import: OK')" || echo "Screening module import failed"
 
     - name: Run tests
       id: pytest
@@ -123,7 +143,7 @@ jobs:
         PYTHONWARNINGS: "ignore::DeprecationWarning:numpy,ignore::UserWarning,ignore::FutureWarning"
         TESTING: "1"
         FLASK_ENV: "testing"
-        DATABASE_PATH: "test_stock.db"
+        DATABASE_PATH: "${{ github.workspace }}/test_stock.db"
       run: |
         # デバッグ情報を出力
         echo "Current directory: $(pwd)"
@@ -134,8 +154,13 @@ jobs:
         echo "DATABASE_PATH: $DATABASE_PATH"
         # 全テストを実行（カバレッジ付き）
         pytest -v --tb=short --cov=. --cov-report=xml --cov-report=term -W ignore::FutureWarning -W ignore::UserWarning || {
-          echo "::error::Test failed with exit code: $?"
-          exit 1
+          EXIT_CODE=$?
+          echo "::error::Test failed with exit code: $EXIT_CODE"
+          # 失敗したテストの詳細を表示
+          echo "::group::Failed test details"
+          pytest --lf -v --tb=long -W ignore::FutureWarning -W ignore::UserWarning || true
+          echo "::endgroup::"
+          exit $EXIT_CODE
         }
 
     - name: Check coverage threshold
