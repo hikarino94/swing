@@ -87,7 +87,7 @@ class TestPathValidation:
             "screening/screen_statements.py",
             "screening/screen_technical.py",
             "screening/screen_ml.py",
-            "screening/thresholds.json",
+            "screening/thresholds.py",  # thresholds.jsonはgitignoreされているため、thresholds.pyを確認
         ]
 
         for module in screening_modules:
@@ -171,9 +171,11 @@ class TestPathValidation:
         """Webアプリケーションのパス設定を検証"""
         from src.ui.web import (
             app,
-            template_dir,
         )
         from src.ui.web import project_root as web_project_root
+        from src.ui.web import (
+            template_dir,
+        )
 
         # プロジェクトルートが正しく設定されているか
         assert web_project_root == project_root

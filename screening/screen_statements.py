@@ -161,9 +161,11 @@ def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     def _add(g: pd.DataFrame) -> pd.DataFrame:
         g = g.copy()
 
-        # Basic growth
-        g["sales_qoq"] = g["NetSales"].pct_change(fill_method=None)
-        g["op_qoq"] = g["OperatingProfit"].pct_change(fill_method=None)
+        # Basic growth - pandas 2.x対応のpct_change
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            g["sales_qoq"] = g["NetSales"].pct_change()
+            g["op_qoq"] = g["OperatingProfit"].pct_change()
 
         # Margin trends
         g["op_margin"] = g["OperatingProfit"] / g["NetSales"]
@@ -174,7 +176,9 @@ def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
         g["leverage"] = g["op_qoq"] / g["sales_qoq"]
 
         # Forecast EPS revision
-        g["feps_revision"] = g["ForecastEarningsPerShare"].pct_change(fill_method=None)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            g["feps_revision"] = g["ForecastEarningsPerShare"].pct_change()
 
         # Turnaround flag
         g["turnaround"] = (g["Profit"].shift(1) < 0) & (g["Profit"] > 0)
@@ -188,27 +192,31 @@ def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
 
         # FY YoY
         fy_mask = g["TypeOfCurrentPeriod"] == "FY"
-        g.loc[fy_mask, "eps_yoy_fy"] = g.loc[fy_mask, "EarningsPerShare"].pct_change(
-            fill_method=None
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            g.loc[fy_mask, "eps_yoy_fy"] = g.loc[
+                fy_mask, "EarningsPerShare"
+            ].pct_change()
 
         # Quarter YoY
         g["q_num"] = g["TypeOfCurrentPeriod"].map(quarter_map)
-        g["eps_yoy_q"] = g.groupby("q_num")["EarningsPerShare"].pct_change(
-            fill_method=None
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            g["eps_yoy_q"] = g.groupby("q_num")["EarningsPerShare"].pct_change()
         g.drop(columns="q_num", inplace=True)
         return g
 
     # groupbyでcodeカラムを保持する
-    # pandas 2.2.0以降の変更に対応
-    grouped = df.groupby("code", group_keys=False)
+    # pandas 2.x系の互換性を確保
     result_list = []
 
-    for code, group in grouped:
-        processed = _add(group)
-        processed["code"] = code
-        result_list.append(processed)
+    # 各codeごとに処理
+    for code in df["code"].unique():
+        group = df[df["code"] == code].copy()
+        if not group.empty:
+            processed = _add(group)
+            # codeカラムは既に含まれているはず
+            result_list.append(processed)
 
     if result_list:
         result = pd.concat(result_list, ignore_index=True)
