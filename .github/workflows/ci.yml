@@ -91,10 +91,12 @@ jobs:
         pip install -r requirements-dev.txt
 
     - name: Create test database
+      env:
+        TESTING: "1"
+        FLASK_ENV: "testing"
+        DATABASE_PATH: "test_stock.db"
       run: |
         # テスト用の環境変数を設定
-        export TESTING=1
-        export FLASK_ENV=testing
         python db/db_schema.py
 
     - name: Setup Python Path
@@ -116,20 +118,22 @@ jobs:
 
     - name: Run tests
       id: pytest
+      env:
+        PYTHONPATH: "${{ github.workspace }}"
+        PYTHONWARNINGS: "ignore::DeprecationWarning:numpy,ignore::UserWarning,ignore::FutureWarning"
+        TESTING: "1"
+        FLASK_ENV: "testing"
+        DATABASE_PATH: "test_stock.db"
       run: |
-        export PYTHONPATH="${PYTHONPATH}:${PWD}"
-        export PYTHONWARNINGS="ignore::DeprecationWarning:numpy"
-        export PYTHONWARNINGS="ignore::UserWarning"
-        export TESTING=1
-        export FLASK_ENV=testing
         # デバッグ情報を出力
         echo "Current directory: $(pwd)"
         echo "PYTHONPATH: $PYTHONPATH"
         echo "Python version: $(python --version)"
         echo "TESTING: $TESTING"
         echo "FLASK_ENV: $FLASK_ENV"
+        echo "DATABASE_PATH: $DATABASE_PATH"
         # 全テストを実行（カバレッジ付き）
-        pytest -v --tb=short --cov=. --cov-report=xml --cov-report=term || {
+        pytest -v --tb=short --cov=. --cov-report=xml --cov-report=term -W ignore::FutureWarning -W ignore::UserWarning || {
           echo "::error::Test failed with exit code: $?"
           exit 1
         }
