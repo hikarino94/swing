@@ -373,7 +373,7 @@ class TestIntegration:
         )
 
         # DB_PATHを直接モック
-        with mock.patch("fetch.listed_info.DB_PATH", str(db_path)):
+        with mock.patch("fetch.listed_info.get_db_path", return_value=str(db_path)):
             # 実行
             listed_info.update_listed_info()
 

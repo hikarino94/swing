@@ -83,10 +83,10 @@ def test_db():
 def test_csv_to_db_integration(test_db, monkeypatch):
     """CSVから読み込んだデータがデータベースに正しく保存されることを確認"""
 
-    # DB_PATHをモック
-    monkeypatch.setattr("src.config.DB_PATH", str(test_db))
-    monkeypatch.setattr("src.portfolio.models.DB_PATH", str(test_db))
-    monkeypatch.setattr("src.portfolio.manager.DB_PATH", str(test_db))
+    # get_db_pathをモック
+    monkeypatch.setattr("src.config.get_db_path", lambda: str(test_db))
+    monkeypatch.setattr("src.portfolio.models.get_db_path", lambda: str(test_db))
+    monkeypatch.setattr("src.portfolio.manager.get_db_path", lambda: str(test_db))
 
     # サンプルCSVデータ
     csv_content = """銘柄,銘柄,銘柄,銘柄,銘柄,銘柄,銘柄,預り区分,保有株数,注文株数,取得単価,現在値,現在値,評価損益,評価損益(%),買付金額,評価額,基準値,基準値比,基準値比(%),決算月,貸株金利,始値,高値,安値,売買代金(千円),出来高,予想PER(倍),実績PBR(倍),予想配当利回り(%),予想EPS,実績BPS,予想1株配当,貸借区分,騰落チャート(日足)
@@ -134,7 +134,7 @@ def test_csv_to_db_integration(test_db, monkeypatch):
 def test_holding_model_with_indicators(test_db, monkeypatch):
     """Holdingモデルが株価指標データを正しく保存・読み込みできることを確認"""
 
-    monkeypatch.setattr("src.portfolio.models.DB_PATH", str(test_db))
+    monkeypatch.setattr("src.portfolio.models.get_db_path", lambda: str(test_db))
 
     # 新規作成
     holding = Holding(user_id=1, code="7203", account_name="test")

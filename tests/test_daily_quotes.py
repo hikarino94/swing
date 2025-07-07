@@ -353,7 +353,7 @@ class TestIntegration:
             ]
         )
 
-        with mock.patch("fetch.daily_quotes.DB_PATH", test_db):
+        with mock.patch("fetch.daily_quotes.get_db_path", return_value=test_db):
             daily_quotes.fetch_and_load(None, None)
 
         # 株式分割銘柄の全履歴が取得されたか確認
@@ -392,7 +392,7 @@ class TestIntegration:
 
         mock_by_date.side_effect = mock_data
 
-        with mock.patch("fetch.daily_quotes.DB_PATH", test_db):
+        with mock.patch("fetch.daily_quotes.get_db_path", return_value=test_db):
             daily_quotes.fetch_and_load("2024-01-01", "2024-01-07")
 
         # 平日5日分のAPI呼び出しを確認

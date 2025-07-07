@@ -55,10 +55,9 @@ class TestUserModel:
         assert user.email == "test@example.com"
         assert user.password_hash == "hash"
 
-    @patch("src.auth.models.DB_PATH", new="test.db")
     def test_find_by_username(self, temp_db):
         """ユーザー名での検索"""
-        with patch("src.auth.models.DB_PATH", temp_db):
+        with patch("src.auth.models.get_db_path", return_value=temp_db):
             # テストユーザーを作成
             import sqlite3
 
@@ -83,10 +82,9 @@ class TestUserModel:
             user = User.find_by_username("nonexistent")
             assert user is None
 
-    @patch("src.auth.models.DB_PATH", new="test.db")
     def test_find_by_email(self, temp_db):
         """メールアドレスでの検索"""
-        with patch("src.auth.models.DB_PATH", temp_db):
+        with patch("src.auth.models.get_db_path", return_value=temp_db):
             # テストユーザーを作成
             import sqlite3
 
@@ -110,10 +108,9 @@ class TestUserModel:
             user = User.find_by_email("none@example.com")
             assert user is None
 
-    @patch("src.auth.models.DB_PATH", new="test.db")
     def test_save_new_user(self, temp_db):
         """新規ユーザーの保存"""
-        with patch("src.auth.models.DB_PATH", temp_db):
+        with patch("src.auth.models.get_db_path", return_value=temp_db):
             user = User(
                 username="newuser", email="new@example.com", password_hash="hash"
             )
@@ -127,10 +124,9 @@ class TestUserModel:
             assert saved_user is not None
             assert saved_user.email == "new@example.com"
 
-    @patch("src.auth.models.DB_PATH", new="test.db")
     def test_save_duplicate_user(self, temp_db):
         """重複ユーザーの保存（エラー）"""
-        with patch("src.auth.models.DB_PATH", temp_db):
+        with patch("src.auth.models.get_db_path", return_value=temp_db):
             # 最初のユーザー
             user1 = User(
                 username="testuser", email="test@example.com", password_hash="hash"
@@ -185,10 +181,9 @@ class TestSessionModel:
         assert session.user_id == 1
         assert session.expires_at == expires_at
 
-    @patch("src.auth.models.DB_PATH", new="test.db")
     def test_find_valid_session(self, temp_db):
         """有効なセッションの検索"""
-        with patch("src.auth.models.DB_PATH", temp_db):
+        with patch("src.auth.models.get_db_path", return_value=temp_db):
             # 有効なセッションを作成
             import sqlite3
 
@@ -209,10 +204,9 @@ class TestSessionModel:
             assert session is not None
             assert session.user_id == 1
 
-    @patch("src.auth.models.DB_PATH", new="test.db")
     def test_find_expired_session(self, temp_db):
         """期限切れセッションの検索"""
-        with patch("src.auth.models.DB_PATH", temp_db):
+        with patch("src.auth.models.get_db_path", return_value=temp_db):
             # 期限切れセッションを作成
             import sqlite3
 
@@ -232,10 +226,9 @@ class TestSessionModel:
             session = Session.find_by_id("expired123")
             assert session is None
 
-    @patch("src.auth.models.DB_PATH", new="test.db")
     def test_save_session(self, temp_db):
         """セッションの保存"""
-        with patch("src.auth.models.DB_PATH", temp_db):
+        with patch("src.auth.models.get_db_path", return_value=temp_db):
             expires_at = (datetime.now() + timedelta(hours=24)).isoformat()
             session = Session("newsession", 1, expires_at)
             result = session.save()
@@ -247,10 +240,9 @@ class TestSessionModel:
             assert saved_session is not None
             assert saved_session.user_id == 1
 
-    @patch("src.auth.models.DB_PATH", new="test.db")
     def test_delete_session(self, temp_db):
         """セッションの削除"""
-        with patch("src.auth.models.DB_PATH", temp_db):
+        with patch("src.auth.models.get_db_path", return_value=temp_db):
             # セッションを作成
             expires_at = (datetime.now() + timedelta(hours=24)).isoformat()
             session = Session("deleteme", 1, expires_at)
@@ -264,10 +256,9 @@ class TestSessionModel:
             deleted_session = Session.find_by_id("deleteme")
             assert deleted_session is None
 
-    @patch("src.auth.models.DB_PATH", new="test.db")
     def test_cleanup_expired_sessions(self, temp_db):
         """期限切れセッションのクリーンアップ"""
-        with patch("src.auth.models.DB_PATH", temp_db):
+        with patch("src.auth.models.get_db_path", return_value=temp_db):
             import sqlite3
 
             conn = sqlite3.connect(temp_db)

@@ -206,7 +206,7 @@ def compute_features(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     # マルチインデックスの場合は、codeレベルをカラムに戻す
     if isinstance(result.index, pd.MultiIndex):
         result = result.reset_index(level=0)
-    elif result.index.name == "code":
+    else:
         result = result.reset_index()
 
     return result

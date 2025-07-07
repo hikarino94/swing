@@ -473,10 +473,8 @@ class TestIntegration:
         conn.commit()
         conn.close()
 
-    @mock.patch("screening.screen_ml.DB_PATH")
-    def test_train_command(self, mock_db_path, ml_db, tmp_path):
+    def test_train_command(self, ml_db, tmp_path):
         """trainコマンドの統合テスト"""
-        mock_db_path.__str__.return_value = ml_db
         model_path = tmp_path / "ml_screen_model.pkl"
 
         # テストデータ作成

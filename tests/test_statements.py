@@ -375,7 +375,7 @@ class TestIntegration:
             {"code": "5678", "DisclosureNumber": "56780001"},
         ]
 
-        with mock.patch("fetch.statements.DB_PATH", statements_db):
+        with mock.patch("fetch.statements.get_db_path", return_value=statements_db):
             statements.main("1", None, None)
 
         # 有効な銘柄のみ取得されたか確認
@@ -411,7 +411,7 @@ class TestIntegration:
             {"code": "1234", "DisclosureNumber": "12340001"}
         ]
 
-        with mock.patch("fetch.statements.DB_PATH", statements_db):
+        with mock.patch("fetch.statements.get_db_path", return_value=statements_db):
             statements.main("2", None, None)
 
         mock_fetch_date.assert_called_once()
@@ -430,7 +430,7 @@ class TestIntegration:
             {"code": "5678", "DisclosureNumber": "56780001"},
         ]
 
-        with mock.patch("fetch.statements.DB_PATH", statements_db):
+        with mock.patch("fetch.statements.get_db_path", return_value=statements_db):
             statements.main("2", "2024-01-01", "2024-01-03")
 
         mock_fetch_period.assert_called_once()
@@ -443,7 +443,7 @@ class TestIntegration:
         with mock.patch("fetch.statements._load_token") as mock_load_token:
             mock_load_token.return_value = "test_token"
 
-            with mock.patch("fetch.statements.DB_PATH", statements_db):
+            with mock.patch("fetch.statements.get_db_path", return_value=statements_db):
                 with mock.patch("fetch.statements.logger") as mock_logger:
                     statements.main("3", None, None)  # 無効なモード
 

@@ -329,10 +329,9 @@ class TestHoldingModel:
         assert holding.quantity == 0
         assert holding.average_price == 0.0
 
-    @patch("src.portfolio.models.DB_PATH", new="test.db")
     def test_save_new_holding(self, temp_db):
         """新規保有銘柄の保存"""
-        with patch("src.portfolio.models.DB_PATH", temp_db):
+        with patch("src.portfolio.models.get_db_path", return_value=temp_db):
             holding = Holding(user_id=1, code="7203")
             holding.quantity = 100
             holding.average_price = 2500
@@ -341,10 +340,9 @@ class TestHoldingModel:
             assert result is True
             assert holding.id is not None
 
-    @patch("src.portfolio.models.DB_PATH", new="test.db")
     def test_find_by_user_and_code(self, temp_db):
         """ユーザーIDと銘柄コードでの検索"""
-        with patch("src.portfolio.models.DB_PATH", temp_db):
+        with patch("src.portfolio.models.get_db_path", return_value=temp_db):
             # テストデータを作成
             import sqlite3
 
@@ -369,10 +367,9 @@ class TestHoldingModel:
             holding = Holding.find_by_user_and_code(1, "9999")
             assert holding is None
 
-    @patch("src.portfolio.models.DB_PATH", new="test.db")
     def test_find_all_by_user(self, temp_db):
         """ユーザーの全保有銘柄取得"""
-        with patch("src.portfolio.models.DB_PATH", temp_db):
+        with patch("src.portfolio.models.get_db_path", return_value=temp_db):
             # テストデータを作成
             import sqlite3
 
@@ -499,10 +496,9 @@ class TestTransactionModel:
         assert trans.price == 2500
         assert trans.total_amount == 250000
 
-    @patch("src.portfolio.models.DB_PATH", new="test.db")
     def test_save_transaction(self, temp_db):
         """取引の保存"""
-        with patch("src.portfolio.models.DB_PATH", temp_db):
+        with patch("src.portfolio.models.get_db_path", return_value=temp_db):
             trans = Transaction(
                 user_id=1,
                 code="7203",
@@ -517,10 +513,9 @@ class TestTransactionModel:
             assert result is True
             assert trans.id is not None
 
-    @patch("src.portfolio.models.DB_PATH", new="test.db")
     def test_find_all_by_user(self, temp_db):
         """ユーザーの取引履歴取得"""
-        with patch("src.portfolio.models.DB_PATH", temp_db):
+        with patch("src.portfolio.models.get_db_path", return_value=temp_db):
             # テストデータを作成
             import sqlite3
 
@@ -561,10 +556,9 @@ class TestTransactionModel:
             assert transactions[0].transaction_date == "2024-01-20"
             assert transactions[1].transaction_date == "2024-01-10"
 
-    @patch("src.portfolio.models.DB_PATH", new="test.db")
     def test_find_all_by_user_with_filters(self, temp_db):
         """フィルター付き取引履歴取得"""
-        with patch("src.portfolio.models.DB_PATH", temp_db):
+        with patch("src.portfolio.models.get_db_path", return_value=temp_db):
             # テストデータを作成
             import sqlite3
 
@@ -608,10 +602,9 @@ class TestTransactionModel:
             assert transactions[0].code == "7203"  # 1/20
             assert transactions[1].code == "6758"  # 1/15
 
-    @patch("src.portfolio.models.DB_PATH", new="test.db")
     def test_bulk_insert(self, temp_db):
         """複数取引の一括挿入"""
-        with patch("src.portfolio.models.DB_PATH", temp_db):
+        with patch("src.portfolio.models.get_db_path", return_value=temp_db):
             transactions_data = [
                 {
                     "user_id": 1,
@@ -642,10 +635,9 @@ class TestTransactionModel:
             transactions = Transaction.find_all_by_user(1)
             assert len(transactions) == 2
 
-    @patch("src.portfolio.models.DB_PATH", new="test.db")
     def test_bulk_insert_skip_duplicates(self, temp_db):
         """重複データのスキップ"""
-        with patch("src.portfolio.models.DB_PATH", temp_db):
+        with patch("src.portfolio.models.get_db_path", return_value=temp_db):
             # 既存データを作成
             trans = Transaction(
                 user_id=1,
@@ -776,7 +768,6 @@ class TestPortfolioManager:
         assert transactions_data[1]["user_id"] == 1
         # 新しい仕様では保有銘柄の再計算は行わない
 
-    @patch("src.portfolio.manager.DB_PATH", new="test.db")
     def test_recalculate_holdings(self):
         """取引履歴から保有銘柄を再計算"""
         # テスト用DBを作成
@@ -841,7 +832,7 @@ class TestPortfolioManager:
         conn.commit()
         conn.close()
 
-        with patch("src.portfolio.manager.DB_PATH", db_path):
+        with patch("src.portfolio.manager.get_db_path", return_value=db_path):
             with patch("src.portfolio.manager.Holding") as mock_holding_class:
                 # モックの設定
                 mock_holding = MagicMock()
@@ -889,7 +880,6 @@ class TestPortfolioManager:
             mock_holdings[0].update_market_value.assert_called_with(2900)
             mock_holdings[1].update_market_value.assert_called_with(15000)
 
-    @patch("src.portfolio.manager.DB_PATH", new="test.db")
     def test_get_portfolio_summary(self):
         """ポートフォリオサマリーの取得"""
         # テスト用DBを作成
@@ -933,7 +923,7 @@ class TestPortfolioManager:
         conn.commit()
         conn.close()
 
-        with patch("src.portfolio.manager.DB_PATH", db_path):
+        with patch("src.portfolio.manager.get_db_path", return_value=db_path):
             summary = PortfolioManager.get_portfolio_summary(1)
 
             assert summary["stock_count"] == 2
@@ -945,7 +935,6 @@ class TestPortfolioManager:
             assert summary["first_transaction_date"] == "2024-01-10"
             assert summary["last_transaction_date"] == "2024-01-20"
 
-    @patch("src.portfolio.manager.DB_PATH", new="test.db")
     def test_aggregate_holdings_by_code(self):
         """銘柄コードで保有銘柄を集約"""
         # テスト用DBを作成
@@ -993,7 +982,7 @@ class TestPortfolioManager:
         conn.commit()
         conn.close()
 
-        with patch("src.portfolio.manager.DB_PATH", db_path):
+        with patch("src.portfolio.manager.get_db_path", return_value=db_path):
             aggregated = PortfolioManager.aggregate_holdings_by_code(1)
 
             assert len(aggregated) == 1
