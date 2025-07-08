@@ -1090,16 +1090,24 @@
                             <!-- グラフ表示エリア -->
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div class="bg-white p-4 rounded-lg shadow overflow-hidden">
-                                    <div id="stock-composition-chart" class="w-full" style="height: 400px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">銘柄別構成比</h3>
+                                    <p class="text-sm text-gray-600 mb-4">各銘柄が占める評価額の割合を表示します。分散投資の状況を確認できます。</p>
+                                    <div id="stock-composition-chart" class="w-full" style="height: 500px;"></div>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow overflow-hidden">
-                                    <div id="sector-composition-chart" class="w-full" style="height: 400px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">セクター別構成比</h3>
+                                    <p class="text-sm text-gray-600 mb-4">業種別の投資配分を表示します。特定セクターへの偏りを確認できます。</p>
+                                    <div id="sector-composition-chart" class="w-full" style="height: 500px;"></div>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow overflow-hidden">
-                                    <div id="market-composition-chart" class="w-full" style="height: 400px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">市場別構成比</h3>
+                                    <p class="text-sm text-gray-600 mb-4">プライム、スタンダード、グロース市場別の配分を表示します。</p>
+                                    <div id="market-composition-chart" class="w-full" style="height: 500px;"></div>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow overflow-hidden">
-                                    <div id="account-composition-chart" class="w-full" style="height: 400px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">口座別構成比</h3>
+                                    <p class="text-sm text-gray-600 mb-4">特定口座、NISA口座などの口座別配分を表示します。</p>
+                                    <div id="account-composition-chart" class="w-full" style="height: 500px;"></div>
                                 </div>
                             </div>
                         </div>
@@ -1154,13 +1162,19 @@
                             <!-- グラフ表示エリア -->
                             <div class="space-y-6">
                                 <div class="bg-white p-4 rounded-lg shadow">
-                                    <div id="value-performance-chart" style="height: 400px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">評価額推移</h3>
+                                    <p class="text-sm text-gray-600 mb-4">ポートフォリオの総評価額の推移を表示します。資産の成長を時系列で確認できます。</p>
+                                    <div id="value-performance-chart" style="height: 500px;"></div>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow">
-                                    <div id="profit-performance-chart" style="height: 400px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">損益推移</h3>
+                                    <p class="text-sm text-gray-600 mb-4">累積損益額と損益率の推移を表示します。投資パフォーマンスを評価できます。</p>
+                                    <div id="profit-performance-chart" style="height: 500px;"></div>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow">
-                                    <div id="benchmark-comparison-chart" style="height: 400px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">ベンチマーク比較</h3>
+                                    <p class="text-sm text-gray-600 mb-4">ポートフォリオのパフォーマンスを日経平均株価と比較します。相対的な運用成果を評価できます。</p>
+                                    <div id="benchmark-comparison-chart" style="height: 500px;"></div>
                                 </div>
                             </div>
                         </div>
@@ -1201,13 +1215,19 @@
                             <!-- ヒートマップ表示エリア -->
                             <div class="space-y-6">
                                 <div class="bg-white p-4 rounded-lg shadow">
-                                    <div id="stocks-heatmap" style="height: 500px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">銘柄別損益率ヒートマップ</h3>
+                                    <p class="text-sm text-gray-600 mb-4">各銘柄の損益率を色の濃淡で表示します。緑が利益、赤が損失を示し、色が濃いほど変動が大きいことを表します。</p>
+                                    <div id="stocks-heatmap" style="height: 600px;"></div>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow">
-                                    <div id="sectors-heatmap" style="height: 400px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">セクター別損益率ヒートマップ</h3>
+                                    <p class="text-sm text-gray-600 mb-4">セクター別の平均損益率を表示します。好調なセクターと不調なセクターを一目で確認できます。</p>
+                                    <div id="sectors-heatmap" style="height: 500px;"></div>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow">
-                                    <div id="distribution-chart" style="height: 300px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">損益率分布</h3>
+                                    <p class="text-sm text-gray-600 mb-4">銘柄の損益率の分布を表示します。ポートフォリオ全体のリスク・リターンの偏りを確認できます。</p>
+                                    <div id="distribution-chart" style="height: 400px;"></div>
                                 </div>
                             </div>
                         </div>
