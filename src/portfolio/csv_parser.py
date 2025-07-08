@@ -705,14 +705,22 @@ class SBICSVParser:
 
             # 現在のセクション（口座タイプ）を追跡
             current_account_type = "特定"  # デフォルト
+            current_section_name = ""  # 現在のセクション名
 
             # セクション見出しと口座タイプのマッピング
             section_mapping = {
                 "株式（特定預り）": "特定",
                 "株式（NISA預り（成長投資枠））": "NISA",
                 "株式（旧NISA預り）": "旧NISA",
-                # TODO: 投資信託セクションは現在スキップ対象
+                # 投資信託セクション
                 "投資信託（金額/NISA預り（つみたて投資枠））": "つみたてNISA",
+                "投資信託（金額/特定預り）": "特定",
+                "投資信託（金額/NISA預り（成長投資枠））": "NISA",
+                "投資信託（金額/旧NISA預り）": "旧NISA",
+                "投資信託（口数/特定預り）": "特定",
+                "投資信託（口数/NISA預り（成長投資枠））": "NISA",
+                "投資信託（口数/NISA預り（つみたて投資枠））": "つみたてNISA",
+                "投資信託（口数/旧NISA預り）": "旧NISA",
             }
 
             # 各行を処理
@@ -723,6 +731,7 @@ class SBICSVParser:
                 # セクション見出しをチェック
                 if line in section_mapping:
                     current_account_type = section_mapping[line]
+                    current_section_name = line  # セクション名を記憶
                     logger.debug(
                         f"セクション検出: {line} -> 口座タイプ: {current_account_type}"
                     )
@@ -735,31 +744,72 @@ class SBICSVParser:
                     reader = csv.reader(io.StringIO(line))
                     row = next(reader, None)
                     if row and len(row) >= 8:
+                        # 投資信託の場合は9列必要
+                        if "投資信託" in current_section_name and len(row) < 9:
+                            logger.debug(f"投資信託データの列数が不足: {len(row)}列")
+                            continue
                         # 投資信託セクションかどうか判定
-                        is_fund = (
-                            "つみたてNISA" in current_account_type and len(row) >= 9
-                        )
+                        is_fund = "投資信託" in current_section_name
 
                         if is_fund:
                             # 投資信託の場合
                             fund_name = row[0].strip() if row[0] else ""
                             if fund_name:
-                                # TODO: 投資信託の取り込み機能を実装する
-                                # 現在の課題:
-                                # 1. 投資信託には標準的な4桁銘柄コードが存在しない
-                                # 2. ファンド名のみでの識別となるため、名称変更時の追跡が困難
-                                # 3. 複数の販売会社で同一ファンドが異なるコードで管理される
-                                #
-                                # 実装案:
-                                # - ISINコードやファンドコードなど一意識別子の利用を検討
-                                # - ファンド名のマスターテーブルを作成し、名称変更に対応
-                                # - 投資信託専用のテーブル（fund_holdings）を作成
-                                # - 銘柄コードの代わりにファンドIDを使用
-                                # - ファンド名とハッシュ値のマッピングテーブルを管理
-                                #
-                                # 一時的に投資信託のインポートをスキップ
-                                logger.warning(
-                                    f"投資信託のインポートはスキップされました: {fund_name} "
+                                # デバッグ用にrow内容を出力
+                                logger.debug(f"投資信託行データ: {row}")
+                                logger.debug(f"行データ長: {len(row)}")
+
+                                # 口数を取得（列1 - 「口」を除去）
+                                quantity = None
+                                if len(row) > 1:
+                                    # 「口」を除去してから数値解析
+                                    quantity_str = row[1].replace("口", "").strip()
+                                    quantity = SBICSVParser._parse_number(quantity_str)
+                                    logger.debug(
+                                        f"口数解析: row[1]='{row[1]}' -> '{quantity_str}' -> {quantity}"
+                                    )
+
+                                # quantityがNoneまたは0の場合はスキップ
+                                if quantity is None or quantity == 0:
+                                    logger.warning(
+                                        f"投資信託の口数が無効です: {fund_name} "
+                                        f"(口数: {quantity}, 口座: {current_account_type})"
+                                    )
+                                    continue
+
+                                # 投資信託データを保持（ファンド名で識別）
+                                holding = {
+                                    "fund_name": fund_name,
+                                    "account_type": current_account_type,
+                                    "quantity": quantity,  # 口数
+                                    "average_price": (
+                                        SBICSVParser._parse_number(row[3])
+                                        if len(row) > 3
+                                        else 0
+                                    ),  # 取得単価
+                                    "current_price": (
+                                        SBICSVParser._parse_number(row[4])
+                                        if len(row) > 4
+                                        else None
+                                    ),  # 基準価額
+                                    "market_value": (
+                                        SBICSVParser._parse_number(row[6])
+                                        if len(row) > 6
+                                        else None
+                                    ),  # 評価額
+                                    "profit_loss": (
+                                        SBICSVParser._parse_number(row[7])
+                                        if len(row) > 7
+                                        else None
+                                    ),  # 評価損益
+                                    "profit_loss_ratio": None,
+                                    "is_fund": True,  # 投資信託フラグ
+                                    "code": None,  # 投資信託にはコードがない
+                                }
+                                holdings.append(holding)
+                                logger.info(
+                                    f"投資信託データを取得: {fund_name} "
+                                    f"口数: {quantity}, 平均取得価額: {holding['average_price']} "
                                     f"(口座: {current_account_type})"
                                 )
                         else:

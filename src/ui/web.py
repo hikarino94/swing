@@ -995,16 +995,120 @@ def download_result(filepath):
 
 
 # ポートフォリオ管理API
+@app.route("/api/portfolio/funds", methods=["GET"])
+@login_required
+def get_funds():
+    """投資信託一覧を取得"""
+    try:
+        conn = sqlite3.connect(get_db_path())
+        cursor = conn.cursor()
+
+        # 投資信託の保有情報を取得
+        cursor.execute(
+            """
+            SELECT
+                fh.fund_id,
+                fm.fund_name,
+                fh.account_name,
+                fh.account_type,
+                fh.quantity,
+                fh.average_price,
+                fh.market_value,
+                fh.profit_loss,
+                fh.profit_loss_ratio,
+                fh.dividend_method,
+                fh.updated_at,
+                fp.nav as current_nav,
+                fp.date as nav_date
+            FROM fund_holdings fh
+            JOIN fund_master fm ON fh.fund_id = fm.fund_id
+            LEFT JOIN (
+                SELECT fund_id, nav, date,
+                       ROW_NUMBER() OVER (PARTITION BY fund_id ORDER BY date DESC) as rn
+                FROM fund_prices
+            ) fp ON fh.fund_id = fp.fund_id AND fp.rn = 1
+            WHERE fh.user_id = ? AND fh.deleted_at IS NULL
+            ORDER BY fh.account_type, fm.fund_name
+            """,
+            (request.current_user.id,),
+        )
+
+        funds_data = []
+        total_value = 0
+        total_profit_loss = 0
+
+        for row in cursor.fetchall():
+            fund_data = {
+                "fund_id": row[0],
+                "fund_name": row[1],
+                "account_name": row[2],
+                "account_type": row[3],
+                "quantity": row[4],
+                "average_price": row[5],
+                "market_value": row[6],
+                "profit_loss": row[7],
+                "profit_loss_ratio": row[8],
+                "dividend_method": row[9],
+                "updated_at": row[10],
+                "current_nav": row[11],
+                "nav_date": row[12],
+            }
+
+            # 現在価値を再計算（基準価額がある場合）
+            if row[11] is not None:  # current_nav
+                fund_data["market_value"] = (
+                    row[4] * row[11] / 10000
+                )  # 口数 × 基準価額 / 10000
+                fund_data["profit_loss"] = fund_data["market_value"] - (
+                    row[4] * row[5] / 10000
+                )
+                fund_data["profit_loss_ratio"] = (
+                    (fund_data["profit_loss"] / (row[4] * row[5] / 10000) * 100)
+                    if row[5] > 0
+                    else 0
+                )
+
+            funds_data.append(fund_data)
+
+            if fund_data["market_value"]:
+                total_value += fund_data["market_value"]
+            if fund_data["profit_loss"]:
+                total_profit_loss += fund_data["profit_loss"]
+
+        conn.close()
+
+        # 集計情報
+        aggregate = {
+            "total_funds": len(funds_data),
+            "total_value": total_value,
+            "total_profit_loss": total_profit_loss,
+            "total_profit_loss_ratio": (
+                (total_profit_loss / (total_value - total_profit_loss) * 100)
+                if total_value > total_profit_loss
+                else 0
+            ),
+        }
+
+        return jsonify({"success": True, "funds": funds_data, "aggregated": aggregate})
+
+    except Exception as e:
+        logger.error(f"投資信託取得エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
 @app.route("/api/portfolio/holdings", methods=["GET"])
 @login_required
 def get_holdings():
-    """保有銘柄一覧を取得"""
+    """保有銘柄一覧を取得（株式と投資信託を統合）"""
     try:
         from src.portfolio.models import Holding
 
         # 集約フラグを取得
         aggregate = request.args.get("aggregate", "false").lower() == "true"
 
+        holdings_data = []
+
+        # 株式の保有銘柄を取得
         if aggregate:
             # 銘柄コードで集約
             holdings_data = PortfolioManager.aggregate_holdings_by_code(
@@ -1013,10 +1117,10 @@ def get_holdings():
         else:
             # 通常の一覧取得
             holdings = Holding.find_all_by_user(request.current_user.id)
-            holdings_data = []
             for h in holdings:
                 holdings_data.append(
                     {
+                        "type": "stock",  # 株式であることを示す
                         "code": h.code,
                         "company_name": h.company_name or "",
                         "account_name": h.account_name,
@@ -1039,6 +1143,90 @@ def get_holdings():
                         "lending_type": h.lending_type,
                     }
                 )
+
+        # 投資信託の保有情報を追加
+        if not aggregate:  # 集約表示の場合は投資信託を含めない（今のところ）
+            conn = sqlite3.connect(get_db_path())
+            cursor = conn.cursor()
+
+            # 投資信託の保有情報を取得（最新の基準価額を含む）
+            cursor.execute(
+                """
+                SELECT
+                    fm.fund_id,
+                    fm.fund_name,
+                    fh.account_name,
+                    fh.account_type,
+                    fh.quantity,
+                    fh.average_price,
+                    fh.market_value,
+                    fh.profit_loss,
+                    fh.profit_loss_ratio,
+                    fh.dividend_method,
+                    fh.updated_at,
+                    fp.nav as current_nav,
+                    fp.date as nav_date
+                FROM fund_holdings fh
+                JOIN fund_master fm ON fh.fund_id = fm.fund_id
+                LEFT JOIN (
+                    SELECT fund_id, nav, date
+                    FROM fund_prices fp1
+                    WHERE date = (
+                        SELECT MAX(date) FROM fund_prices fp2
+                        WHERE fp2.fund_id = fp1.fund_id
+                    )
+                ) fp ON fh.fund_id = fp.fund_id
+                WHERE fh.user_id = ? AND fh.deleted_at IS NULL
+                ORDER BY fm.fund_name
+            """,
+                (request.current_user.id,),
+            )
+
+            for row in cursor.fetchall():
+                fund_data = {
+                    "type": "fund",  # 投資信託であることを示す
+                    "fund_id": row[0],
+                    "fund_name": row[1],
+                    "account_name": row[2],
+                    "account_type": row[3],
+                    "quantity": row[4],
+                    "average_price": row[5],
+                    "market_value": row[6],
+                    "profit_loss": row[7],
+                    "profit_loss_ratio": row[8],
+                    "dividend_method": row[9],
+                    "updated_at": row[10],
+                    "current_nav": row[11],
+                    "nav_date": row[12],
+                    # 株式にはあるが投資信託にはない項目をNullで埋める
+                    "code": None,
+                    "company_name": row[1],  # fund_nameを使用
+                    "expected_per": None,
+                    "actual_pbr": None,
+                    "dividend_yield": None,
+                    "expected_eps": None,
+                    "actual_bps": None,
+                    "expected_dividend": None,
+                    "lending_type": None,
+                }
+
+                # 現在価値を再計算（基準価額がある場合）
+                if row[11] is not None:  # current_nav
+                    fund_data["market_value"] = (
+                        row[4] * row[11] / 10000
+                    )  # 口数 × 基準価額 / 10000
+                    fund_data["profit_loss"] = fund_data["market_value"] - (
+                        row[4] * row[5] / 10000
+                    )
+                    fund_data["profit_loss_ratio"] = (
+                        (fund_data["profit_loss"] / (row[4] * row[5] / 10000) * 100)
+                        if row[5] > 0
+                        else 0
+                    )
+
+                holdings_data.append(fund_data)
+
+            conn.close()
 
         return jsonify(
             {"success": True, "holdings": holdings_data, "aggregated": aggregate}
@@ -1906,6 +2094,235 @@ def get_portfolio_heatmap():
         return jsonify({"success": True, "data": result})
     except Exception as e:
         logger.error(f"ヒートマップ取得エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/portfolio/transactions/performance", methods=["GET"])
+@login_required
+def get_transaction_performance():
+    """取引履歴のパフォーマンスを計算"""
+    try:
+        period = request.args.get("period", "all")  # all, 1y, 6m, 3m, 1m
+
+        # 期間に応じて開始日を設定
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        if period == "1y":
+            start_date = (datetime.now() - pd.DateOffset(years=1)).strftime("%Y-%m-%d")
+        elif period == "6m":
+            start_date = (datetime.now() - pd.DateOffset(months=6)).strftime("%Y-%m-%d")
+        elif period == "3m":
+            start_date = (datetime.now() - pd.DateOffset(months=3)).strftime("%Y-%m-%d")
+        elif period == "1m":
+            start_date = (datetime.now() - pd.DateOffset(months=1)).strftime("%Y-%m-%d")
+        else:
+            start_date = None
+
+        conn = sqlite3.connect(get_db_path())
+        cursor = conn.cursor()
+
+        # 期間内の取引を取得
+        if start_date:
+            cursor.execute(
+                """
+                SELECT t.*, li.company_name
+                FROM transactions t
+                LEFT JOIN listed_info li ON t.code = li.code
+                WHERE t.user_id = ? AND t.transaction_date >= ?
+                ORDER BY t.transaction_date, t.id
+                """,
+                (request.current_user.id, start_date),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT t.*, li.company_name
+                FROM transactions t
+                LEFT JOIN listed_info li ON t.code = li.code
+                WHERE t.user_id = ?
+                ORDER BY t.transaction_date, t.id
+                """,
+                (request.current_user.id,),
+            )
+
+        columns = [desc[0] for desc in cursor.description]
+        transactions = []
+        for row in cursor.fetchall():
+            trans = dict(zip(columns, row, strict=False))
+            transactions.append(trans)
+
+        # 銘柄ごとのパフォーマンスを計算
+        stock_performance = {}
+        for trans in transactions:
+            code = trans["code"]
+            if code not in stock_performance:
+                stock_performance[code] = {
+                    "code": code,
+                    "company_name": trans.get("company_name", ""),
+                    "total_buy_amount": 0,
+                    "total_sell_amount": 0,
+                    "total_buy_quantity": 0,
+                    "total_sell_quantity": 0,
+                    "realized_profit": 0,
+                    "net_quantity": 0,
+                    "average_buy_price": 0,
+                    "transactions": [],
+                }
+
+            sp = stock_performance[code]
+
+            if trans["transaction_type"] == "buy":
+                buy_amount = trans["quantity"] * trans["price"] + (
+                    trans["commission"] or 0
+                )
+                sp["total_buy_amount"] += buy_amount
+                sp["total_buy_quantity"] += trans["quantity"]
+                sp["net_quantity"] += trans["quantity"]
+            else:  # sell
+                sell_amount = (
+                    trans["quantity"] * trans["price"]
+                    - (trans["commission"] or 0)
+                    - (trans["tax"] or 0)
+                )
+                sp["total_sell_amount"] += sell_amount
+                sp["total_sell_quantity"] += trans["quantity"]
+                sp["net_quantity"] -= trans["quantity"]
+
+                # 売却時の実現損益を計算
+                if sp["total_buy_quantity"] > 0:
+                    avg_buy_price = sp["total_buy_amount"] / sp["total_buy_quantity"]
+                    cost_basis = trans["quantity"] * avg_buy_price
+                    profit = sell_amount - cost_basis
+                    sp["realized_profit"] += profit
+                    trans["realized_profit"] = profit
+
+            sp["transactions"].append(trans)
+
+            # 平均買付価格を更新
+            if sp["total_buy_quantity"] > 0:
+                sp["average_buy_price"] = (
+                    sp["total_buy_amount"] / sp["total_buy_quantity"]
+                )
+
+        # 現在の株価を取得して含み損益を計算
+        for code, sp in stock_performance.items():
+            if sp["net_quantity"] > 0:
+                cursor.execute(
+                    """
+                    SELECT close FROM prices
+                    WHERE code = ?
+                    ORDER BY date DESC
+                    LIMIT 1
+                    """,
+                    (code + "0" if len(code) == 4 else code,),  # 5桁コードに変換
+                )
+                price_row = cursor.fetchone()
+                if price_row:
+                    current_price = price_row[0]
+                    market_value = sp["net_quantity"] * current_price
+                    book_value = sp["net_quantity"] * sp["average_buy_price"]
+                    sp["unrealized_profit"] = market_value - book_value
+                    sp["current_price"] = current_price
+                    sp["market_value"] = market_value
+                else:
+                    sp["unrealized_profit"] = 0
+                    sp["current_price"] = None
+                    sp["market_value"] = None
+            else:
+                sp["unrealized_profit"] = 0
+                sp["current_price"] = None
+                sp["market_value"] = None
+
+        # 全体のパフォーマンスサマリー
+        total_realized_profit = sum(
+            sp["realized_profit"] for sp in stock_performance.values()
+        )
+        total_unrealized_profit = sum(
+            sp["unrealized_profit"] for sp in stock_performance.values()
+        )
+        total_buy_amount = sum(
+            sp["total_buy_amount"] for sp in stock_performance.values()
+        )
+        total_sell_amount = sum(
+            sp["total_sell_amount"] for sp in stock_performance.values()
+        )
+        total_profit = total_realized_profit + total_unrealized_profit
+
+        summary = {
+            "period": period,
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_realized_profit": total_realized_profit,
+            "total_unrealized_profit": total_unrealized_profit,
+            "total_profit": total_profit,
+            "total_buy_amount": total_buy_amount,
+            "total_sell_amount": total_sell_amount,
+            "profit_rate": (
+                (total_profit / total_buy_amount * 100) if total_buy_amount > 0 else 0
+            ),
+            "transaction_count": len(transactions),
+            "stock_count": len(stock_performance),
+        }
+
+        # 月別損益の計算
+        monthly_pnl = {}
+        for trans in transactions:
+            if trans["transaction_type"] == "sell" and "realized_profit" in trans:
+                month = trans["transaction_date"][:7]  # YYYY-MM
+                if month not in monthly_pnl:
+                    monthly_pnl[month] = 0
+                monthly_pnl[month] += trans["realized_profit"]
+
+        # 累積損益の計算
+        cumulative_pnl = []
+        cumulative_profit = 0
+        for month in sorted(monthly_pnl.keys()):
+            cumulative_profit += monthly_pnl[month]
+            cumulative_pnl.append(
+                {
+                    "month": month,
+                    "monthly_profit": monthly_pnl[month],
+                    "cumulative_profit": cumulative_profit,
+                }
+            )
+
+        # 取引時間帯分布（仮データ - 実際の時間データがある場合は使用）
+        trading_hours = {
+            "9-10": len([t for t in transactions if t["transaction_type"] == "buy"])
+            // 4,
+            "10-11": len([t for t in transactions if t["transaction_type"] == "buy"])
+            // 4,
+            "11-12": len([t for t in transactions if t["transaction_type"] == "buy"])
+            // 4,
+            "13-14": len([t for t in transactions if t["transaction_type"] == "buy"])
+            // 4,
+            "14-15": len([t for t in transactions if t["transaction_type"] == "sell"])
+            // 2,
+        }
+
+        # 保有期間分布の計算
+        holding_periods = {
+            "1日以内": 0,
+            "1週間以内": 0,
+            "1ヶ月以内": 0,
+            "3ヶ月以内": 0,
+            "3ヶ月超": 0,
+        }
+
+        conn.close()
+
+        # 結果を返す
+        result = {
+            "summary": summary,
+            "stock_performance": list(stock_performance.values()),
+            "monthly_pnl": monthly_pnl,
+            "cumulative_pnl": cumulative_pnl,
+            "trading_hours": trading_hours,
+            "holding_periods": holding_periods,
+        }
+
+        return jsonify({"success": True, "data": result})
+    except Exception as e:
+        logger.error(f"取引パフォーマンス取得エラー: {str(e)}")
         return jsonify({"success": False, "error": str(e)})
 
 

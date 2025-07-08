@@ -548,7 +548,7 @@ class PortfolioVisualizer:
                        li.company_name, li.sector17_name, li.sector33_name
                 FROM holdings h
                 LEFT JOIN listed_info li ON (h.code || '0') = li.code
-                WHERE h.user_id = ? AND h.quantity > 0
+                WHERE h.user_id = ? AND h.quantity > 0 AND h.deleted_at IS NULL
                 ORDER BY h.profit_loss_ratio DESC
             """
             df = pd.read_sql(query, conn, params=[self.user_id])
@@ -579,6 +579,7 @@ class PortfolioVisualizer:
                     marker={
                         "colorscale": "RdYlGn",
                         "cmid": 0,
+                        "color": stock_values,
                         "colorbar": {"title": "損益率(%)"},
                         "line": {"width": 2},
                         "cmin": -20,
@@ -616,6 +617,7 @@ class PortfolioVisualizer:
                     marker={
                         "colorscale": "RdYlGn",
                         "cmid": 0,
+                        "color": sector_perf["profit_loss_ratio"],
                         "colorbar": {"title": "平均損益率(%)"},
                         "line": {"width": 2},
                         "cmin": -10,

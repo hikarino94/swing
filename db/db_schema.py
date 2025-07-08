@@ -326,6 +326,90 @@ CREATE INDEX IF NOT EXISTS idx_transactions_code ON transactions(code);
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_code ON transactions(user_id, code);
 
+-- fund_master --------------------------------------------------------
+-- 投資信託マスター（ファンド基本情報）
+CREATE TABLE IF NOT EXISTS fund_master (
+    fund_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fund_name TEXT NOT NULL,
+    fund_name_kana TEXT,
+    isin_code TEXT UNIQUE,  -- 国際証券識別番号（あれば）
+    fund_code TEXT,  -- 運用会社のファンドコード
+    management_company TEXT,  -- 運用会社名
+    fund_type TEXT,  -- ファンドタイプ（国内株式、海外株式、債券等）
+    investment_area TEXT,  -- 投資地域
+    investment_target TEXT,  -- 投資対象
+    benchmark TEXT,  -- ベンチマーク
+    inception_date TEXT,  -- 設定日
+    is_active INTEGER DEFAULT 1,  -- アクティブフラグ
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_fund_master_name ON fund_master(fund_name);
+CREATE INDEX IF NOT EXISTS idx_fund_master_isin ON fund_master(isin_code);
+CREATE INDEX IF NOT EXISTS idx_fund_master_active ON fund_master(is_active);
+
+-- fund_prices --------------------------------------------------------
+-- 投資信託基準価額履歴
+CREATE TABLE IF NOT EXISTS fund_prices (
+    fund_id INTEGER NOT NULL,
+    date TEXT NOT NULL,  -- YYYY-MM-DD
+    nav REAL NOT NULL,  -- 基準価額（Net Asset Value）
+    total_net_assets REAL,  -- 純資産総額（百万円）
+    dividend_amount REAL DEFAULT 0,  -- 分配金
+    created_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (fund_id, date),
+    FOREIGN KEY (fund_id) REFERENCES fund_master(fund_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_fund_prices_fund_id ON fund_prices(fund_id);
+CREATE INDEX IF NOT EXISTS idx_fund_prices_date ON fund_prices(date);
+
+-- fund_holdings ------------------------------------------------------
+-- 投資信託保有情報
+CREATE TABLE IF NOT EXISTS fund_holdings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    fund_id INTEGER NOT NULL,
+    account_name TEXT NOT NULL DEFAULT 'default',
+    account_type TEXT NOT NULL DEFAULT '特定',  -- 特定/NISA/つみたてNISA
+    quantity REAL NOT NULL,  -- 口数
+    average_price REAL NOT NULL,  -- 平均取得基準価額
+    dividend_method TEXT DEFAULT '再投資',  -- 分配金受取方法: 受取/再投資
+    market_value REAL,  -- 現在価値
+    profit_loss REAL,  -- 評価損益
+    profit_loss_ratio REAL,  -- 評価損益率
+    updated_at TEXT DEFAULT (datetime('now')),
+    deleted_at TEXT DEFAULT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (fund_id) REFERENCES fund_master(fund_id),
+    UNIQUE(user_id, fund_id, account_name, account_type)
+);
+CREATE INDEX IF NOT EXISTS idx_fund_holdings_user_id ON fund_holdings(user_id);
+CREATE INDEX IF NOT EXISTS idx_fund_holdings_fund_id ON fund_holdings(fund_id);
+CREATE INDEX IF NOT EXISTS idx_fund_holdings_account ON fund_holdings(account_name);
+CREATE INDEX IF NOT EXISTS idx_fund_holdings_deleted ON fund_holdings(deleted_at);
+
+-- fund_transactions --------------------------------------------------
+-- 投資信託取引履歴
+CREATE TABLE IF NOT EXISTS fund_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    fund_id INTEGER NOT NULL,
+    transaction_date TEXT NOT NULL,  -- YYYY-MM-DD
+    transaction_type TEXT NOT NULL,  -- 'buy'/'sell'/'dividend'(分配金)
+    quantity REAL NOT NULL,  -- 口数
+    price REAL NOT NULL,  -- 基準価額
+    amount REAL NOT NULL,  -- 約定金額
+    commission REAL DEFAULT 0,  -- 手数料
+    tax REAL DEFAULT 0,  -- 税金
+    remarks TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (fund_id) REFERENCES fund_master(fund_id)
+);
+CREATE INDEX IF NOT EXISTS idx_fund_transactions_user_id ON fund_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_fund_transactions_fund_id ON fund_transactions(fund_id);
+CREATE INDEX IF NOT EXISTS idx_fund_transactions_date ON fund_transactions(transaction_date);
+
 
 """
 

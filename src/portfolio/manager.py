@@ -46,9 +46,164 @@ class PortfolioManager:
                 logger.info("SaveFile形式CSVとして処理します")
 
         for data in holdings_data:
+            # 投資信託かどうかをチェック
+            is_fund = data.get("is_fund", False)
+
             # 口座タイプを取得（デフォルトは"特定"）
             account_type = data.get("account_type", "特定")
 
+            if is_fund:
+                # 投資信託の場合
+                fund_name = data.get("fund_name", "")
+                if not fund_name:
+                    logger.warning("投資信託名が空のデータをスキップ")
+                    continue
+
+                # 必須項目のチェック
+                quantity = data.get("quantity")
+                if quantity is None or quantity == 0:
+                    logger.warning(
+                        f"投資信託の口数が無効: {fund_name} (quantity={quantity})"
+                    )
+                    continue
+
+                average_price = data.get("average_price", 0)
+                if average_price is None:
+                    average_price = 0
+
+                # fund_masterからfund_idを取得または作成
+                conn = sqlite3.connect(get_db_path())
+                cursor = conn.cursor()
+                try:
+                    # 既存のファンドを検索
+                    cursor.execute(
+                        "SELECT fund_id FROM fund_master WHERE fund_name = ?",
+                        (fund_name,),
+                    )
+                    fund_row = cursor.fetchone()
+
+                    if fund_row:
+                        fund_id = fund_row[0]
+                    else:
+                        # 新規ファンドとして登録
+                        cursor.execute(
+                            """
+                            INSERT INTO fund_master (fund_name, is_active)
+                            VALUES (?, 1)
+                            """,
+                            (fund_name,),
+                        )
+                        fund_id = cursor.lastrowid
+                        conn.commit()
+                        logger.info(f"新規ファンドを登録: {fund_name} (ID: {fund_id})")
+
+                    # 既存の投資信託保有情報を検索
+                    cursor.execute(
+                        """
+                        SELECT id, deleted_at FROM fund_holdings
+                        WHERE user_id = ? AND fund_id = ? AND account_name = ? AND account_type = ?
+                        """,
+                        (user_id, fund_id, account_name, account_type),
+                    )
+                    existing_fund_row = cursor.fetchone()
+
+                    if existing_fund_row:
+                        # 既存データを更新
+                        cursor.execute(
+                            """
+                            UPDATE fund_holdings
+                            SET quantity = ?, average_price = ?,
+                                market_value = ?, profit_loss = ?,
+                                profit_loss_ratio = ?,
+                                updated_at = datetime('now'),
+                                deleted_at = NULL
+                            WHERE id = ?
+                            """,
+                            (
+                                quantity,
+                                average_price,
+                                data.get("market_value"),
+                                data.get("profit_loss"),
+                                data.get("profit_loss_ratio"),
+                                existing_fund_row[0],
+                            ),
+                        )
+                        updated_count += 1
+                        logger.info(f"投資信託更新: {fund_name} ({account_type})")
+                    else:
+                        # 新規データを挿入
+                        cursor.execute(
+                            """
+                            INSERT INTO fund_holdings
+                            (user_id, fund_id, account_name, account_type,
+                             quantity, average_price, market_value, profit_loss,
+                             profit_loss_ratio)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                user_id,
+                                fund_id,
+                                account_name,
+                                account_type,
+                                quantity,
+                                average_price,
+                                data.get("market_value"),
+                                data.get("profit_loss"),
+                                data.get("profit_loss_ratio"),
+                            ),
+                        )
+                        new_count += 1
+                        logger.info(f"投資信託追加: {fund_name} ({account_type})")
+
+                    # 基準価額履歴を更新（現在の基準価額がある場合）
+                    current_price = data.get("current_price")
+                    if current_price:
+                        from datetime import datetime
+
+                        today = datetime.now().strftime("%Y-%m-%d")
+
+                        # 今日のデータがあるか確認
+                        cursor.execute(
+                            """
+                            SELECT nav FROM fund_prices
+                            WHERE fund_id = ? AND date = ?
+                            """,
+                            (fund_id, today),
+                        )
+                        price_row = cursor.fetchone()
+
+                        if price_row:
+                            # 既存データを更新
+                            cursor.execute(
+                                """
+                                UPDATE fund_prices
+                                SET nav = ?
+                                WHERE fund_id = ? AND date = ?
+                                """,
+                                (current_price, fund_id, today),
+                            )
+                        else:
+                            # 新規データを挿入
+                            cursor.execute(
+                                """
+                                INSERT INTO fund_prices (fund_id, date, nav)
+                                VALUES (?, ?, ?)
+                                """,
+                                (fund_id, today, current_price),
+                            )
+
+                    conn.commit()
+
+                except sqlite3.Error as e:
+                    logger.error(f"投資信託データ処理エラー: {e}")
+                    conn.rollback()
+                finally:
+                    conn.close()
+
+                # 投資信託の場合は次のデータへ
+                continue
+
+            # 以下は株式の処理
             # 既存の保有銘柄を検索（論理削除されたものも含めて検索）
             conn = sqlite3.connect(get_db_path())
             cursor = conn.cursor()
