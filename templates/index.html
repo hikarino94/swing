@@ -1209,7 +1209,7 @@
                             <p class="text-gray-600">グラフを読み込み中...</p>
                         </div>
 
-                        <div x-show="!portfolio.visualizationLoading && portfolio.compositionData">
+                        <div x-show="!portfolio.visualizationLoading && portfolio.compositionData && !portfolio.compositionData.error">
                             <!-- サマリー情報 -->
                             <div x-show="portfolio.compositionData.summary" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                                 <div class="bg-gray-50 p-4 rounded-lg text-center">
@@ -1252,6 +1252,18 @@
                                     <p class="text-sm text-gray-600 mb-4">口座別の配分を表示します。</p>
                                     <div id="account-composition-chart" class="w-full" style="height: 400px;"></div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- エラー表示 -->
+                        <div x-show="!portfolio.visualizationLoading && portfolio.compositionData && portfolio.compositionData.error"
+                             class="text-center py-8">
+                            <div class="text-gray-500">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                </svg>
+                                <p class="mt-2 text-sm" x-text="portfolio.compositionData.error || '保有銘柄データがありません'"></p>
                             </div>
                         </div>
                     </div>
@@ -2706,6 +2718,21 @@ function swingApp() {
                                     locale: 'ja'
                                 };
 
+                                // グラフを描画する前に既存のグラフをクリア
+                                const chartIds = [
+                                    'stock-composition-chart',
+                                    'sector-composition-chart',
+                                    'market-composition-chart',
+                                    'account-composition-chart'
+                                ];
+
+                                chartIds.forEach(id => {
+                                    const element = document.getElementById(id);
+                                    if (element) {
+                                        Plotly.purge(element);
+                                    }
+                                });
+
                                 if (data.stock_chart) {
                                     const stockData = JSON.parse(data.stock_chart);
                                     Plotly.newPlot('stock-composition-chart', stockData.data, stockData.layout, config);
@@ -2734,6 +2761,20 @@ function swingApp() {
                                     locale: 'ja'
                                 };
 
+                                // グラフを描画する前に既存のグラフをクリア
+                                const perfChartIds = [
+                                    'value-performance-chart',
+                                    'profit-performance-chart',
+                                    'benchmark-comparison-chart'
+                                ];
+
+                                perfChartIds.forEach(id => {
+                                    const element = document.getElementById(id);
+                                    if (element) {
+                                        Plotly.purge(element);
+                                    }
+                                });
+
                                 if (data.value_chart) {
                                     const valueData = JSON.parse(data.value_chart);
                                     Plotly.newPlot('value-performance-chart', valueData.data, valueData.layout, config);
@@ -2757,6 +2798,20 @@ function swingApp() {
                                     displayModeBar: false,
                                     locale: 'ja'
                                 };
+
+                                // グラフを描画する前に既存のグラフをクリア
+                                const heatmapChartIds = [
+                                    'stocks-heatmap',
+                                    'sectors-heatmap',
+                                    'distribution-chart'
+                                ];
+
+                                heatmapChartIds.forEach(id => {
+                                    const element = document.getElementById(id);
+                                    if (element) {
+                                        Plotly.purge(element);
+                                    }
+                                });
 
                                 if (data.stocks_heatmap) {
                                     const stocksData = JSON.parse(data.stocks_heatmap);

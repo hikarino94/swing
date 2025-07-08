@@ -19,49 +19,12 @@ class TestCSVLogicalDelete:
         fd, db_path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
 
+        # init_schemaを使用してすべてのテーブルを作成
+        from db.db_schema import init_schema
+
+        init_schema(db_path)
+
         conn = sqlite3.connect(db_path)
-        conn.executescript(
-            """
-            CREATE TABLE holdings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                code TEXT NOT NULL,
-                account_name TEXT NOT NULL DEFAULT 'default',
-                account_type TEXT NOT NULL DEFAULT '特定',
-                quantity INTEGER NOT NULL,
-                average_price REAL NOT NULL,
-                market_value REAL,
-                profit_loss REAL,
-                profit_loss_ratio REAL,
-                expected_per REAL,
-                actual_pbr REAL,
-                dividend_yield REAL,
-                expected_eps REAL,
-                actual_bps REAL,
-                expected_dividend REAL,
-                lending_type TEXT,
-                updated_at TEXT DEFAULT (datetime('now')),
-                deleted_at TEXT DEFAULT NULL,
-                UNIQUE(user_id, code, account_name, account_type)
-            );
-            CREATE TABLE prices (
-                code TEXT,
-                date TEXT,
-                close REAL
-            );
-            CREATE TABLE statements (
-                code TEXT,
-                DisclosedDate TEXT,
-                EarningsPerShare REAL,
-                BookValuePerShare REAL,
-                ForecastDividendPerShareAnnual REAL,
-                NextYearForecastDividendPerShareAnnual REAL,
-                ForecastEarningsPerShare REAL,
-                NextYearForecastEarningsPerShare REAL,
-                ResultDividendPerShareAnnual REAL
-            );
-        """
-        )
 
         # 既存データを挿入（3銘柄）
         conn.executescript(
@@ -198,11 +161,21 @@ class TestCSVLogicalDelete:
                 # テスト用の株価データとステートメントデータを追加
                 conn = sqlite3.connect(setup_db)
                 cursor = conn.cursor()
-                cursor.execute("INSERT INTO prices VALUES ('94320', '2024-01-20', 160)")
                 cursor.execute(
                     """
-                    INSERT INTO statements VALUES
-                    ('94320', '2024-01-15', 12.5, 120, 6, 7, 13, 14, 5.5)
+                    INSERT INTO prices (code, date, close)
+                    VALUES ('94320', '2024-01-20', 160)
+                """
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO statements (
+                        code, DisclosedDate, DisclosureNumber,
+                        EarningsPerShare, BookValuePerShare,
+                        ForecastDividendPerShareAnnual, NextYearForecastDividendPerShareAnnual,
+                        ForecastEarningsPerShare, NextYearForecastEarningsPerShare,
+                        ResultDividendPerShareAnnual
+                    ) VALUES ('94320', '2024-01-15', 'TEST001', 12.5, 120, 6, 7, 13, 14, 5.5)
                 """
                 )
                 conn.commit()

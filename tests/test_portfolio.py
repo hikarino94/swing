@@ -164,8 +164,8 @@ class TestSBICSVParser:
 
         result = SBICSVParser.parse_holdings_csv(csv_content)
 
-        # 投資信託はスキップされるため、株式のみが返される
-        assert len(result) == 7  # 投資信託2件を除く7銘柄
+        # 投資信託も含めて返される
+        assert len(result) == 9  # 株式7銘柄 + 投資信託2件
 
         # 特定口座の銘柄
         assert result[0]["code"] == "1911"
@@ -933,39 +933,30 @@ class TestPortfolioManager:
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
 
+        # init_schemaを使用してすべてのテーブルを作成
+        from db.db_schema import init_schema
+
+        init_schema(db_path)
+
         import sqlite3
 
         conn = sqlite3.connect(db_path)
-        conn.executescript(
-            """
-            CREATE TABLE holdings (
-                user_id INTEGER,
-                quantity INTEGER,
-                average_price REAL,
-                market_value REAL,
-                profit_loss REAL,
-                deleted_at TEXT DEFAULT NULL
-            );
-            CREATE TABLE transactions (
-                user_id INTEGER,
-                transaction_date TEXT
-            );
-        """
-        )
 
         # テストデータ
         conn.execute(
             """
-            INSERT INTO holdings VALUES
-            (1, 100, 2500, 280000, 30000, NULL),
-            (1, 50, 13000, 750000, 100000, NULL)
+            INSERT INTO holdings (user_id, code, account_name, quantity, average_price, market_value, profit_loss, deleted_at)
+            VALUES
+            (1, '7203', 'default', 100, 2500, 280000, 30000, NULL),
+            (1, '8306', 'default', 50, 13000, 750000, 100000, NULL)
         """
         )
         conn.execute(
             """
-            INSERT INTO transactions VALUES
-            (1, '2024-01-10'),
-            (1, '2024-01-20')
+            INSERT INTO transactions (user_id, code, transaction_date, transaction_type, quantity, price, total_amount)
+            VALUES
+            (1, '7203', '2024-01-10', 'buy', 100, 2500, 250000),
+            (1, '8306', '2024-01-20', 'buy', 50, 13000, 650000)
         """
         )
         conn.commit()
@@ -989,48 +980,28 @@ class TestPortfolioManager:
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
 
+        # init_schemaを使用してすべてのテーブルを作成
+        from db.db_schema import init_schema
+
+        init_schema(db_path)
+
         import sqlite3
 
         conn = sqlite3.connect(db_path)
-        conn.executescript(
-            """
-            CREATE TABLE holdings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                code TEXT,
-                account_name TEXT,
-                account_type TEXT DEFAULT '特定',
-                quantity INTEGER,
-                average_price REAL,
-                market_value REAL,
-                profit_loss REAL,
-                profit_loss_ratio REAL,
-                expected_per REAL,
-                actual_pbr REAL,
-                dividend_yield REAL,
-                expected_eps REAL,
-                actual_bps REAL,
-                expected_dividend REAL,
-                lending_type TEXT,
-                updated_at TEXT,
-                deleted_at TEXT DEFAULT NULL
-            );
-            CREATE TABLE listed_info (
-                code TEXT PRIMARY KEY,
-                company_name TEXT
-            );
-        """
-        )
 
         # テストデータ（同じ銘柄を複数口座で保有）
         conn.execute(
             """
-            INSERT INTO holdings VALUES
-            (1, 1, '7203', 'SBI', '特定', 100, 2500, 280000, 30000, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-            (2, 1, '7203', '楽天', '特定', 50, 2600, 140000, 10000, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+            INSERT INTO holdings (id, user_id, code, account_name, account_type,
+                quantity, average_price, market_value, profit_loss)
+            VALUES
+            (1, 1, '7203', 'SBI', '特定', 100, 2500, 280000, 30000),
+            (2, 1, '7203', '楽天', '特定', 50, 2600, 140000, 10000)
         """
         )
-        conn.execute("INSERT INTO listed_info VALUES ('72030', 'トヨタ自動車')")
+        conn.execute(
+            "INSERT INTO listed_info (code, company_name) VALUES ('72030', 'トヨタ自動車')"
+        )
         conn.commit()
         conn.close()
 
@@ -1056,14 +1027,14 @@ class TestPortfolioManager:
     def test_delete_all_holdings(self, mock_connect):
         """全保有銘柄の削除（論理削除）"""
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (3,)  # 3件削除
+        mock_cursor.fetchone.side_effect = [(3,), (3,)]  # 株式3件、投資信託3件削除
         mock_conn = MagicMock()
         mock_conn.cursor.return_value = mock_cursor
         mock_connect.return_value = mock_conn
 
         count = PortfolioManager.delete_all_holdings(1)
 
-        assert count == 3
+        assert count == 6  # 株式3件 + 投資信託3件
         mock_cursor.execute.assert_any_call(
             "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND deleted_at IS NULL",
             (1,),
@@ -1078,14 +1049,14 @@ class TestPortfolioManager:
     def test_delete_holdings_by_account(self, mock_connect):
         """特定口座の保有銘柄削除（論理削除）"""
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (2,)  # 2件削除
+        mock_cursor.fetchone.side_effect = [(2,), (2,)]  # 株式2件、投資信託2件削除
         mock_conn = MagicMock()
         mock_conn.cursor.return_value = mock_cursor
         mock_connect.return_value = mock_conn
 
         count = PortfolioManager.delete_holdings_by_account(1, "SBI")
 
-        assert count == 2
+        assert count == 4  # 株式2件 + 投資信託2件
         mock_cursor.execute.assert_any_call(
             "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
             (1, "SBI"),

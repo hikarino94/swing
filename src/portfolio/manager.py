@@ -371,27 +371,124 @@ class PortfolioManager:
             conn = sqlite3.connect(get_db_path())
             cursor = conn.cursor()
             try:
-                # CSVに含まれる銘柄コードのリスト
-                csv_codes = [data["code"] for data in holdings_data]
-                placeholders = ",".join("?" * len(csv_codes))
+                # 株式と投資信託を分離
+                stock_data = [
+                    data for data in holdings_data if not data.get("is_fund", False)
+                ]
+                fund_data = [
+                    data for data in holdings_data if data.get("is_fund", False)
+                ]
 
-                # 論理削除の実行
-                cursor.execute(
-                    f"""
-                    UPDATE holdings
-                    SET deleted_at = datetime('now')
-                    WHERE user_id = ?
-                      AND account_name = ?
-                      AND code NOT IN ({placeholders})
-                      AND deleted_at IS NULL
-                    """,
-                    [user_id, account_name, *csv_codes],
-                )
+                # 株式の論理削除
+                if stock_data:
+                    csv_codes = [
+                        data["code"] for data in stock_data if data.get("code")
+                    ]
+                    if csv_codes:
+                        placeholders = ",".join("?" * len(csv_codes))
+                        cursor.execute(
+                            f"""
+                            UPDATE holdings
+                            SET deleted_at = datetime('now')
+                            WHERE user_id = ?
+                              AND account_name = ?
+                              AND code NOT IN ({placeholders})
+                              AND deleted_at IS NULL
+                            """,
+                            [user_id, account_name, *csv_codes],
+                        )
+                        stock_deleted_count = cursor.rowcount
+                    else:
+                        # CSVに株式データがない場合は全ての株式を削除
+                        cursor.execute(
+                            """
+                            UPDATE holdings
+                            SET deleted_at = datetime('now')
+                            WHERE user_id = ?
+                              AND account_name = ?
+                              AND deleted_at IS NULL
+                            """,
+                            (user_id, account_name),
+                        )
+                        stock_deleted_count = cursor.rowcount
+                else:
+                    # CSVに株式データがない場合は全ての株式を削除
+                    cursor.execute(
+                        """
+                        UPDATE holdings
+                        SET deleted_at = datetime('now')
+                        WHERE user_id = ?
+                          AND account_name = ?
+                          AND deleted_at IS NULL
+                        """,
+                        (user_id, account_name),
+                    )
+                    stock_deleted_count = cursor.rowcount
 
-                deleted_count = cursor.rowcount
-                if deleted_count > 0:
+                # 投資信託の論理削除
+                if fund_data:
+                    csv_fund_names = [
+                        data["fund_name"] for data in fund_data if data.get("fund_name")
+                    ]
+                    if csv_fund_names:
+                        # CSVに含まれるファンド名からfund_idを取得
+                        fund_placeholders = ",".join("?" * len(csv_fund_names))
+                        cursor.execute(
+                            f"""
+                            SELECT fund_id FROM fund_master
+                            WHERE fund_name IN ({fund_placeholders})
+                            """,
+                            csv_fund_names,
+                        )
+                        csv_fund_ids = [row[0] for row in cursor.fetchall()]
+
+                        if csv_fund_ids:
+                            fund_id_placeholders = ",".join("?" * len(csv_fund_ids))
+                            cursor.execute(
+                                f"""
+                                UPDATE fund_holdings
+                                SET deleted_at = datetime('now')
+                                WHERE user_id = ?
+                                  AND account_name = ?
+                                  AND fund_id NOT IN ({fund_id_placeholders})
+                                  AND deleted_at IS NULL
+                                """,
+                                [user_id, account_name, *csv_fund_ids],
+                            )
+                            fund_deleted_count = cursor.rowcount
+                        else:
+                            fund_deleted_count = 0
+                    else:
+                        # CSVに投資信託データがない場合は全ての投資信託を削除
+                        cursor.execute(
+                            """
+                            UPDATE fund_holdings
+                            SET deleted_at = datetime('now')
+                            WHERE user_id = ?
+                              AND account_name = ?
+                              AND deleted_at IS NULL
+                            """,
+                            (user_id, account_name),
+                        )
+                        fund_deleted_count = cursor.rowcount
+                else:
+                    # CSVに投資信託データがない場合は全ての投資信託を削除
+                    cursor.execute(
+                        """
+                        UPDATE fund_holdings
+                        SET deleted_at = datetime('now')
+                        WHERE user_id = ?
+                          AND account_name = ?
+                          AND deleted_at IS NULL
+                        """,
+                        (user_id, account_name),
+                    )
+                    fund_deleted_count = cursor.rowcount
+
+                if stock_deleted_count > 0 or fund_deleted_count > 0:
                     logger.info(
-                        f"CSVに存在しない銘柄を論理削除しました: {deleted_count}件"
+                        f"CSVに存在しない銘柄を論理削除しました: "
+                        f"株式{stock_deleted_count}件、投資信託{fund_deleted_count}件"
                     )
 
                 conn.commit()
@@ -765,7 +862,7 @@ class PortfolioManager:
     @staticmethod
     def delete_all_holdings(user_id: int) -> int:
         """
-        ユーザーの全保有銘柄を削除
+        ユーザーの全保有銘柄を削除（株式と投資信託の両方）
 
         Args:
             user_id: ユーザーID
@@ -777,20 +874,39 @@ class PortfolioManager:
         cursor = conn.cursor()
 
         try:
+            # 株式の削除対象件数を取得
             cursor.execute(
                 "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND deleted_at IS NULL",
                 (user_id,),
             )
-            count = cursor.fetchone()[0]
+            stock_count = cursor.fetchone()[0]
 
+            # 投資信託の削除対象件数を取得
+            cursor.execute(
+                "SELECT COUNT(*) FROM fund_holdings WHERE user_id = ? AND deleted_at IS NULL",
+                (user_id,),
+            )
+            fund_count = cursor.fetchone()[0]
+
+            # 株式を論理削除
             cursor.execute(
                 "UPDATE holdings SET deleted_at = datetime('now') WHERE user_id = ? AND deleted_at IS NULL",
                 (user_id,),
             )
+
+            # 投資信託を論理削除
+            cursor.execute(
+                "UPDATE fund_holdings SET deleted_at = datetime('now') WHERE user_id = ? AND deleted_at IS NULL",
+                (user_id,),
+            )
+
             conn.commit()
 
-            logger.info(f"保有銘柄削除完了: {count}件")
-            return int(count)
+            total_count = stock_count + fund_count
+            logger.info(
+                f"保有銘柄削除完了: 株式{stock_count}件、投資信託{fund_count}件（合計{total_count}件）"
+            )
+            return int(total_count)
 
         except sqlite3.Error as e:
             logger.error(f"保有銘柄削除エラー: {e}")
@@ -802,7 +918,7 @@ class PortfolioManager:
     @staticmethod
     def delete_holdings_by_account(user_id: int, account_name: str) -> int:
         """
-        特定口座の保有銘柄を削除
+        特定口座の保有銘柄を削除（株式と投資信託の両方）
 
         Args:
             user_id: ユーザーID
@@ -815,20 +931,39 @@ class PortfolioManager:
         cursor = conn.cursor()
 
         try:
+            # 株式の削除対象件数を取得
             cursor.execute(
                 "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
                 (user_id, account_name),
             )
-            count = cursor.fetchone()[0]
+            stock_count = cursor.fetchone()[0]
 
+            # 投資信託の削除対象件数を取得
+            cursor.execute(
+                "SELECT COUNT(*) FROM fund_holdings WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
+                (user_id, account_name),
+            )
+            fund_count = cursor.fetchone()[0]
+
+            # 株式を論理削除
             cursor.execute(
                 "UPDATE holdings SET deleted_at = datetime('now') WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
                 (user_id, account_name),
             )
+
+            # 投資信託を論理削除
+            cursor.execute(
+                "UPDATE fund_holdings SET deleted_at = datetime('now') WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
+                (user_id, account_name),
+            )
+
             conn.commit()
 
-            logger.info(f"保有銘柄削除完了: {count}件（口座: {account_name}）")
-            return int(count)
+            total_count = stock_count + fund_count
+            logger.info(
+                f"保有銘柄削除完了: 株式{stock_count}件、投資信託{fund_count}件（合計{total_count}件）（口座: {account_name}）"
+            )
+            return int(total_count)
 
         except sqlite3.Error as e:
             logger.error(f"保有銘柄削除エラー: {e}")
@@ -1107,7 +1242,7 @@ class PortfolioManager:
         cursor = conn.cursor()
 
         try:
-            # 保有銘柄の集計
+            # 株式の集計
             cursor.execute(
                 """
                 SELECT
@@ -1121,13 +1256,30 @@ class PortfolioManager:
                 (user_id,),
             )
 
-            row = cursor.fetchone()
+            stock_row = cursor.fetchone()
 
+            # 投資信託の集計
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) as fund_count,
+                    SUM(quantity * average_price / 10000) as total_cost,
+                    SUM(market_value) as total_market_value,
+                    SUM(profit_loss) as total_profit_loss
+                FROM fund_holdings
+                WHERE user_id = ? AND quantity > 0 AND deleted_at IS NULL
+            """,
+                (user_id,),
+            )
+
+            fund_row = cursor.fetchone()
+
+            # 合計値を計算
             summary = {
-                "stock_count": row[0] or 0,
-                "total_cost": row[1] or 0,
-                "total_market_value": row[2] or 0,
-                "total_profit_loss": row[3] or 0,
+                "stock_count": (stock_row[0] or 0) + (fund_row[0] or 0),
+                "total_cost": (stock_row[1] or 0) + (fund_row[1] or 0),
+                "total_market_value": (stock_row[2] or 0) + (fund_row[2] or 0),
+                "total_profit_loss": (stock_row[3] or 0) + (fund_row[3] or 0),
                 "total_profit_loss_ratio": 0,
             }
 

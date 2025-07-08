@@ -1145,11 +1145,44 @@ def get_holdings():
                 )
 
         # 投資信託の保有情報を追加
-        if not aggregate:  # 集約表示の場合は投資信託を含めない（今のところ）
-            conn = sqlite3.connect(get_db_path())
-            cursor = conn.cursor()
+        conn = sqlite3.connect(get_db_path())
+        cursor = conn.cursor()
 
-            # 投資信託の保有情報を取得（最新の基準価額を含む）
+        if aggregate:
+            # 集約表示の場合は投資信託も集約する
+            cursor.execute(
+                """
+                SELECT
+                    fm.fund_id,
+                    fm.fund_name,
+                    SUM(fh.quantity) as total_quantity,
+                    SUM(fh.quantity * fh.average_price) / NULLIF(SUM(fh.quantity), 0) as weighted_avg_price,
+                    SUM(fh.market_value) as total_market_value,
+                    SUM(fh.profit_loss) as total_profit_loss,
+                    COUNT(DISTINCT fh.account_name) as account_count,
+                    GROUP_CONCAT(DISTINCT fh.account_name) as account_names,
+                    GROUP_CONCAT(DISTINCT fh.account_type) as account_types,
+                    MAX(fh.updated_at) as updated_at,
+                    fp.nav as current_nav,
+                    fp.date as nav_date
+                FROM fund_holdings fh
+                JOIN fund_master fm ON fh.fund_id = fm.fund_id
+                LEFT JOIN (
+                    SELECT fund_id, nav, date
+                    FROM fund_prices fp1
+                    WHERE date = (
+                        SELECT MAX(date) FROM fund_prices fp2
+                        WHERE fp2.fund_id = fp1.fund_id
+                    )
+                ) fp ON fh.fund_id = fp.fund_id
+                WHERE fh.user_id = ? AND fh.quantity > 0 AND fh.deleted_at IS NULL
+                GROUP BY fm.fund_id, fm.fund_name, fp.nav, fp.date
+                ORDER BY fm.fund_name
+            """,
+                (request.current_user.id,),
+            )
+        else:
+            # 通常表示の場合
             cursor.execute(
                 """
                 SELECT
@@ -1182,7 +1215,68 @@ def get_holdings():
                 (request.current_user.id,),
             )
 
-            for row in cursor.fetchall():
+        for row in cursor.fetchall():
+            if aggregate:
+                # 集約表示の場合
+                fund_data = {
+                    "type": "fund",  # 投資信託であることを示す
+                    "fund_id": row[0],
+                    "fund_name": row[1],
+                    "total_quantity": row[2],  # 合計口数
+                    "weighted_avg_price": row[3] or 0,  # 加重平均価格
+                    "total_market_value": row[4],  # 合計評価額
+                    "total_profit_loss": row[5],  # 合計損益
+                    "account_count": row[6],
+                    "account_names": row[7],
+                    "account_types": row[8],
+                    "profit_loss_ratio": 0,
+                    "updated_at": row[9],
+                    "current_nav": row[10],
+                    "nav_date": row[11],
+                    # 集約表示用の追加フィールド
+                    "quantity": row[2],  # total_quantityと同じ値を設定
+                    "average_price": row[3] or 0,
+                    "market_value": row[4],
+                    "profit_loss": row[5],
+                    # 株式にはあるが投資信託にはない項目をNullで埋める
+                    "code": None,
+                    "company_name": row[1],  # fund_nameを使用
+                    "expected_per": None,
+                    "actual_pbr": None,
+                    "dividend_yield": None,
+                    "expected_eps": None,
+                    "actual_bps": None,
+                    "expected_dividend": None,
+                    "lending_type": None,
+                }
+
+                # 損益率の計算
+                total_cost = (
+                    fund_data["total_quantity"]
+                    * fund_data["weighted_avg_price"]
+                    / 10000
+                )
+                if total_cost > 0:
+                    fund_data["profit_loss_ratio"] = (
+                        fund_data["total_profit_loss"] / total_cost
+                    ) * 100
+
+                # 現在価値を再計算（基準価額がある場合）
+                if row[10] is not None:  # current_nav
+                    fund_data["total_market_value"] = (
+                        row[2] * row[10] / 10000
+                    )  # 合計口数 × 基準価額 / 10000
+                    fund_data["market_value"] = fund_data["total_market_value"]
+                    fund_data["total_profit_loss"] = (
+                        fund_data["total_market_value"] - total_cost
+                    )
+                    fund_data["profit_loss"] = fund_data["total_profit_loss"]
+                    if total_cost > 0:
+                        fund_data["profit_loss_ratio"] = (
+                            fund_data["total_profit_loss"] / total_cost * 100
+                        )
+            else:
+                # 通常表示の場合
                 fund_data = {
                     "type": "fund",  # 投資信託であることを示す
                     "fund_id": row[0],
@@ -1224,9 +1318,9 @@ def get_holdings():
                         else 0
                     )
 
-                holdings_data.append(fund_data)
+            holdings_data.append(fund_data)
 
-            conn.close()
+        conn.close()
 
         return jsonify(
             {"success": True, "holdings": holdings_data, "aggregated": aggregate}
@@ -2266,7 +2360,10 @@ def get_transaction_performance():
         # 月別損益の計算
         monthly_pnl = {}
         for trans in transactions:
-            if trans["transaction_type"] == "sell" and "realized_profit" in trans:
+            if (
+                trans["transaction_type"] == "sell"
+                and trans.get("realized_profit") is not None
+            ):
                 month = trans["transaction_date"][:7]  # YYYY-MM
                 if month not in monthly_pnl:
                     monthly_pnl[month] = 0
