@@ -1910,6 +1910,18 @@ def get_portfolio_heatmap():
 
 
 if __name__ == "__main__":
+    import argparse
+
+    # コマンドライン引数のパーサーを作成
+    parser = argparse.ArgumentParser(description="Swing Trading Tool Web UI")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=5000,
+        help="サーバーのポート番号 (デフォルト: 5000)",
+    )
+    args = parser.parse_args()
+
     # 期限切れセッションのクリーンアップ
     try:
         cleaned = Session.cleanup_expired()
@@ -1919,14 +1931,14 @@ if __name__ == "__main__":
         logger.warning(f"セッションクリーンアップエラー: {str(e)}")
 
     # デバッグモードで起動（本番環境では無効にすること）
-    logger.info("Web UIサーバーを起動します")
-    logger.info("http://localhost:5005 でアクセスできます")
+    logger.info(f"Web UIサーバーを起動します (ポート: {args.port})")
+    logger.info(f"http://localhost:{args.port} でアクセスできます")
 
     print("\n" + "=" * 60)
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Swing Trading Tool Web UI")
     print("=" * 60)
     print("サーバーを起動しています...")
-    print("URL: http://localhost:5005")
+    print(f"URL: http://localhost:{args.port}")
     print("Ctrl+C で終了")
     print("=" * 60 + "\n")
 
@@ -1939,4 +1951,6 @@ if __name__ == "__main__":
         print("3. WSL2_NETWORK_FIX.md を参照\n")
 
     # チャンクサイズを小さくしてレスポンスを送信
-    app.run(host="0.0.0.0", port=5005, debug=True, threaded=True, use_reloader=True)
+    app.run(
+        host="0.0.0.0", port=args.port, debug=True, threaded=True, use_reloader=True
+    )
