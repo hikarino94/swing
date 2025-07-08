@@ -742,7 +742,7 @@ class PortfolioManager:
                 current_price = price_row[0]
 
                 # 最新のstatementデータを取得（5桁変換）
-                # EPSデータが存在するレコードから取得（配当予想修正などのEPS空レコードを除外）
+                # まず最新のデータを取得（BPSや配当データも含む）
                 cursor.execute(
                     """
                     SELECT
@@ -755,12 +755,6 @@ class PortfolioManager:
                         ResultDividendPerShareAnnual
                     FROM statements
                     WHERE code = ?
-                      AND (ForecastEarningsPerShare IS NOT NULL
-                           OR NextYearForecastEarningsPerShare IS NOT NULL
-                           OR EarningsPerShare IS NOT NULL)
-                      AND (ForecastEarningsPerShare != ''
-                           OR NextYearForecastEarningsPerShare != ''
-                           OR EarningsPerShare != '')
                     ORDER BY CurrentFiscalYearStartDate DESC, DisclosedDate DESC
                     LIMIT 1
                     """,
@@ -773,7 +767,7 @@ class PortfolioManager:
                     continue
 
                 # 株価指標を計算
-                eps = stmt_row[0]  # 実績EPS
+                # eps = stmt_row[0]  # 実績EPS（PER計算には使用しない）
                 bps = stmt_row[1]  # 実績BPS
                 forecast_dividend = stmt_row[2]  # 今期予想配当
                 next_year_dividend = stmt_row[3]  # 来期予想配当
@@ -781,8 +775,34 @@ class PortfolioManager:
                 next_year_eps = stmt_row[5]  # 来期予想EPS
                 result_dividend = stmt_row[6]  # 実績配当
 
-                # 予想EPSを優先的に使用（なければ実績EPSを使用）
-                expected_eps = forecast_eps or next_year_eps or eps
+                # 予想EPSのみを使用（実績EPSは使用しない）
+                expected_eps = forecast_eps or next_year_eps
+
+                # 予想EPSがない場合、別のレコードから取得を試みる
+                if not expected_eps:
+                    cursor.execute(
+                        """
+                        SELECT
+                            ForecastEarningsPerShare,
+                            NextYearForecastEarningsPerShare
+                        FROM statements
+                        WHERE code = ?
+                          AND (ForecastEarningsPerShare IS NOT NULL
+                               AND ForecastEarningsPerShare != ''
+                               AND ForecastEarningsPerShare > 0
+                               OR NextYearForecastEarningsPerShare IS NOT NULL
+                               AND NextYearForecastEarningsPerShare != ''
+                               AND NextYearForecastEarningsPerShare > 0)
+                        ORDER BY CurrentFiscalYearStartDate DESC, DisclosedDate DESC
+                        LIMIT 1
+                        """,
+                        (code_5digit,),
+                    )
+                    eps_row = cursor.fetchone()
+                    if eps_row:
+                        forecast_eps = eps_row[0]
+                        next_year_eps = eps_row[1]
+                        expected_eps = forecast_eps or next_year_eps
 
                 # PER計算（予想EPSベース）
                 expected_per = None
