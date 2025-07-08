@@ -851,14 +851,14 @@
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <template x-for="holding in sortedHoldings()" :key="holding.code + '_' + (holding.account_name || 'default') + '_' + (holding.account_type || '特定')">
+                                <template x-for="holding in sortedHoldings()" :key="(holding.code || holding.fund_name || '') + '_' + (holding.account_name || 'default') + '_' + (holding.account_type || '特定')">
                                     <tr>
                                         <td class="px-6 py-4 whitespace-nowrap">
-                                            <div x-show="holding.type === 'stock'">
+                                            <div x-show="holding.type === 'stock' || (!holding.type && holding.code)">
                                                 <div class="text-sm font-medium text-gray-900" x-text="holding.code"></div>
                                                 <div class="text-sm text-gray-500" x-text="holding.company_name"></div>
                                             </div>
-                                            <div x-show="holding.type === 'fund'">
+                                            <div x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)">
                                                 <div class="text-sm font-medium text-gray-900">
                                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">投信</span>
                                                 </div>
@@ -893,8 +893,8 @@
                                             </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            <span x-show="holding.type === 'stock'" x-text="(holding.quantity || holding.total_quantity).toLocaleString()"></span>
-                                            <span x-show="holding.type === 'fund'" x-text="(holding.quantity || holding.total_quantity).toLocaleString() + '口'"></span>
+                                            <span x-show="holding.type === 'stock' || (!holding.type && holding.code)" x-text="(holding.quantity || holding.total_quantity).toLocaleString()"></span>
+                                            <span x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)" x-text="(holding.quantity || holding.total_quantity).toLocaleString() + '口'"></span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="formatCurrency(holding.average_price || holding.weighted_avg_price)"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="formatCurrency(holding.market_value || holding.total_market_value)"></td>
@@ -905,29 +905,30 @@
                                             :class="holding.profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'"
                                             x-text="formatPercentage(holding.profit_loss_ratio)"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            <span x-show="holding.type === 'stock'" x-text="holding.expected_per ? holding.expected_per.toFixed(2) : '-'"
+                                            <span x-show="holding.type === 'stock' || (!holding.type && holding.code)" x-text="holding.expected_per ? holding.expected_per.toFixed(2) : '-'"
                                                   :class="holding.expected_per < 15 ? 'text-green-600' : (holding.expected_per > 30 ? 'text-red-600' : '')"></span>
-                                            <span x-show="holding.type === 'fund'">-</span>
+                                            <span x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)">-</span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            <span x-show="holding.type === 'stock'" x-text="holding.actual_pbr ? holding.actual_pbr.toFixed(2) : '-'"
+                                            <span x-show="holding.type === 'stock' || (!holding.type && holding.code)" x-text="holding.actual_pbr ? holding.actual_pbr.toFixed(2) : '-'"
                                                   :class="holding.actual_pbr < 1 ? 'text-green-600' : (holding.actual_pbr > 3 ? 'text-red-600' : '')"></span>
-                                            <span x-show="holding.type === 'fund'">-</span>
+                                            <span x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)">-</span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            <span x-show="holding.type === 'stock'" x-text="holding.dividend_yield ? holding.dividend_yield.toFixed(2) + '%' : '-'"
+                                            <span x-show="holding.type === 'stock' || (!holding.type && holding.code)" x-text="holding.dividend_yield ? holding.dividend_yield.toFixed(2) + '%' : '-'"
                                                   :class="holding.dividend_yield > 3 ? 'text-green-600' : ''"></span>
-                                            <span x-show="holding.type === 'fund'">-</span>
+                                            <span x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)">-</span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            <span x-show="holding.type === 'stock'" x-text="holding.expected_dividend ? formatCurrency(holding.expected_dividend) : '-'"></span>
-                                            <span x-show="holding.type === 'fund'" class="text-xs text-gray-500">
+                                            <span x-show="holding.type === 'stock' || (!holding.type && holding.code)" x-text="holding.expected_dividend ? formatCurrency(holding.expected_dividend) : '-'"></span>
+                                            <span x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)" class="text-xs text-gray-500">
                                                 <span x-text="holding.current_nav ? '基準価額:' + holding.current_nav.toLocaleString() : '-'"></span>
                                             </span>
                                         </td>
                                         <td x-show="!portfolio.aggregateView" class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <button @click="showEditHoldingModal(holding)" class="text-blue-600 hover:text-blue-900 mr-3">編集</button>
-                                            <button @click="deleteSingleHolding(holding.code, holding.account_name)" class="text-red-600 hover:text-red-900">削除</button>
+                                            <button x-show="holding.type === 'stock' || (!holding.type && holding.code)" @click="showEditHoldingModal(holding)" class="text-blue-600 hover:text-blue-900 mr-3">編集</button>
+                                            <button x-show="holding.type === 'stock' || (!holding.type && holding.code)" @click="deleteSingleHolding(holding.code, holding.account_name)" class="text-red-600 hover:text-red-900">削除</button>
+                                            <span x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)" class="text-gray-400">-</span>
                                         </td>
                                     </tr>
                                 </template>

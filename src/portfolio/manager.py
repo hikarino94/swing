@@ -726,6 +726,7 @@ class PortfolioManager:
             aggregated_holdings = []
             for row in cursor.fetchall():
                 holding = {
+                    "type": "stock",  # 株式であることを示す
                     "code": row[0],
                     "company_name": row[1],
                     "total_quantity": row[2],

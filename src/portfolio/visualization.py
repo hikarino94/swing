@@ -31,7 +31,7 @@ class PortfolioVisualizer:
         """ポートフォリオ構成円グラフを作成"""
         conn = sqlite3.connect(DB_PATH)
         try:
-            # 保有銘柄データを取得
+            # 保有銘柄データを取得（論理削除されていないもののみ）
             query = """
                 SELECT h.code, h.market_value, h.account_name,
                        li.company_name, li.sector17_name, li.sector33_name,
@@ -39,6 +39,7 @@ class PortfolioVisualizer:
                 FROM holdings h
                 LEFT JOIN listed_info li ON (h.code || '0') = li.code
                 WHERE h.user_id = ? AND h.quantity > 0 AND h.market_value > 0
+                      AND h.deleted_at IS NULL
             """
             df = pd.read_sql(query, conn, params=[self.user_id])
 
@@ -288,7 +289,7 @@ class PortfolioVisualizer:
                 SELECT p.date, p.code, p.close
                 FROM prices p
                 INNER JOIN (
-                    SELECT DISTINCT code FROM holdings WHERE user_id = ?
+                    SELECT DISTINCT code FROM holdings WHERE user_id = ? AND deleted_at IS NULL
                     UNION
                     SELECT DISTINCT code FROM transactions WHERE user_id = ?
                 ) h ON p.code = h.code
@@ -307,7 +308,7 @@ class PortfolioVisualizer:
                     SELECT h.code, h.quantity, h.average_price, h.market_value,
                            h.profit_loss, h.profit_loss_ratio, h.updated_at
                     FROM holdings h
-                    WHERE h.user_id = ? AND h.quantity > 0
+                    WHERE h.user_id = ? AND h.quantity > 0 AND h.deleted_at IS NULL
                 """
                 holdings_df = pd.read_sql(holdings_query, conn, params=[self.user_id])
 
@@ -579,7 +580,7 @@ class PortfolioVisualizer:
                     marker={
                         "colorscale": "RdYlGn",
                         "cmid": 0,
-                        "color": stock_values,
+                        "colors": stock_values,
                         "colorbar": {"title": "損益率(%)"},
                         "line": {"width": 2},
                         "cmin": -20,
@@ -617,7 +618,7 @@ class PortfolioVisualizer:
                     marker={
                         "colorscale": "RdYlGn",
                         "cmid": 0,
-                        "color": sector_perf["profit_loss_ratio"],
+                        "colors": sector_perf["profit_loss_ratio"],
                         "colorbar": {"title": "平均損益率(%)"},
                         "line": {"width": 2},
                         "cmin": -10,
