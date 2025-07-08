@@ -131,10 +131,17 @@ class SBICSVParser:
 
             code = SBICSVParser._normalize_code(row[0])
             if not code:
+                # 銘柄コードが空の場合（投資信託など）はスキップ
+                logger.debug(f"銘柄コードが空のためスキップ: {row[1]}")
                 continue
 
             trade_type = row[3].strip()
             transaction_type, detailed_type = SBICSVParser._parse_trade_type(trade_type)
+
+            # 現引きや投資信託取引はスキップ
+            if transaction_type == "skip":
+                logger.info(f"{detailed_type}取引をスキップ: {row[1]} ({row[0]})")
+                continue
 
             # 決済損益の解析（注文一覧形式では約定代金と入金額が別列）
             realized_profit = None
@@ -145,6 +152,17 @@ class SBICSVParser:
                         # 入金額から決済損益を計算する方法もあるが、
                         # この形式では正確な決済損益は取得できない
                         realized_profit = None
+
+            # 信用取引かどうかを判定してremarksに設定
+            remarks = ""
+            if "信用" in trade_type:
+                remarks = "信用"
+            # 新規売りは信用取引（空売り）
+            elif detailed_type == "新規売り":
+                remarks = "信用"
+            # 決済買いも信用取引（空売りの決済）
+            elif detailed_type == "決済買い":
+                remarks = "信用"
 
             transaction = {
                 "code": code,
@@ -158,7 +176,7 @@ class SBICSVParser:
                 "tax": SBICSVParser._parse_number(row[11], default=0),
                 "total_amount": None,  # この形式では計算が必要
                 "realized_profit": realized_profit,
-                "remarks": "",
+                "remarks": remarks,
             }
 
             # 受渡金額を計算
@@ -223,10 +241,17 @@ class SBICSVParser:
 
             code = SBICSVParser._normalize_code(row[2])
             if not code:
+                # 銘柄コードが空の場合（投資信託など）はスキップ
+                logger.debug(f"銘柄コードが空のためスキップ: {row[1]}")
                 continue
 
             trade_type = row[4].strip()
             transaction_type, detailed_type = SBICSVParser._parse_trade_type(trade_type)
+
+            # 現引きや投資信託取引はスキップ
+            if transaction_type == "skip":
+                logger.info(f"{detailed_type}取引をスキップ: {row[1]} ({row[2]})")
+                continue
 
             # 決済損益の解析
             realized_profit = None
@@ -234,6 +259,17 @@ class SBICSVParser:
                 # 信用新規買/売の場合は決済損益なし
                 if detailed_type not in ["新規買い", "新規売り"]:
                     realized_profit = SBICSVParser._parse_number(row[13])
+
+            # 信用取引かどうかを判定してremarksに設定
+            remarks = ""
+            if "信用" in trade_type:
+                remarks = "信用"
+            # 新規売りは信用取引（空売り）
+            elif detailed_type == "新規売り":
+                remarks = "信用"
+            # 決済買いも信用取引（空売りの決済）
+            elif detailed_type == "決済買い":
+                remarks = "信用"
 
             transaction = {
                 "code": code,
@@ -247,7 +283,7 @@ class SBICSVParser:
                 "tax": SBICSVParser._parse_number(row[11], default=0),
                 "total_amount": None,  # この形式では計算が必要
                 "realized_profit": realized_profit,
-                "remarks": "",
+                "remarks": remarks,
             }
 
             # 受渡金額を計算
@@ -309,6 +345,17 @@ class SBICSVParser:
                     transaction_type = "buy"
                     detailed_type = "新規買い"
 
+                # 信用取引かどうかを判定
+                remarks = row.get("備考", "")
+                # 売買区分から信用取引を判定（標準形式では備考欄に情報がない場合があるため）
+                if not remarks and trade_type:
+                    # 新規売りは信用取引（空売り）
+                    if detailed_type == "新規売り":
+                        remarks = "信用"
+                    # 決済買いも信用取引（空売りの決済）
+                    elif detailed_type == "決済買い":
+                        remarks = "信用"
+
                 transaction = {
                     "code": code,
                     "name": row.get("銘柄名", "").strip(),
@@ -329,7 +376,7 @@ class SBICSVParser:
                     ),
                     "total_amount": SBICSVParser._parse_number(row.get("受渡金額")),
                     "realized_profit": None,
-                    "remarks": row.get("備考", ""),
+                    "remarks": remarks,
                 }
 
                 # 必須フィールドのチェック
@@ -378,16 +425,26 @@ class SBICSVParser:
 
             code = SBICSVParser._normalize_code(row[0])
             if not code:
+                # 銘柄コードが空の場合（投資信託など）はスキップ
+                logger.debug(f"銘柄コードが空のためスキップ: {row[1]}")
                 continue
 
             trade_type = row[3].strip()
             transaction_type, detailed_type = SBICSVParser._parse_trade_type(trade_type)
+
+            # 現引きや投資信託取引はスキップ
+            if transaction_type == "skip":
+                logger.info(f"{detailed_type}取引をスキップ: {row[1]} ({row[0]})")
+                continue
 
             # 決済損益の解析
             realized_profit = None
             if len(row) > 12 and row[12] and row[12] != "--":
                 if detailed_type in ["決済売り", "決済買い"]:
                     realized_profit = SBICSVParser._parse_number(row[12])
+
+            # 信用取引かどうかを判定してremarksに設定
+            remarks = "信用" if "信用" in trade_type else ""
 
             transaction = {
                 "code": code,
@@ -401,7 +458,7 @@ class SBICSVParser:
                 "tax": SBICSVParser._parse_number(row[11], default=0),
                 "total_amount": None,  # この形式では計算が必要
                 "realized_profit": realized_profit,
-                "remarks": "信用" if "信用" in trade_type else "",
+                "remarks": remarks,
             }
 
             # 受渡金額を計算
@@ -436,19 +493,27 @@ class SBICSVParser:
         if not trade_type:
             return "buy", "新規買い"
 
+        # 現引き取引はスキップ（特別な値を返す）
+        if "現引" in trade_type:
+            return "skip", "現引き"
+
+        # 投資信託取引はスキップ
+        if "投信" in trade_type or "投資信託" in trade_type:
+            return "skip", "投資信託"
+
         # 信用取引の判定
         if "信用新規買" in trade_type:
             return "buy", "新規買い"
         elif "信用新規売" in trade_type:
             return "sell", "新規売り"
-        elif "信用返済買" in trade_type:
+        elif "信用返済買" in trade_type or "信用決済買" in trade_type:
             return "buy", "決済買い"
-        elif "信用返済売" in trade_type:
+        elif "信用返済売" in trade_type or "信用決済売" in trade_type:
             return "sell", "決済売り"
-        # 現物取引の判定
-        elif "現物買" in trade_type:
+        # 現物取引の判定（「株式現物買」「株式現物売」にも対応）
+        elif "現物買" in trade_type or "株式現物買" in trade_type:
             return "buy", "新規買い"
-        elif "現物売" in trade_type:
+        elif "現物売" in trade_type or "株式現物売" in trade_type:
             return "sell", "決済売り"
         # その他
         elif "買" in trade_type:

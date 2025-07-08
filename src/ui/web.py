@@ -2253,6 +2253,16 @@ def get_transaction_performance():
         # 取引データを銘柄ごとに集計
         for trans in transactions:
             code = trans["code"]
+
+            # 現物売り（決済売りでremarksが信用でない）はパフォーマンス集計から除外
+            # 新規売りは全て信用取引（空売り）なので含める
+            if (
+                trans["transaction_type"] == "sell"
+                and trans.get("detailed_type") == "決済売り"
+                and trans.get("remarks", "") != "信用"
+            ):
+                continue
+
             if code not in stock_performance:
                 stock_performance[code] = {
                     "code": code,
@@ -2290,9 +2300,10 @@ def get_transaction_performance():
                 sp["total_sell_quantity"] += trans["quantity"]
                 sp["net_quantity"] -= trans["quantity"]
 
-                # 実現損益はtransactionsテーブルの値を使用（NULLは0として扱う）
-                realized_profit = trans.get("realized_profit") or 0
-                sp["realized_profit"] += realized_profit
+            # 実現損益はtransactionsテーブルの値を使用（NULLは0として扱う）
+            # 買い・売り両方で実現損益が記録されている場合があるため、全ての取引で加算
+            realized_profit = trans.get("realized_profit") or 0
+            sp["realized_profit"] += realized_profit
 
         # 銘柄ごとに平均買付価格を計算
         for _code, sp in stock_performance.items():
@@ -2338,6 +2349,14 @@ def get_transaction_performance():
         # 月別損益の計算
         monthly_pnl = {}
         for trans in transactions:
+            # 現物売りは除外
+            if (
+                trans["transaction_type"] == "sell"
+                and trans.get("detailed_type") == "決済売り"
+                and trans.get("remarks", "") != "信用"
+            ):
+                continue
+
             if (
                 trans["transaction_type"] == "sell"
                 and trans.get("realized_profit") is not None
