@@ -1983,7 +1983,13 @@ function swingApp() {
         },
 
         async updateStockIndicators() {
-            if (!confirm('保有銘柄の株価指標（PER、PBR、配当利回り、予想配当）を最新のデータで更新しますか？')) return;
+            const confirmMessage = '保有銘柄の株価指標（PER、PBR、配当利回り、予想配当）を最新のデータで更新しますか？\n\n' +
+                '【注意事項】\n' +
+                '・PERなどの財務指標は株式分割や通期予想が未定の場合、正しく表示されない可能性があります\n' +
+                '・最新の財務データが未公表の場合、古いデータが使用される可能性があります\n' +
+                '・更新処理には時間がかかる場合があります';
+
+            if (!confirm(confirmMessage)) return;
 
             try {
                 const response = await fetch('/api/portfolio/indicators/update', {
