@@ -6,16 +6,27 @@ on:
   pull_request:
     branches: [ main ]
 
+# ジョブの同時実行数を設定
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint-and-test:
     name: Lint & Test
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: true  # 一つでも失敗したら即座に終了
       matrix:
         python-version: ['3.12']
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        # 浅いクローンで高速化（最新のコミットのみ取得）
+        fetch-depth: 1
+        # LFS ファイルをスキップ（必要ない場合）
+        lfs: false
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -78,6 +89,7 @@ jobs:
         FLASK_ENV: "testing"
         DATABASE_PATH: "${{ github.workspace }}/test_stock.db"
       run: |
+        # テストを実行
         pytest -v --tb=short --cov=. --cov-report=xml --cov-report=term -W ignore::FutureWarning -W ignore::UserWarning || {
           EXIT_CODE=$?
           echo "::error::Test failed with exit code: $EXIT_CODE"
@@ -104,6 +116,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        # 浅いクローンで高速化（最新のコミットのみ取得）
+        fetch-depth: 1
+        # LFS ファイルをスキップ（必要ない場合）
+        lfs: false
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -131,6 +148,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        # 浅いクローンで高速化（最新のコミットのみ取得）
+        fetch-depth: 1
+        # LFS ファイルをスキップ（必要ない場合）
+        lfs: false
 
     - name: Set up Python
       uses: actions/setup-python@v5
