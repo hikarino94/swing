@@ -50,7 +50,7 @@ python -m src.ui.web
 python src/ui/web_production.py
 ```
 
-ブラウザで http://localhost:5000 にアクセスしてください。
+ブラウザで http://localhost:5005 にアクセスしてください。
 
 ## 🔧 手動セットアップ（上級者向け）
 

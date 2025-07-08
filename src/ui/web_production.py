@@ -36,8 +36,8 @@ if __name__ == "__main__":
     )
     print("=" * 60)
     print("Waitressサーバーを起動しています...")
-    print("URL: http://localhost:5000")
-    print("     http://0.0.0.0:5000 (LAN内の他の端末からアクセス可能)")
+    print("URL: http://localhost:5005")
+    print("     http://0.0.0.0:5005 (LAN内の他の端末からアクセス可能)")
     print("Ctrl+C で終了")
     print("=" * 60 + "\n")
 
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     serve(
         app,
         host="0.0.0.0",
-        port=5000,
+        port=5005,
         threads=4,
         connection_limit=100,
         cleanup_interval=30,

@@ -23,7 +23,8 @@ help:
 	@echo "  make update-token  - J-Quants認証トークンを更新"
 	@echo "  make run-scheduler - スケジューラーを起動"
 	@echo "  make run-gui       - GUIアプリケーションを起動"
-	@echo "  make run-web       - Webサーバーを起動"
+	@echo "  make run-web       - Webサーバーを起動（デフォルトポート5000）"
+	@echo "  make run-web PORT=8080 - 指定ポートでWebサーバーを起動"
 
 # 環境構築
 setup:
@@ -125,5 +126,8 @@ run-gui:
 	python3 -m src.ui.legacy.gui
 
 # Webサーバー起動
+# デフォルトポート
+PORT ?= 5000
+
 run-web:
-	python3 -m src.ui.web
+	python3 -m src.ui.web --port $(PORT)

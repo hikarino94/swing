@@ -80,6 +80,16 @@ class PortfolioManager:
                 logger.error(f"保有銘柄の保存に失敗: {data['code']} ({account_type})")
 
         logger.info(f"保有銘柄追加完了: {new_count}件（口座: {account_name}）")
+
+        # 追加した銘柄の株価指標を更新
+        if new_count > 0:
+            added_codes = [data["code"] for data in holdings_data]
+            unique_codes = list(set(added_codes))
+            indicator_count = PortfolioManager.update_stock_indicators(
+                user_id, unique_codes
+            )
+            logger.info(f"株価指標更新: {indicator_count}件")
+
         return updated_count, new_count
 
     @staticmethod
@@ -353,6 +363,7 @@ class PortfolioManager:
                     SUM(h.profit_loss) as total_profit_loss,
                     COUNT(DISTINCT h.account_name) as account_count,
                     GROUP_CONCAT(DISTINCT h.account_name) as account_names,
+                    GROUP_CONCAT(DISTINCT h.account_type) as account_types,
                     -- 株価指標は最初の値を使用（通常、同じ銘柄なら同じ値のはず）
                     MAX(h.expected_per) as expected_per,
                     MAX(h.actual_pbr) as actual_pbr,
@@ -381,15 +392,16 @@ class PortfolioManager:
                     "total_profit_loss": row[5],
                     "account_count": row[6],
                     "account_names": row[7],
+                    "account_types": row[8],
                     "profit_loss_ratio": 0,
                     # 株価指標データ
-                    "expected_per": row[8],
-                    "actual_pbr": row[9],
-                    "dividend_yield": row[10],
-                    "expected_eps": row[11],
-                    "actual_bps": row[12],
-                    "expected_dividend": row[13],
-                    "lending_type": row[14],
+                    "expected_per": row[9],
+                    "actual_pbr": row[10],
+                    "dividend_yield": row[11],
+                    "expected_eps": row[12],
+                    "actual_bps": row[13],
+                    "expected_dividend": row[14],
+                    "lending_type": row[15],
                 }
 
                 # 損益率の計算
@@ -473,6 +485,222 @@ class PortfolioManager:
 
         except sqlite3.Error as e:
             logger.error(f"保有銘柄削除エラー: {e}")
+            conn.rollback()
+            return 0
+        finally:
+            conn.close()
+
+    @staticmethod
+    def update_stock_indicators(user_id: int, codes: list[str] | None = None) -> int:
+        """
+        statementsテーブルのデータを使用して保有銘柄の株価指標を更新
+
+        Args:
+            user_id: ユーザーID
+            codes: 更新対象の銘柄コードリスト（Noneの場合は全保有銘柄）
+
+        Returns:
+            更新件数
+        """
+        conn = sqlite3.connect(get_db_path())
+        cursor = conn.cursor()
+        updated_count = 0
+
+        try:
+            # 更新対象の保有銘柄を取得
+            if codes:
+                placeholders = ",".join("?" * len(codes))
+                cursor.execute(
+                    f"""
+                    SELECT DISTINCT h.code
+                    FROM holdings h
+                    WHERE h.user_id = ? AND h.code IN ({placeholders})
+                    """,
+                    [user_id, *codes],
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT DISTINCT code
+                    FROM holdings
+                    WHERE user_id = ?
+                    """,
+                    (user_id,),
+                )
+
+            target_codes = [row[0] for row in cursor.fetchall()]
+
+            for code in target_codes:
+                # 最新の株価を取得（5桁変換）
+                code_5digit = code.ljust(5, "0")
+                cursor.execute(
+                    """
+                    SELECT close, date FROM prices
+                    WHERE code = ?
+                    ORDER BY date DESC
+                    LIMIT 1
+                    """,
+                    (code_5digit,),
+                )
+                price_row = cursor.fetchone()
+
+                if not price_row:
+                    logger.warning(f"No price data for {code}")
+                    continue
+
+                current_price = price_row[0]
+
+                # 最新のstatementデータを取得（5桁変換）
+                # まず最新のデータを取得
+                cursor.execute(
+                    """
+                    SELECT
+                        EarningsPerShare,
+                        BookValuePerShare,
+                        ForecastDividendPerShareAnnual,
+                        NextYearForecastDividendPerShareAnnual,
+                        ForecastEarningsPerShare,
+                        NextYearForecastEarningsPerShare,
+                        ResultDividendPerShareAnnual
+                    FROM statements
+                    WHERE code = ?
+                    ORDER BY DisclosedDate DESC
+                    LIMIT 1
+                    """,
+                    (code_5digit,),
+                )
+                stmt_row = cursor.fetchone()
+
+                if not stmt_row:
+                    logger.warning(f"No statement data for {code}")
+                    continue
+
+                # 株価指標を計算
+                eps = stmt_row[0]  # 実績EPS
+                bps = stmt_row[1]  # 実績BPS
+                forecast_dividend = stmt_row[2]  # 今期予想配当
+                next_year_dividend = stmt_row[3]  # 来期予想配当
+                forecast_eps = stmt_row[4]  # 今期予想EPS
+                next_year_eps = stmt_row[5]  # 来期予想EPS
+                result_dividend = stmt_row[6]  # 実績配当
+
+                # 予想EPSを優先的に使用（なければ実績EPSを使用）
+                expected_eps = forecast_eps or next_year_eps or eps
+
+                # PER計算（予想EPSベース）
+                expected_per = None
+                if expected_eps and expected_eps > 0:
+                    expected_per = round(current_price / expected_eps, 2)
+
+                # PBR計算（実績BPSベース）
+                actual_pbr = None
+                if bps and bps > 0:
+                    actual_pbr = round(current_price / bps, 2)
+
+                # BPSがない場合、別のレコードから取得を試みる
+                if not bps:
+                    cursor.execute(
+                        """
+                        SELECT BookValuePerShare
+                        FROM statements
+                        WHERE code = ?
+                          AND BookValuePerShare IS NOT NULL
+                          AND BookValuePerShare != ''
+                          AND BookValuePerShare > 0
+                        ORDER BY DisclosedDate DESC
+                        LIMIT 1
+                        """,
+                        (code_5digit,),
+                    )
+                    bps_row = cursor.fetchone()
+                    if bps_row and bps_row[0]:
+                        bps = bps_row[0]
+                        if bps > 0:
+                            actual_pbr = round(current_price / bps, 2)
+
+                # 配当利回り計算（予想配当ベース）
+                dividend_yield = None
+                expected_dividend = (
+                    next_year_dividend or forecast_dividend or result_dividend
+                )
+
+                # 配当データがない場合、別のレコードから取得を試みる
+                if not expected_dividend:
+                    cursor.execute(
+                        """
+                        SELECT
+                            CASE
+                                WHEN NextYearForecastDividendPerShareAnnual IS NOT NULL
+                                     AND NextYearForecastDividendPerShareAnnual != ''
+                                     AND NextYearForecastDividendPerShareAnnual > 0
+                                THEN NextYearForecastDividendPerShareAnnual
+                                WHEN ForecastDividendPerShareAnnual IS NOT NULL
+                                     AND ForecastDividendPerShareAnnual != ''
+                                     AND ForecastDividendPerShareAnnual > 0
+                                THEN ForecastDividendPerShareAnnual
+                                WHEN ResultDividendPerShareAnnual IS NOT NULL
+                                     AND ResultDividendPerShareAnnual != ''
+                                     AND ResultDividendPerShareAnnual > 0
+                                THEN ResultDividendPerShareAnnual
+                                ELSE NULL
+                            END as dividend
+                        FROM statements
+                        WHERE code = ?
+                          AND (
+                               (NextYearForecastDividendPerShareAnnual IS NOT NULL AND NextYearForecastDividendPerShareAnnual != '')
+                               OR (ForecastDividendPerShareAnnual IS NOT NULL AND ForecastDividendPerShareAnnual != '')
+                               OR (ResultDividendPerShareAnnual IS NOT NULL AND ResultDividendPerShareAnnual != '')
+                          )
+                        ORDER BY DisclosedDate DESC
+                        LIMIT 1
+                        """,
+                        (code_5digit,),
+                    )
+                    div_row = cursor.fetchone()
+                    if div_row and div_row[0]:
+                        expected_dividend = div_row[0]
+
+                if expected_dividend and expected_dividend > 0:
+                    dividend_yield = round((expected_dividend / current_price) * 100, 2)
+
+                # 保有銘柄を更新（全ての該当レコードを更新）
+                cursor.execute(
+                    """
+                    UPDATE holdings
+                    SET
+                        expected_per = ?,
+                        actual_pbr = ?,
+                        dividend_yield = ?,
+                        expected_dividend = ?,
+                        expected_eps = ?,
+                        actual_bps = ?
+                    WHERE user_id = ? AND code = ?
+                    """,
+                    (
+                        expected_per,
+                        actual_pbr,
+                        dividend_yield,
+                        expected_dividend,
+                        expected_eps,
+                        bps,
+                        user_id,
+                        code,
+                    ),
+                )
+
+                if cursor.rowcount > 0:
+                    updated_count += cursor.rowcount
+                    logger.info(
+                        f"Updated indicators for {code}: PER={expected_per}, "
+                        f"PBR={actual_pbr}, Yield={dividend_yield}%"
+                    )
+
+            conn.commit()
+            logger.info(f"株価指標更新完了: {updated_count}件")
+            return updated_count
+
+        except sqlite3.Error as e:
+            logger.error(f"株価指標更新エラー: {e}")
             conn.rollback()
             return 0
         finally:

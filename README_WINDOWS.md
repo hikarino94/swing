@@ -147,7 +147,7 @@ python fetch\\statements.py
 ```cmd
 python -m src.ui.web
 ```
-ブラウザで `http://localhost:5000` にアクセス
+ブラウザで `http://localhost:5005` にアクセス
 
 #### デスクトップGUI（レガシー）
 ```cmd
@@ -219,7 +219,7 @@ python scripts\\log_viewer.py list
 
 #### 3. 依存関係のインストールに失敗
 
-**解決策**: 
+**解決策**:
 - ネットワーク接続を確認
 - ファイアウォール設定を確認
 - 以下のコマンドで個別にインストールを試行：
