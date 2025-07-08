@@ -725,11 +725,22 @@ class TestTransactionModel:
 class TestPortfolioManager:
     """PortfolioManagerのテスト"""
 
+    @patch("src.portfolio.manager.get_db_path")
     @patch("src.portfolio.manager.Holding")
-    def test_update_holdings_from_csv_new(self, mock_holding_class):
+    def test_update_holdings_from_csv_new(self, mock_holding_class, mock_get_db_path):
         """CSVから新規保有銘柄を更新"""
+        # テスト用DBを作成
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = f.name
+        mock_get_db_path.return_value = db_path
+
+        # DBを初期化
+        from db.db_schema import init_schema
+
+        init_schema(db_path)
+
         # モックの設定
-        mock_holding_class.find_by_user_and_code.return_value = None
+        mock_holding_class.find_by_user_code_and_account.return_value = None
         mock_holding_instance = MagicMock()
         mock_holding_instance.save.return_value = True
         mock_holding_class.return_value = mock_holding_instance
@@ -753,10 +764,27 @@ class TestPortfolioManager:
         assert mock_holding_instance.average_price == 2500
         mock_holding_instance.save.assert_called_once()
 
+        # クリーンアップ
+        os.unlink(db_path)
+
+    @patch("src.portfolio.manager.get_db_path")
     @patch("src.portfolio.manager.Holding")
-    def test_update_holdings_from_csv_existing(self, mock_holding_class):
+    def test_update_holdings_from_csv_existing(
+        self, mock_holding_class, mock_get_db_path
+    ):
         """CSVから保有銘柄を追加（重複チェックなし）"""
+        # テスト用DBを作成
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = f.name
+        mock_get_db_path.return_value = db_path
+
+        # DBを初期化
+        from db.db_schema import init_schema
+
+        init_schema(db_path)
+
         # 新規インスタンスをモック
+        mock_holding_class.find_by_user_code_and_account.return_value = None
         mock_holding_instance = MagicMock()
         mock_holding_instance.save.return_value = True
         mock_holding_class.return_value = mock_holding_instance
@@ -780,6 +808,9 @@ class TestPortfolioManager:
         assert mock_holding_instance.quantity == 150
         assert mock_holding_instance.average_price == 2600
         mock_holding_instance.save.assert_called_once()
+
+        # クリーンアップ
+        os.unlink(db_path)
 
     @patch("src.portfolio.manager.Transaction")
     def test_import_transactions_from_csv(self, mock_transaction_class):

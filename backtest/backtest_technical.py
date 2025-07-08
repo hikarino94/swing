@@ -393,10 +393,9 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: Path | str) -> N
             if len(trades) > 0:
                 # 列の最大文字数を計算（NaNをチェック）
                 max_len = trades[col].astype(str).str.len().max()
-                if pd.notna(max_len):
-                    width = max(10, int(max_len * 1.1))
-                else:
-                    width = 15  # デフォルト幅
+                width = max(10, int(max_len * 1.1)) if pd.notna(max_len) else 15
+            else:
+                width = 15
             sheet.set_column(i, i, width)
 
 

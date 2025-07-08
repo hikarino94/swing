@@ -1,4 +1,5 @@
 import logging
+import shlex
 import subprocess
 import sys
 import time
@@ -17,7 +18,8 @@ logger = logging.getLogger("scheduler")
 def _run(cmd: str) -> None:
     """Run *cmd* and log if it fails."""
     logger.info("Run: %s", cmd)
-    proc = subprocess.run(cmd, shell=True)
+    # shellを使わずに実行（セキュリティ向上）
+    proc = subprocess.run(shlex.split(cmd))
     if proc.returncode:
         logger.error("Command failed: %s", cmd)
 

@@ -173,7 +173,7 @@ def create_visual_report(trades: pd.DataFrame, output_path: Path | None = None) 
 
     # 1. Cumulative Returns
     ax1 = plt.subplot(3, 2, 1)
-    cumulative_returns = (1 + trades[ret_col] / 100).cumprod()
+    cumulative_returns = (1 + trades[ret_col] / 100).cumprod()  # type: ignore[var-annotated]
     cumulative_returns.plot(ax=ax1, linewidth=2)
     ax1.set_title("Cumulative Returns", fontsize=14, fontweight="bold")
     ax1.set_xlabel("Trade Number")
