@@ -767,7 +767,7 @@ class PortfolioManager:
                     continue
 
                 # 株価指標を計算
-                # eps = stmt_row[0]  # 実績EPS（PER計算には使用しない）
+                eps = stmt_row[0]  # 実績EPS
                 bps = stmt_row[1]  # 実績BPS
                 forecast_dividend = stmt_row[2]  # 今期予想配当
                 next_year_dividend = stmt_row[3]  # 来期予想配当
@@ -775,8 +775,8 @@ class PortfolioManager:
                 next_year_eps = stmt_row[5]  # 来期予想EPS
                 result_dividend = stmt_row[6]  # 実績配当
 
-                # 予想EPSのみを使用（実績EPSは使用しない）
-                expected_eps = forecast_eps or next_year_eps
+                # 予想EPSを優先的に使用（なければ実績EPSを使用）
+                expected_eps = forecast_eps or next_year_eps or eps
 
                 # 予想EPSがない場合、別のレコードから取得を試みる
                 if not expected_eps:
@@ -784,7 +784,8 @@ class PortfolioManager:
                         """
                         SELECT
                             ForecastEarningsPerShare,
-                            NextYearForecastEarningsPerShare
+                            NextYearForecastEarningsPerShare,
+                            EarningsPerShare
                         FROM statements
                         WHERE code = ?
                           AND (ForecastEarningsPerShare IS NOT NULL
@@ -792,7 +793,10 @@ class PortfolioManager:
                                AND ForecastEarningsPerShare > 0
                                OR NextYearForecastEarningsPerShare IS NOT NULL
                                AND NextYearForecastEarningsPerShare != ''
-                               AND NextYearForecastEarningsPerShare > 0)
+                               AND NextYearForecastEarningsPerShare > 0
+                               OR EarningsPerShare IS NOT NULL
+                               AND EarningsPerShare != ''
+                               AND EarningsPerShare > 0)
                         ORDER BY CurrentFiscalYearStartDate DESC, DisclosedDate DESC
                         LIMIT 1
                         """,
@@ -802,9 +806,12 @@ class PortfolioManager:
                     if eps_row:
                         forecast_eps = eps_row[0]
                         next_year_eps = eps_row[1]
-                        expected_eps = forecast_eps or next_year_eps
+                        eps = eps_row[2]
+                        expected_eps = forecast_eps or next_year_eps or eps
+                    else:
+                        logger.debug(f"No EPS data found for {code}")
 
-                # PER計算（予想EPSベース）
+                # PER計算（予想EPSを優先、なければ実績EPS）
                 expected_per = None
                 if expected_eps and expected_eps > 0:
                     expected_per = round(current_price / expected_eps, 2)
@@ -907,10 +914,16 @@ class PortfolioManager:
 
                 if cursor.rowcount > 0:
                     updated_count += cursor.rowcount
-                    logger.info(
-                        f"Updated indicators for {code}: PER={expected_per}, "
-                        f"PBR={actual_pbr}, Yield={dividend_yield}%"
-                    )
+                    if expected_per is not None:
+                        logger.info(
+                            f"Updated indicators for {code}: PER={expected_per}, "
+                            f"PBR={actual_pbr}, Yield={dividend_yield}%"
+                        )
+                    else:
+                        logger.info(
+                            f"Updated indicators for {code}: PER=N/A (no EPS data), "
+                            f"PBR={actual_pbr}, Yield={dividend_yield}%"
+                        )
 
             conn.commit()
             logger.info(f"株価指標更新完了: {updated_count}件")
