@@ -56,67 +56,13 @@ def screening_db():
     import os
     import tempfile
 
+    from db.db_schema import init_schema
+
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
 
-    conn = sqlite3.connect(db_path)
-    # statements テーブル作成
-    conn.execute(
-        """
-        CREATE TABLE statements (
-            code TEXT,
-            DisclosedDate TEXT,
-            DisclosedTime TEXT,
-            TypeOfCurrentPeriod TEXT,
-            NetSales REAL,
-            OperatingProfit REAL,
-            Profit REAL,
-            EarningsPerShare REAL,
-            ForecastEarningsPerShare REAL,
-            CashFlowsFromOperatingActivities REAL,
-            EquityToAssetRatio REAL,
-            NumberOfTreasuryStockAtTheEndOfFiscalYear REAL,
-            MaterialChangesInSubsidiaries TEXT,
-            ChangesOtherThanOnesBasedOnRevisionsOfAccountingStandard TEXT,
-            ChangesInAccountingEstimates TEXT
-        )
-    """
-    )
-
-    # listed_info テーブル作成
-    conn.execute(
-        """
-        CREATE TABLE listed_info (
-            code TEXT PRIMARY KEY,
-            market_code TEXT
-        )
-    """
-    )
-
-    # fundamental_signals テーブル作成
-    conn.execute(
-        """
-        CREATE TABLE fundamental_signals (
-            code TEXT,
-            DisclosedAt TEXT,
-            TypeOfCurrentPeriod TEXT,
-            eps_yoy_fy REAL,
-            eps_yoy_q REAL,
-            op_margin_delta REAL,
-            feps_revision REAL,
-            cf_quality REAL,
-            eta_delta REAL,
-            leverage REAL,
-            turnaround INTEGER,
-            treasury_delta REAL,
-            created_at TEXT,
-            PRIMARY KEY (code, DisclosedAt)
-        )
-    """
-    )
-
-    conn.commit()
-    conn.close()
+    # 正しいスキーマでデータベースを初期化
+    init_schema(db_path)
 
     yield db_path
 
@@ -133,20 +79,27 @@ class TestDataAccess:
         # テストデータ挿入
         conn.execute(
             """
-            INSERT INTO listed_info (code, market_code) VALUES
-            ('1234', '0111'),
-            ('5678', '0109')  -- OTCは除外される
+            INSERT INTO listed_info (code, market_code, company_name, delete_flag) VALUES
+            ('1234', '0111', 'Test Company 1', 0),
+            ('5678', '0109', 'Test Company 2', 0)  -- OTCは除外される
         """
         )
 
         conn.execute(
             """
-            INSERT INTO statements VALUES
-            ('1234', '2024-01-01', '15:00:00', 'FY', 1000000, 100000, 50000,
+            INSERT INTO statements (
+                code, DisclosedDate, DisclosedTime, DisclosureNumber, TypeOfCurrentPeriod,
+                NetSales, OperatingProfit, Profit, EarningsPerShare, ForecastEarningsPerShare,
+                CashFlowsFromOperatingActivities, EquityToAssetRatio,
+                NumberOfTreasuryStockAtTheEndOfFiscalYear,
+                MaterialChangesInSubsidiaries, ChangesOtherThanOnesBasedOnRevisionsOfAccountingStandard,
+                ChangesInAccountingEstimates
+            ) VALUES
+            ('1234', '2024-01-01', '15:00:00', 'DISC001', 'FY', 1000000, 100000, 50000,
              10.5, 12.0, 120000, 0.45, 1000000, 'false', 'true', '0'),
-            ('1234', '2024-04-01', '15:00:00', '1Q', 250000, 25000, 12500,
+            ('1234', '2024-04-01', '15:00:00', 'DISC002', '1Q', 250000, 25000, 12500,
              2.5, 3.0, 30000, 0.46, 1100000, '1', 'false', 'false'),
-            ('5678', '2024-01-01', '15:00:00', 'FY', 500000, 50000, 25000,
+            ('5678', '2024-01-01', '15:00:00', 'DISC003', 'FY', 500000, 50000, 25000,
              5.0, 6.0, 60000, 0.50, 500000, 'false', 'false', 'false')
         """
         )
@@ -552,18 +505,25 @@ class TestIntegration:
 
         conn.execute(
             """
-            INSERT INTO listed_info (code, market_code) VALUES
-            ('1234', '0111')
+            INSERT INTO listed_info (code, market_code, company_name, delete_flag) VALUES
+            ('1234', '0111', 'Test Company', 0)
         """
         )
 
         # 2年分のデータを作成（YoY計算のため）
         conn.execute(
             """
-            INSERT INTO statements VALUES
-            ('1234', '2023-05-30', '15:00:00', 'FY', 1000000, 100000, 50000,
+            INSERT INTO statements (
+                code, DisclosedDate, DisclosedTime, DisclosureNumber, TypeOfCurrentPeriod,
+                NetSales, OperatingProfit, Profit, EarningsPerShare, ForecastEarningsPerShare,
+                CashFlowsFromOperatingActivities, EquityToAssetRatio,
+                NumberOfTreasuryStockAtTheEndOfFiscalYear,
+                MaterialChangesInSubsidiaries, ChangesOtherThanOnesBasedOnRevisionsOfAccountingStandard,
+                ChangesInAccountingEstimates
+            ) VALUES
+            ('1234', '2023-05-30', '15:00:00', 'DISC004', 'FY', 1000000, 100000, 50000,
              10.0, 12.0, 120000, 0.45, 1000000, 'false', 'false', 'false'),
-            ('1234', '2024-05-30', '15:00:00', 'FY', 1300000, 150000, 75000,
+            ('1234', '2024-05-30', '15:00:00', 'DISC005', 'FY', 1300000, 150000, 75000,
              15.0, 18.0, 180000, 0.48, 900000, 'false', 'false', 'false')
         """
         )

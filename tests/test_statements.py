@@ -240,30 +240,13 @@ def statements_db():
     import os
     import tempfile
 
+    from db.db_schema import init_schema
+
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
 
-    conn = sqlite3.connect(db_path)
-    # statements テーブルの作成（簡略版）
-    conn.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS statements (
-            {', '.join([f'{col} TEXT' for col in statements.SCHEMA_COLUMNS])},
-            PRIMARY KEY (DisclosureNumber)
-        )
-    """
-    )
-    # listed_info テーブルも作成（モード1のテスト用）
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS listed_info (
-            code TEXT PRIMARY KEY,
-            delete_flag INTEGER DEFAULT 0
-        )
-    """
-    )
-    conn.commit()
-    conn.close()
+    # 正しいスキーマでデータベースを初期化
+    init_schema(db_path)
 
     yield db_path
 
@@ -333,7 +316,7 @@ class TestDatabase:
             "SELECT NetSales FROM statements WHERE DisclosureNumber = '12345678901234'"
         )
         row = cursor.fetchone()
-        assert row[0] == "1500000"
+        assert row[0] == 1500000.0
 
         conn.close()
 

@@ -2197,6 +2197,9 @@ def get_transaction_performance():
     """取引履歴のパフォーマンスを計算"""
     try:
         period = request.args.get("period", "all")  # all, 1y, 6m, 3m, 1m
+        include_holdings = (
+            request.args.get("include_holdings", "false").lower() == "true"
+        )
 
         # 期間に応じて開始日を設定
         end_date = datetime.now().strftime("%Y-%m-%d")
@@ -2244,8 +2247,10 @@ def get_transaction_performance():
             trans = dict(zip(columns, row, strict=False))
             transactions.append(trans)
 
-        # 銘柄ごとのパフォーマンスを計算
+        # 銘柄ごとのパフォーマンスを計算（シンプルな総額ベース）
         stock_performance = {}
+
+        # 取引データを銘柄ごとに集計
         for trans in transactions:
             code = trans["code"]
             if code not in stock_performance:
@@ -2263,15 +2268,19 @@ def get_transaction_performance():
                 }
 
             sp = stock_performance[code]
+            sp["transactions"].append(trans)
 
             if trans["transaction_type"] == "buy":
+                # 買付金額（手数料込み）
                 buy_amount = trans["quantity"] * trans["price"] + (
                     trans["commission"] or 0
                 )
                 sp["total_buy_amount"] += buy_amount
                 sp["total_buy_quantity"] += trans["quantity"]
                 sp["net_quantity"] += trans["quantity"]
+
             else:  # sell
+                # 売却金額（手数料・税金控除後）
                 sell_amount = (
                     trans["quantity"] * trans["price"]
                     - (trans["commission"] or 0)
@@ -2281,57 +2290,26 @@ def get_transaction_performance():
                 sp["total_sell_quantity"] += trans["quantity"]
                 sp["net_quantity"] -= trans["quantity"]
 
-                # 売却時の実現損益を計算
-                if sp["total_buy_quantity"] > 0:
-                    avg_buy_price = sp["total_buy_amount"] / sp["total_buy_quantity"]
-                    cost_basis = trans["quantity"] * avg_buy_price
-                    profit = sell_amount - cost_basis
-                    sp["realized_profit"] += profit
-                    trans["realized_profit"] = profit
+                # 実現損益はtransactionsテーブルの値を使用（NULLは0として扱う）
+                realized_profit = trans.get("realized_profit") or 0
+                sp["realized_profit"] += realized_profit
 
-            sp["transactions"].append(trans)
-
-            # 平均買付価格を更新
+        # 銘柄ごとに平均買付価格を計算
+        for _code, sp in stock_performance.items():
             if sp["total_buy_quantity"] > 0:
                 sp["average_buy_price"] = (
                     sp["total_buy_amount"] / sp["total_buy_quantity"]
                 )
 
-        # 現在の株価を取得して含み損益を計算
-        for code, sp in stock_performance.items():
-            if sp["net_quantity"] > 0:
-                cursor.execute(
-                    """
-                    SELECT close FROM prices
-                    WHERE code = ?
-                    ORDER BY date DESC
-                    LIMIT 1
-                    """,
-                    (code + "0" if len(code) == 4 else code,),  # 5桁コードに変換
-                )
-                price_row = cursor.fetchone()
-                if price_row:
-                    current_price = price_row[0]
-                    market_value = sp["net_quantity"] * current_price
-                    book_value = sp["net_quantity"] * sp["average_buy_price"]
-                    sp["unrealized_profit"] = market_value - book_value
-                    sp["current_price"] = current_price
-                    sp["market_value"] = market_value
-                else:
-                    sp["unrealized_profit"] = 0
-                    sp["current_price"] = None
-                    sp["market_value"] = None
-            else:
-                sp["unrealized_profit"] = 0
-                sp["current_price"] = None
-                sp["market_value"] = None
+        # 含み損益の計算は行わない
+        for _code, sp in stock_performance.items():
+            sp["unrealized_profit"] = 0
+            sp["current_price"] = None
+            sp["market_value"] = None
 
         # 全体のパフォーマンスサマリー
         total_realized_profit = sum(
             sp["realized_profit"] for sp in stock_performance.values()
-        )
-        total_unrealized_profit = sum(
-            sp["unrealized_profit"] for sp in stock_performance.values()
         )
         total_buy_amount = sum(
             sp["total_buy_amount"] for sp in stock_performance.values()
@@ -2339,19 +2317,19 @@ def get_transaction_performance():
         total_sell_amount = sum(
             sp["total_sell_amount"] for sp in stock_performance.values()
         )
-        total_profit = total_realized_profit + total_unrealized_profit
 
         summary = {
             "period": period,
             "start_date": start_date,
             "end_date": end_date,
             "total_realized_profit": total_realized_profit,
-            "total_unrealized_profit": total_unrealized_profit,
-            "total_profit": total_profit,
+            "total_profit": total_realized_profit,  # 実現損益のみ
             "total_buy_amount": total_buy_amount,
             "total_sell_amount": total_sell_amount,
             "profit_rate": (
-                (total_profit / total_buy_amount * 100) if total_buy_amount > 0 else 0
+                (total_realized_profit / total_buy_amount * 100)
+                if total_buy_amount > 0
+                else 0
             ),
             "transaction_count": len(transactions),
             "stock_count": len(stock_performance),
@@ -2404,6 +2382,86 @@ def get_transaction_performance():
             "3ヶ月以内": 0,
             "3ヶ月超": 0,
         }
+
+        # 保有銘柄を含める場合の処理
+        if include_holdings:
+            conn = sqlite3.connect(get_db_path())
+            cursor = conn.cursor()
+
+            # 現在の保有銘柄を取得
+            cursor.execute(
+                """
+                SELECT h.code, li.company_name, h.quantity, h.average_price,
+                       h.market_value, h.profit_loss, h.account_type
+                FROM holdings h
+                LEFT JOIN listed_info li ON h.code = li.code
+                WHERE h.user_id = ? AND h.deleted_at IS NULL
+                """,
+                (request.current_user.id,),
+            )
+
+            for row in cursor.fetchall():
+                code = row[0]
+
+                if code in stock_performance:
+                    # 取引履歴にある銘柄の場合、sourceを'both'に更新
+                    stock_performance[code]["source"] = "both"
+                else:
+                    # 取引履歴にない銘柄の場合、新規追加
+                    stock_performance[code] = {
+                        "code": code,
+                        "company_name": row[1] or "",
+                        "total_buy_amount": row[2] * row[3],  # 数量 × 平均取得価格
+                        "total_sell_amount": 0,
+                        "total_buy_quantity": row[2],
+                        "total_sell_quantity": 0,
+                        "realized_profit": 0,
+                        "net_quantity": row[2],
+                        "average_buy_price": row[3],
+                        "unrealized_profit": row[5] or 0,  # profit_loss
+                        "current_price": (
+                            row[4] / row[2] if row[2] > 0 else None
+                        ),  # market_value / quantity
+                        "market_value": row[4],
+                        "transactions": [],
+                        "source": "holdings",  # 保有のみ
+                    }
+
+            # ソース情報を既存の取引履歴銘柄に追加
+            for _code, sp in stock_performance.items():
+                if "source" not in sp:
+                    sp["source"] = "transaction"  # 取引履歴のみ
+
+            # サマリーを再計算（保有銘柄を含める場合）
+            total_realized_profit = sum(
+                sp["realized_profit"] for sp in stock_performance.values()
+            )
+            total_unrealized_profit = sum(
+                sp["unrealized_profit"] for sp in stock_performance.values()
+            )
+            total_buy_amount = sum(
+                sp["total_buy_amount"] for sp in stock_performance.values()
+            )
+            total_sell_amount = sum(
+                sp["total_sell_amount"] for sp in stock_performance.values()
+            )
+            total_profit = total_realized_profit + total_unrealized_profit
+
+            summary.update(
+                {
+                    "total_realized_profit": total_realized_profit,
+                    "total_unrealized_profit": total_unrealized_profit,
+                    "total_profit": total_profit,
+                    "total_buy_amount": total_buy_amount,
+                    "total_sell_amount": total_sell_amount,
+                    "profit_rate": (
+                        (total_profit / total_buy_amount * 100)
+                        if total_buy_amount > 0
+                        else 0
+                    ),
+                    "stock_count": len(stock_performance),
+                }
+            )
 
         conn.close()
 

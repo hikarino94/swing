@@ -1079,17 +1079,24 @@
 
                     <!-- パフォーマンス表示（取引履歴分析） -->
                     <div x-show="portfolio.visualizationType === 'performance'" class="space-y-6">
-                        <!-- 期間選択 -->
-                        <div class="mb-4">
-                            <label class="text-sm font-medium text-gray-700">表示期間：</label>
-                            <select x-model="portfolio.performancePeriod" @change="loadTransactionPerformance()"
-                                    class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
-                                <option value="all">全期間</option>
-                                <option value="1y">過去1年</option>
-                                <option value="6m">過去6ヶ月</option>
-                                <option value="3m">過去3ヶ月</option>
-                                <option value="1m">過去1ヶ月</option>
-                            </select>
+                        <!-- 期間選択とオプション -->
+                        <div class="mb-4 flex items-center gap-4">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">表示期間：</label>
+                                <select x-model="portfolio.performancePeriod" @change="loadTransactionPerformance()"
+                                        class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                                    <option value="all">全期間</option>
+                                    <option value="1y">過去1年</option>
+                                    <option value="6m">過去6ヶ月</option>
+                                    <option value="3m">過去3ヶ月</option>
+                                    <option value="1m">過去1ヶ月</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" id="includeHoldings" x-model="portfolio.includeHoldings" @change="loadTransactionPerformance()"
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <label for="includeHoldings" class="ml-2 text-sm text-gray-700">現在の保有銘柄を含める</label>
+                            </div>
                         </div>
 
                         <div x-show="portfolio.visualizationLoading" class="text-center py-8">
@@ -1099,24 +1106,12 @@
 
                         <div x-show="!portfolio.visualizationLoading && portfolio.transactionPerformanceData">
                         <!-- サマリー情報 -->
-                        <div x-show="portfolio.transactionPerformanceData.summary" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+                        <div x-show="portfolio.transactionPerformanceData.summary" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
                             <div class="bg-gray-50 p-4 rounded-lg text-center">
                                 <div class="text-sm text-gray-600">実現損益</div>
                                 <div class="text-xl font-bold"
                                      :class="portfolio.transactionPerformanceData.summary.total_realized_profit >= 0 ? 'text-green-600' : 'text-red-600'"
                                      x-text="formatCurrency(portfolio.transactionPerformanceData.summary.total_realized_profit)"></div>
-                            </div>
-                            <div class="bg-gray-50 p-4 rounded-lg text-center">
-                                <div class="text-sm text-gray-600">含み損益</div>
-                                <div class="text-xl font-bold"
-                                     :class="portfolio.transactionPerformanceData.summary.total_unrealized_profit >= 0 ? 'text-green-600' : 'text-red-600'"
-                                     x-text="formatCurrency(portfolio.transactionPerformanceData.summary.total_unrealized_profit)"></div>
-                            </div>
-                            <div class="bg-gray-50 p-4 rounded-lg text-center">
-                                <div class="text-sm text-gray-600">合計損益</div>
-                                <div class="text-xl font-bold"
-                                     :class="portfolio.transactionPerformanceData.summary.total_profit >= 0 ? 'text-green-600' : 'text-red-600'"
-                                     x-text="formatCurrency(portfolio.transactionPerformanceData.summary.total_profit)"></div>
                             </div>
                             <div class="bg-gray-50 p-4 rounded-lg text-center">
                                 <div class="text-sm text-gray-600">収益率</div>
@@ -1146,8 +1141,7 @@
                                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">売却金額</th>
                                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">実現損益</th>
                                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">保有数量</th>
-                                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">含み損益</th>
-                                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">合計損益</th>
+                                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">ソース</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
@@ -1163,12 +1157,11 @@
                                                     :class="stock.realized_profit >= 0 ? 'text-green-600' : 'text-red-600'"
                                                     x-text="formatCurrency(stock.realized_profit)"></td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right" x-text="stock.net_quantity > 0 ? stock.net_quantity.toLocaleString() : '-'"></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right"
-                                                    :class="stock.unrealized_profit >= 0 ? 'text-green-600' : 'text-red-600'"
-                                                    x-text="stock.net_quantity > 0 ? formatCurrency(stock.unrealized_profit) : '-'"></td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-right"
-                                                    :class="(stock.realized_profit + stock.unrealized_profit) >= 0 ? 'text-green-600' : 'text-red-600'"
-                                                    x-text="formatCurrency(stock.realized_profit + stock.unrealized_profit)"></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-center">
+                                                    <span x-show="stock.source === 'both'" class="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">取引+保有</span>
+                                                    <span x-show="stock.source === 'transaction'" class="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">取引履歴</span>
+                                                    <span x-show="stock.source === 'holdings'" class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">保有のみ</span>
+                                                </td>
                                             </tr>
                                         </template>
                                     </tbody>
@@ -1705,7 +1698,8 @@ function swingApp() {
             compositionData: null,
             transactionPerformanceData: null,
             heatmapData: null,
-            performancePeriod: 'all'
+            performancePeriod: 'all',
+            includeHoldings: false
         },
 
         // メソッド
@@ -2558,7 +2552,8 @@ function swingApp() {
 
             try {
                 const params = {
-                    period: this.portfolio.performancePeriod
+                    period: this.portfolio.performancePeriod,
+                    include_holdings: this.portfolio.includeHoldings
                 };
 
                 const queryString = new URLSearchParams(params).toString();
