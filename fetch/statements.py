@@ -40,7 +40,7 @@ from requests import Session
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from config import DB_PATH, config  # noqa: E402
+from src.config import config, get_db_path  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Config & logging
@@ -56,7 +56,7 @@ logger = logging.getLogger("statements")
 SCHEMA_COLUMNS: list[str] = [
     "DisclosedDate",
     "DisclosedTime",
-    "LocalCode",
+    "code",
     "DisclosureNumber",
     "TypeOfDocument",
     "TypeOfCurrentPeriod",
@@ -285,7 +285,12 @@ def _normalize(df: pd.DataFrame) -> pd.DataFrame:
     """DataFrameを正規化し、スキーマに合わせて列を調整する。
 
     断片化警告を避けるため、不足している列を一括で追加します。
+    APIレスポンスのLocalCodeをcodeに変換します。
     """
+    # LocalCodeをcodeに変換（APIレスポンスとの互換性のため）
+    if "LocalCode" in df.columns and "code" not in df.columns:
+        df = df.rename(columns={"LocalCode": "code"})
+
     # 不足している列を特定
     missing_cols = [col for col in SCHEMA_COLUMNS if col not in df.columns]
 
@@ -320,7 +325,7 @@ def main(mode: str, start_date: str | None, end_date: str | None) -> None:
     idtoken = _load_token()
     start = time.perf_counter()
     logger.info("モード%sで処理を開始します", mode)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
     try:
         if mode == "1":
             cur = conn.execute("SELECT code FROM listed_info WHERE delete_flag = 0")

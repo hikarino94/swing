@@ -17,7 +17,6 @@ $ python backtest_statements.py \
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import logging
 import sqlite3
 import sys
@@ -30,8 +29,9 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
 sys.path.append(str(SCREENING_DIR))
 
-from config import DB_PATH  # noqa: E402
 from screening.thresholds import log_thresholds  # noqa: E402
+from src.config import get_db_path  # noqa: E402
+from src.utils.file_utils import get_timestamped_output_path  # noqa: E402
 
 TD_FMT = "%Y-%m-%d"
 DEFAULT_CAPITAL = 1_000_000  # JPY
@@ -41,11 +41,11 @@ LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logger = logging.getLogger("backtest_statements")
 
 
-def _result_paths(prefix: str) -> tuple[str, str]:
+def _result_paths(prefix: str) -> tuple[Path, Path]:
     """Return Excel and JSON file paths with a timestamp."""
-
-    ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}_{ts}.xlsx", f"{prefix}_{ts}.json"
+    excel_path = get_timestamped_output_path("backtest", prefix, ".xlsx")
+    json_path = get_timestamped_output_path("backtest", prefix, ".json")
+    return excel_path, json_path
 
 
 # ---------------------------------------------------------------------------
@@ -61,14 +61,9 @@ def read_prices(conn: sqlite3.Connection) -> pd.DataFrame:
     処理内容: prices テーブルを取得しマルチインデックスで整形して返す。
     """
 
-    q = (
-        "SELECT code   AS LocalCode,"
-        "       date   AS trade_date,"
-        "       adj_close"
-        "  FROM prices"
-    )
+    q = "SELECT code," "       date   AS trade_date," "       adj_close" "  FROM prices"
     df = pd.read_sql(q, conn, parse_dates=["trade_date"])
-    return df.set_index(["LocalCode", "trade_date"]).sort_index()
+    return df.set_index(["code", "trade_date"]).sort_index()
 
 
 def read_signals(
@@ -81,7 +76,7 @@ def read_signals(
     処理内容: fundamental_signals テーブルから期間で絞り込んで読み込む。
     """
 
-    q = "SELECT LocalCode, DisclosedAt FROM fundamental_signals"
+    q = "SELECT code, DisclosedAt FROM fundamental_signals"
     if start or end:
         q += " WHERE 1=1"
         if start:
@@ -139,8 +134,8 @@ def run_backtest(
     signals["exit_date"] = add_n_trading_days(signals["entry_date"], hold, calendar)
 
     # マルチ‑インデックスで価格取得
-    entry_idx = signals.set_index(["LocalCode", "entry_date"]).index
-    exit_idx = signals.set_index(["LocalCode", "exit_date"]).index
+    entry_idx = signals.set_index(["code", "entry_date"]).index
+    exit_idx = signals.set_index(["code", "exit_date"]).index
 
     entry_px = prices.reindex(entry_idx)["adj_close"].to_numpy()
     exit_px = prices.reindex(exit_idx)["adj_close"].to_numpy()
@@ -157,7 +152,7 @@ def run_backtest(
 
     trades = pd.DataFrame(
         {
-            "code": signals_filtered["LocalCode"],
+            "code": signals_filtered["code"],
             "DisclosedAt": signals_filtered["DisclosedAt"].dt.date,
             "entry_date": signals_filtered["entry_date"].dt.date,
             "exit_date": signals_filtered["exit_date"].dt.date,
@@ -224,7 +219,7 @@ def show_results(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 
 
-def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
+def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: Path | str):
     """バックテスト結果を Excel ファイルに出力する。
 
     入力パラメータ: トレード表、サマリー表、保存先パス。
@@ -240,7 +235,15 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
 
         # 自動列幅調整
         for i, col in enumerate(trades.columns):
-            width = max(10, int(trades[col].astype(str).str.len().max() * 1.1))
+            if len(trades) > 0:
+                # 列の最大文字数を計算（NaNをチェック）
+                max_len = trades[col].astype(str).str.len().max()
+                if pd.notna(max_len):
+                    width = max(10, int(max_len * 1.1))
+                else:
+                    width = 15  # デフォルト幅
+            else:
+                width = 15  # DataFrameが空の場合のデフォルト幅
             sheet.set_column(i, i, width)
 
 
@@ -251,7 +254,7 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str):
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    p.add_argument("--db", default=DB_PATH, help="SQLite DB ファイル")
+    p.add_argument("--db", default=get_db_path(), help="SQLite DB ファイル")
     p.add_argument("--hold", type=int, default=40, help="保有期間（日数）")
     p.add_argument(
         "--entry-offset", type=int, default=1, help="エントリー日のオフセット"
@@ -271,9 +274,9 @@ def parse_args(argv=None):
     p.add_argument("--start", type=str, default=None, help="開始日 YYYY-MM-DD")
     p.add_argument("--end", type=str, default=None, help="終了日 YYYY-MM-DD")
     default_xlsx, default_json = _result_paths("fundamental")
-    p.add_argument("--xlsx", type=str, default=default_xlsx, help="Excel 出力ファイル")
+    p.add_argument("--xlsx", type=Path, default=default_xlsx, help="Excel 出力ファイル")
     p.add_argument(
-        "--json", type=str, default=default_json, help="結果を保存するJSONファイル"
+        "--json", type=Path, default=default_json, help="結果を保存するJSONファイル"
     )
     p.add_argument(
         "--show",
@@ -314,9 +317,9 @@ def main():
     summary = summarize(trades)
 
     logger.info("Saving Excel → %s", args.xlsx)
-    to_excel(trades, summary, args.xlsx)
+    to_excel(trades, summary, str(args.xlsx))
 
-    trades.to_json(args.json, orient="records", force_ascii=False)
+    trades.to_json(str(args.json), orient="records", force_ascii=False)
     logger.info("JSON exported -> %s", args.json)
 
     logger.info("\n%s", summary.to_string(index=False))

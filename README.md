@@ -1,226 +1,336 @@
-# swing
+# Swing Trading Tool 🎯
 
-J-Quants の株価・財務データを取得し、
-スクリーニングやバックテストを行うツール群です。
+J-Quants の株価・財務データを使用して、スクリーニングやバックテストを行うツールです。
 
-## 開発手順
+## 🚀 クイックスタート（初心者向け）
 
-### 自動セットアップ（推奨）
+### 必要なもの
+- Python 3.12以上
+- J-Quants API アカウント（[無料登録](https://jpx-jquants.com/)）
+- Windows + WSL2 または Mac/Linux
+
+### 1. 自動セットアップ（推奨）
+
+すべてを自動で設定します：
 
 ```bash
-python setup_environment.py
+# リポジトリをクローン
+git clone https://github.com/yourusername/swing.git
+cd swing
+
+# 自動セットアップ実行
+python scripts/setup_environment.py
 ```
 
-このスクリプトは環境構築に必要な全ての手順を自動化します。
+このスクリプトが以下を自動で行います：
+- 仮想環境の作成
+- 必要なライブラリのインストール
+- データベースの初期化
+- 開発環境の設定
 
-### 手動セットアップ
+### 2. J-Quants API の設定
 
-開発用ツールをインストールし、`pre-commit` フックを設定します。
+J-Quants にログインして認証情報を保存します：
 
 ```bash
+# 対話形式で設定
+python -m src.cli.update_idtoken
+
+# または直接指定
+python -m src.cli.update_idtoken --mail your-email@example.com --password your-password
+```
+
+### 3. Web UIを起動
+
+```bash
+# 通常起動
+python -m src.ui.web
+
+# WSL2環境で家庭内LANからアクセスする場合（推奨）
+python src/ui/web_production.py
+```
+
+ブラウザで http://localhost:5000 にアクセスしてください。
+
+## 🔧 手動セットアップ（上級者向け）
+
+<details>
+<summary>詳細な手動セットアップ手順</summary>
+
+### 1. 仮想環境の作成
+
+```bash
+# 仮想環境作成
+python -m venv venv
+
+# 有効化（Windows）
+venv\Scripts\activate
+
+# 有効化（Mac/Linux）
+source venv/bin/activate
+```
+
+### 2. 依存関係のインストール
+
+```bash
+# 本番用ライブラリ
+pip install -r requirements.txt
+
+# 開発用ツール（任意）
 pip install -r requirements-dev.txt
 pip install pre-commit
 pre-commit install
 ```
 
-コミット時に `black` と `ruff` が自動で実行されます。
-詳細は [DEVELOPMENT.md](DEVELOPMENT.md) を参照してください。
+### 3. 設定ファイルの作成
 
-## セットアップ
-
-Python 3.12 以上を想定しています。必要なライブラリは
-`requirements.txt` にまとめています。
-
-```bash
-pip install -r requirements.txt
-```
-
-J‑Quants API の `idToken` を取得し、次の内容で `idtoken.json` を作成してください。
-
+#### J-Quants認証情報（config/account.json）
 ```json
-{"idToken": "YOUR_TOKEN"}
+{
+  "mailaddress": "your-email@example.com",
+  "password": "your-password"
+}
 ```
 
-J‑Quants の認証に使用するメールアドレスとパスワードを保存する
-`account.json` を用意しておくと、`update_idtoken.py` から自動的に参照されます。
-
-Web アプリ用の認証情報を分けたい場合は `login.json` を用意してください。
-こちらには Web アプリにログインする際の **ID** とパスワード（または
-`password_hash`）を保存します。`login.json` がない場合は `account.json`
-が使われますが、この場合はメールアドレスが ID として扱われます。
-`LOGIN_ACCOUNT` 環境変数でこのファイルの場所を変更できます。
-
+#### Web UI認証情報（config/login.json）- 任意
 ```json
-{"id": "YOUR_ID", "password": "YOUR_PASSWORD", "password_hash": "<hash>"}
+{
+  "id": "admin",
+  "password": "your-web-password"
+}
 ```
 
-`password_hash` は次のように生成できます。
-
-```bash
-python - <<'EOF'
-from werkzeug.security import generate_password_hash
-print(generate_password_hash('YOUR_PASSWORD'))
-EOF
-```
-
-このファイルは `.gitignore` に含まれ、リポジトリには登録されません。
-
-続いて SQLite データベースを初期化します。
+### 4. データベース初期化
 
 ```bash
 python db/db_schema.py
 ```
 
-`db/stock.db` が生成されれば準備完了です。
+</details>
 
-## テスト
+## 📱 モバイル・家庭内LANアクセス対応
+
+### WSL2環境でのネットワーク問題解決
+
+WSL2環境では、MTUサイズの問題により家庭内LANからアクセスできない場合があります。
+
+#### 症状
+- localhostからはアクセスできるが、他のデバイスからタイムアウトする
+- 軽いページは表示されるが、重いページが表示されない
+
+#### 解決方法
+
+1. **即座の解決**（WSL2内で実行）
+```bash
+# MTUサイズを変更
+sudo ip link set dev eth0 mtu 1450
+
+# または自動設定スクリプトを実行
+./setup_wsl_network.sh
+```
+
+2. **本番用サーバーの使用**（推奨）
+```bash
+# Waitressサーバーで起動（より安定）
+python src/ui/web_production.py
+```
+
+3. **恒久的な解決**
+詳細は [WSL2_NETWORK_FIX.md](WSL2_NETWORK_FIX.md) を参照してください。
+
+### モバイル対応UI
+- レスポンシブデザイン対応
+- タッチ操作に最適化
+- スマホでも見やすいカード形式の表示
+
+## 📊 基本的な使い方
+
+### 1. データの取得
+
+Web UIの「📊 データ取得」タブから：
+- **株価取得**: 日次の株価データ
+- **上場情報**: 銘柄の基本情報
+- **財務諸表**: 決算データ
+
+### 2. スクリーニング
+
+「🔍 スクリーニング」タブから3種類の分析が可能：
+
+- **ファンダメンタル分析**: 財務データに基づく銘柄選定
+- **テクニカル分析**: チャート指標による売買シグナル
+- **機械学習分析**: AIモデルによる予測
+
+### 3. バックテスト
+
+「📈 バックテスト」タブで過去データを使った検証：
+- 各スクリーニング手法の実績確認
+- リスク・リターンの分析
+- 最適なパラメータの探索
+
+### 4. 結果の確認
+
+「📁 結果閲覧」タブから：
+- Excel形式でダウンロード
+- JSON形式で詳細分析
+- 過去の実行結果の比較
+
+## 🤖 自動実行
+
+定期的にデータを自動更新：
 
 ```bash
-# 全テスト実行
+# スケジューラーを起動
+python -m src.cli.scheduler
+```
+
+デフォルトスケジュール：
+- 毎日 20:00 - 株価データ取得
+- 毎日 20:30 - 財務データ取得
+- 毎週月曜 6:00 - 上場情報更新
+
+## 📁 プロジェクト構造
+
+```
+swing/
+├── src/                     # ソースコード
+│   ├── ui/                 # ユーザーインターフェース
+│   │   ├── web.py         # Web UI（推奨）
+│   │   └── legacy/gui.py  # デスクトップGUI
+│   ├── cli/               # コマンドラインツール
+│   └── config/            # 設定管理
+├── fetch/                   # データ取得スクリプト
+├── screening/               # スクリーニングロジック
+├── backtest/               # バックテストエンジン
+├── db/                     # データベース管理
+├── templates/              # Web UIテンプレート
+├── tests/                  # テストコード
+└── data/output/            # 結果ファイル
+```
+
+## ❓ よくある質問・トラブルシューティング
+
+### Q: J-Quants APIのトークンエラーが出る
+A: トークンの有効期限が切れています。以下を実行：
+```bash
+python -m src.cli.update_idtoken
+```
+
+### Q: データベースエラーが出る
+A: データベースを再初期化：
+```bash
+# バックアップを取る
+cp db/stock.db db/stock.db.backup
+
+# 再初期化
+python db/db_schema.py
+```
+
+### Q: Web UIにアクセスできない
+A: ファイアウォールの設定を確認：
+- Windows Defenderでポート5000を許可
+- WSL2の場合は上記のネットワーク設定を確認
+
+### Q: スクリーニング結果が出ない
+A: データが不足している可能性があります：
+1. まずデータ取得を実行
+2. 十分な期間のデータがあるか確認（DBサマリーで確認）
+3. `screening/thresholds.json` の閾値を調整
+
+### Q: メモリ不足エラー
+A: 大量データ処理時の対策：
+- 期間を短くして実行
+- WSL2の場合は `.wslconfig` でメモリを増やす
+- `--lookback` パラメータで参照日数を減らす
+
+## 🛠️ 主要コマンドリファレンス
+
+<details>
+<summary>コマンドライン実行例</summary>
+
+### データ取得
+```bash
+# 株価データ（期間指定）
+python fetch/daily_quotes.py --start 2024-01-01 --end 2024-12-31
+
+# 上場情報
+python fetch/listed_info.py
+
+# 財務データ（日次更新）
+python fetch/statements.py 2
+```
+
+### スクリーニング
+```bash
+# ファンダメンタル
+python screening/screen_statements.py --lookback 60 --recent 30
+
+# テクニカル
+python screening/screen_technical.py screen --as-of 2024-01-10
+
+# 機械学習
+python screening/screen_ml.py train  # 学習
+python screening/screen_ml.py screen --top 10  # 予測
+```
+
+### バックテスト
+```bash
+# ファンダメンタル戦略
+python backtest/backtest_statements.py --hold 20 --capital 1000000
+
+# テクニカル戦略
+python backtest/backtest_technical.py --hold-days 10 --stop-loss 5
+
+# ML戦略
+python backtest/backtest_ml.py --top 10 --capital 1000000
+```
+
+### 分析・確認
+```bash
+# DBサマリー
+python db/db_summary.py
+
+# シグナル一覧
+python db/list_signals.py tech --start 2024-01-01
+
+# バックテスト結果分析
+python backtest/analyze_backtest_json.py result.json --show-trades
+```
+
+</details>
+
+## 🧪 テスト実行
+
+```bash
+# 全テスト
 pytest
 
-# カバレッジ付きテスト
-pytest --cov=. --cov-report=html --cov-report=term
+# カバレッジ付き
+pytest --cov=. --cov-report=html
 
-# 特定のテスト実行
-pytest tests/test_config.py
+# 特定のテスト
+pytest tests/test_config.py -v
 ```
 
-## 主なスクリプトと起動引数
+## 📝 開発者向け情報
 
-* `fetch/daily_quotes.py`
-  日足株価を取得して `prices` テーブルへ保存します。
-  `--start` と `--end` を指定すると期間を取得します（省略時は当日分）。
+- コミット時に自動でコード整形（black, ruff）
+- 詳細は [DEVELOPMENT.md](DEVELOPMENT.md) 参照
+- 改善計画は [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) 参照
 
-* `fetch/listed_info.py`
-  上場銘柄情報を取得して `listed_info` テーブルを更新します。
-  引数はありません。
+## 🆕 最近の主な更新
 
-* `fetch/statements.py`
-  決算データを取得して `statements` テーブルに保存します。
-  `mode` に `1` を指定すると銘柄単位で一括取得、`2` を指定すると日付または期間を取得します。
-  `--start` と `--end` を併用することで期間を指定できます。
-* `screening/screen_statements.py`
-  財務データをスクリーニングし、シグナルを `fundamental_signals` に保存します。
-  `--lookback` 過去参照日数、`--recent` 開示閾値日数、`--as-of` 基準日（省略時は当日）を指定できます。
-* `screening/screen_technical.py`
-  `indicators` または `screen` をコマンドとして指定します。
-  `--as-of` で対象日を指定し、`--lookback` は遡る日数です。
-  当日の `prices` データが存在しない場合は処理をスキップします。
-* `screening/screen_ml.py`
-  機械学習モデルで30日後の株価上昇確率を推定し、上位銘柄を抽出します。
-  `train` と `screen` サブコマンドがあり、`--top` や `--lookback` を指定できます。
-* `backtest/backtest_statements.py`
-  財務シグナルを用いたバックテストを実行します。
-  `--hold` 保有日数、`--entry-offset` エントリー日のオフセット、`--capital` 資金、
-  `--min-price` 最低株価、`--start` と `--end` で対象期間を指定します。結果は毎回タイムスタンプ付きの
-  Excel と JSON に保存され、`--xlsx` と `--json` でファイル名を変更できます。
-  `--show` を付けるとサマリーを標準出力に表示します。
-* `backtest/backtest_technical.py`
-  テクニカル指標を用いたスイングトレードのバックテストを行います。
-  `--start` と `--end` でエントリー期間を指定し、`--hold-days` 保有日数、
-  `--stop-loss` 損切り率、`--min-price` 最低株価、`--capital` 資金を与えます。結果は実行ごとに
-  タイムスタンプ付きの Excel と JSON に保存されます。`--outfile` と
-  `--json` で保存先を変更できます。`--show` を指定するとサマリーが
-  標準出力に表示されます。
-* `backtest/backtest_ml.py`
-  機械学習スクリーナーの予測を用いて、日毎に上位銘柄を購入するバックテストを行います。
-  `--start` `--end` で期間を指定し、`--top` 上位件数、`--capital` 資金などを設定します。
-  結果は Excel と JSON に保存され、`--outfile` `--json` でファイル名を変更できます。`--show` でサマリーを表示します。
-* `backtest/analyze_backtest_json.py`
-  バックテスト結果として保存した JSON ファイルを読み込み、損益や
-  勝率などの指標を集計するツールです。複数ファイルを指定して
-  まとめて分析することもできます。GUI の「JSON分析」タブからも
-  実行でき、タブ上でロング/ショートの選択も可能です。`--side` オプションで
-  `long` または `short` を指定する
-  と、買いもしくは空売りのみを対象に集計できます。以下は簡単な
-  実行例です。
+- **モバイル対応**: スマホでも使いやすいレスポンシブUI
+- **WSL2対応**: ネットワーク問題の解決方法を実装
+- **処理の排他制御**: 複数処理の同時実行を防止
+- **Excel自動出力**: スクリーニング結果を自動でExcel化
+- **高速化**: テクニカルスクリーニングの並列処理対応
 
-  ```bash
-  $ python backtest/analyze_backtest_json.py sample.json --show-trades
+## 🤝 貢献・サポート
 
-  === Summary ===
-        trades: 2
-  total_profit: 500 JPY
-      win_rate: 50.00%
-   avg_ret_pct: 0.02%
-        sharpe: 0.43
+- バグ報告: GitHubのIssueへ
+- 機能要望: Discussionsで議論
+- 質問: READMEを確認後、Issueへ
 
-  === Trades ===
-  +------+------------+---------+
-  | code | profit_jpy | ret_pct |
-  +------+------------+---------+
-  | 1234 |       1000 |    0.05 |
-  +------+------------+---------+
-  | 5678 |       -500 |   -0.02 |
-  +------+------------+---------+
+## ⚠️ 免責事項
 
-  === Profit per Trade ===
-    1 ######################################## (1000)
-    2 -#################### (-500)
-  ```
-* `update_idtoken.py`
-  J‑Quants にログインして `idtoken.json` を更新します。
-  `--mail` と `--password` を省略すると `account.json` が参照されます。
-* `db/db_summary.py`
-  データベースの各テーブル件数と日付範囲を表示します。引数はありません。
-  GUI の「DBサマリー」タブからも確認できます。
-* `db/list_signals.py`
-  `fundamental_signals` または `technical_indicators` テーブルから
-  スクリーニング結果を表示します。引数 `fund`/`tech` で種別を選択し、
-  `--start` `--end` で期間を指定できます。開始日と終了日をどちらも
-  指定しない場合は当日の日付が自動的に使われます。テクニカルの場合は
-  バックテストと同じ条件（`signals_count>=3` など）が自動で適用されます。
-* `setup_environment.py`
-  開発環境を自動構築するヘルパースクリプトです。仮想環境の作成、
-  依存関係のインストール、設定ファイルの初期化、データベースのセットアップ、
-  pre-commitフックの設定などを一括で行います。
-* `web.py`
-  Flask を使った簡易 Web インターフェイスを起動します。
-  フォームから各種スクリプトを実行でき、結果もブラウザ上で確認できます。
-
-## 利用の流れ
-
-1. **データ取得**: `fetch` スクリプトでデータベースを更新
-2. **シグナル生成**: `screening` スクリプトで売買シグナルを生成
-   * ファンダメンタル分析（財務データ）
-   * テクニカル分析（チャート指標）
-   * 機械学習（ML予測モデル）
-3. **検証**: `backtest` スクリプトでシグナルを検証
-4. **分析**: 結果の詳細分析とパフォーマンス評価
-
-操作をまとめた簡易 GUI (`gui.py`) に加え、Web 版 (`web.py`) も用意しており、バックテスト結果の Excel は「結果閲覧」タブから確認できます。
-
-## 定期実行
-
-`scheduler.py` を起動しておくと株価や決算情報の取得を自動化できます。
-必要なライブラリは `requirements.txt` からインストールできます。
-
-```bash
-python scheduler.py
-```
-
-デフォルトでは毎日 20:00 に日足株価、20:30 に決算情報を取得し、
-月曜 6:00 に上場銘柄情報を更新します。
-
-## プロジェクト構造
-
-```text
-swing/
-├── fetch/          # データ取得モジュール
-├── screening/      # スクリーニングアルゴリズム
-├── backtest/       # バックテストエンジン
-├── db/             # データベース管理
-├── templates/      # Webインターフェイステンプレート
-├── tests/          # テストスイート
-├── gui.py          # デスクトップGUI
-├── web.py          # WebインターフェイスUI
-├── scheduler.py    # 自動実行スケジューラ
-└── config.py       # 設定管理
-```
-
-## 貢献
-
-プルリクエストを歓迎します。大きな変更の場合は、まずissueを開いて変更内容について議論してください。
-
-詳細な開発ガイドラインは [DEVELOPMENT.md](DEVELOPMENT.md) を参照してください。
+本ツールは情報提供を目的としており、投資判断は自己責任でお願いします。

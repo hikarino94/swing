@@ -30,7 +30,9 @@ import json
 import logging
 import sqlite3
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
@@ -38,7 +40,7 @@ import requests
 from requests import Response, Session
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH, config  # noqa: E402
+from src.config import config, get_db_path  # noqa: E402
 
 API_URL = config.get_api_endpoint("daily_quotes")
 RATE_SLEEP = config.api_rate_limit_sleep
@@ -68,6 +70,37 @@ _PRICE_COLS = [
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+
+class RateLimiter:
+    """APIレート制限を管理するクラス（3リクエスト/秒）"""
+
+    def __init__(self, max_per_second: int = 3):
+        self.max_per_second = max_per_second
+        self.lock = threading.Lock()
+        self.last_request_times: list[float] = []
+
+    def wait_if_needed(self) -> None:
+        """必要に応じて待機してレート制限を守る"""
+        with self.lock:
+            now = time.time()
+            # 1秒以内のリクエストタイムスタンプを保持
+            self.last_request_times = [
+                t for t in self.last_request_times if now - t < 1.0
+            ]
+
+            if len(self.last_request_times) >= self.max_per_second:
+                # レート制限に達している場合は待機
+                sleep_time = 1.0 - (now - self.last_request_times[0]) + 0.01
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+                    now = time.time()
+                    # 古いタイムスタンプを削除
+                    self.last_request_times = [
+                        t for t in self.last_request_times if now - t < 1.0
+                    ]
+
+            self.last_request_times.append(time.time())
 
 
 def _load_token() -> str:
@@ -146,6 +179,70 @@ def _by_code(sess: Session, tok: str, code: str) -> pd.DataFrame:
     return _fetch_all(sess, {"code": code}, tok)
 
 
+def _fetch_date_with_limiter(
+    args: tuple[dt.date, str, RateLimiter],
+) -> tuple[dt.date, pd.DataFrame | None, str | None]:
+    """レート制限付きで指定日の株価を取得（並列実行用）"""
+    date, token, rate_limiter = args
+    error_msg = None
+
+    try:
+        with requests.Session() as sess:
+            rate_limiter.wait_if_needed()
+            df = _by_date(sess, token, date)
+            return date, df, None
+    except requests.HTTPError as exc:
+        error_msg = str(exc)
+        return date, None, error_msg
+    except Exception as exc:
+        error_msg = f"Unexpected error: {exc}"
+        return date, None, error_msg
+
+
+def fetch_dates_parallel(
+    dates: list[dt.date], token: str, max_workers: int = 3
+) -> tuple[list[pd.DataFrame], list[tuple[dt.date, str]]]:
+    """複数日付の株価を並列で取得
+
+    Returns:
+        tuple: (成功したDataFrameのリスト, 失敗した(日付, エラーメッセージ)のリスト)
+    """
+    rate_limiter = RateLimiter(max_per_second=3)
+    successful_dfs = []
+    failed_dates = []
+
+    # 並列実行用の引数を準備
+    args_list = [(d, token, rate_limiter) for d in dates]
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # 全てのタスクを投入
+        futures = {
+            executor.submit(_fetch_date_with_limiter, args): args[0]
+            for args in args_list
+        }
+
+        # 完了順に結果を処理
+        for future in as_completed(futures):
+            date = futures[future]
+            try:
+                result_date, df, error_msg = future.result()
+
+                if error_msg:
+                    logger.error("%s のデータ取得エラー: %s", result_date, error_msg)
+                    failed_dates.append((result_date, error_msg))
+                elif df is not None and not df.empty:
+                    logger.info("%s のデータ取得完了", result_date)
+                    successful_dfs.append(df)
+                else:
+                    logger.info("%s: データなし（休場）", result_date)
+
+            except Exception as exc:
+                logger.error("%s の処理中に予期しないエラー: %s", date, exc)
+                failed_dates.append((date, str(exc)))
+
+    return successful_dfs, failed_dates
+
+
 # ---------------------------------------------------------------------------
 # dataframe utils
 # ---------------------------------------------------------------------------
@@ -175,25 +272,36 @@ def _norm(df: pd.DataFrame) -> pd.DataFrame:
         "AdjustmentVolume": "adj_volume",
     }
     df = df.rename(columns=rename)
-    num = [
+
+    # メモリ効率を考慮したデータ型の最適化
+    # カテゴリ型を使用してメモリ削減
+    if "code" in df.columns:
+        df["code"] = df["code"].astype("category")
+
+    # 価格データをfloat32に最適化（精度は十分）
+    float32_cols = [
         "open",
         "high",
         "low",
         "close",
         "upper_limit",
         "lower_limit",
-        "volume",
-        "turnover_value",
-        "adj_factor",
         "adj_open",
         "adj_high",
         "adj_low",
         "adj_close",
-        "adj_volume",
+        "adj_factor",
     ]
-    for c in num:
+    for c in float32_cols:
         if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
+            df[c] = pd.to_numeric(df[c], errors="coerce").astype("float32")
+
+    # ボリュームデータの整数型最適化
+    int_cols = ["volume", "turnover_value", "adj_volume"]
+    for c in int_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce", downcast="integer")
+
     # Store dates as YYYY-MM-DD in the DB
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
     return df[[c for c in _PRICE_COLS if c in df.columns]]
@@ -202,6 +310,21 @@ def _norm(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # SQLite
 # ---------------------------------------------------------------------------
+
+
+def _get_optimized_connection() -> sqlite3.Connection:
+    """最適化されたSQLite接続を取得する。
+
+    パフォーマンス向上のためのPRAGMA設定を適用します。
+    """
+    conn = sqlite3.connect(get_db_path())
+
+    # パフォーマンス最適化設定
+    conn.execute("PRAGMA cache_size = -64000")  # 64MBのキャッシュ
+    conn.execute("PRAGMA temp_store = MEMORY")  # 一時データをメモリに保存
+    conn.execute("PRAGMA mmap_size = 268435456")  # 256MBのメモリマップI/O
+
+    return conn
 
 
 def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
@@ -226,8 +349,8 @@ def _upsert(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
 def fetch_and_load(start: str | None, end: str | None) -> None:
     """Fetch quotes from the API and load them into SQLite."""
     tok = _load_token()
-    sess = requests.Session()
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_optimized_connection()  # 最適化された接続を使用
+
     try:
         if start or end:
             s = (
@@ -236,34 +359,69 @@ def fetch_and_load(start: str | None, end: str | None) -> None:
                 else dt.date.today()
             )
             e = dt.datetime.strptime(end, "%Y-%m-%d").date() if end else dt.date.today()
-            for d in _daterange(s, e):
-                df = _by_date(sess, tok, d)
-                if df.empty:
-                    logger.info("%s: データなし（休場）", d)
-                    continue
-                logger.info("%s のデータ取得", d)
-                _upsert(conn, _norm(df))
+
+            all_dates = _daterange(s, e)
+            logger.info("%d日分のデータを並列で取得開始", len(all_dates))
+
+            # 日付のバッチ処理（100日ずつ）
+            for i in range(0, len(all_dates), 100):
+                batch_dates = all_dates[i : i + 100]
+
+                # 並列でデータ取得
+                successful_dfs, failed_list = fetch_dates_parallel(batch_dates, tok)
+
+                # 成功したデータをデータベースに保存
+                if successful_dfs:
+                    conn.execute("BEGIN")
+                    # 各DataFrameを正規化してから結合
+                    normalized_dfs = [_norm(df) for df in successful_dfs]
+                    combined_df = pd.concat(normalized_dfs, ignore_index=True)
+                    _upsert(conn, combined_df)
+                    conn.commit()
+                    logger.info("%d日分のデータをコミットしました", len(successful_dfs))
+
+                # 失敗した日付を記録
+                if failed_list:
+                    for date, error in failed_list:
+                        logger.warning("%s: %s", date, error)
+
         else:
             today = dt.date.today()
             logger.info("本日 %s", today)
-            df_today = _norm(_by_date(sess, tok, today))
-            _upsert(conn, df_today)
 
-            # 空のDataFrameの場合は株式分割チェックをスキップ
-            if not df_today.empty:
-                splits = df_today.loc[
-                    df_today["adj_factor"].fillna(1.0) != 1.0,
-                    "code",
-                ].unique()
-                for c in splits:
-                    logger.info("株式分割検出 %s → 全履歴取得", c)
-                    _upsert(conn, _norm(_by_code(sess, tok, c)))
-    except requests.HTTPError as exc:
-        conn.commit()
-        logger.error("API error: %s", exc)
+            try:
+                with requests.Session() as sess:
+                    conn.execute("BEGIN")
+                    df_today = _norm(_by_date(sess, tok, today))
+                    _upsert(conn, df_today)
+
+                    # 空のDataFrameの場合は株式分割チェックをスキップ
+                    if not df_today.empty:
+                        splits = df_today.loc[
+                            df_today["adj_factor"].fillna(1.0) != 1.0,
+                            "code",
+                        ].unique()
+                        for c in splits:
+                            logger.info("株式分割検出 %s → 全履歴取得", c)
+                            try:
+                                _upsert(conn, _norm(_by_code(sess, tok, c)))
+                            except requests.HTTPError as exc:
+                                logger.error("株式分割データ取得エラー %s: %s", c, exc)
+                                # 個別エラーは無視して処理を継続
+
+                    conn.commit()
+            except requests.HTTPError as exc:
+                logger.error("本日のデータ取得エラー: %s", exc)
+                # エラーが発生しても正常終了
+
+    except Exception as exc:
+        # 予期しないエラーの場合のみロールバック
+        try:
+            conn.rollback()
+        except Exception:
+            pass  # nosec B110 - ロールバックのエラーは無視
+        logger.error("予期しないエラー: %s", exc)
         raise
-    else:
-        conn.commit()
     finally:
         conn.close()
     logger.info("完了")

@@ -20,7 +20,6 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from config import DB_PATH
 from screening.screen_ml import (
     FUTURE_WINDOW,
     NUMERIC_STMT_COLS,
@@ -31,6 +30,8 @@ from screening.screen_ml import (
     _merge_features,
     _train_model,
 )
+from src.config import get_db_path
+from src.utils.file_utils import get_timestamped_output_path
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
@@ -42,9 +43,10 @@ logger = logging.getLogger("backtest_ml")
 # ---------------------------------------------------------------------------
 
 
-def _result_paths(prefix: str) -> tuple[str, str]:
-    ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}_{ts}.xlsx", f"{prefix}_{ts}.json"
+def _result_paths(prefix: str) -> tuple[Path, Path]:
+    excel_path = get_timestamped_output_path("backtest", prefix, ".xlsx")
+    json_path = get_timestamped_output_path("backtest", prefix, ".json")
+    return excel_path, json_path
 
 
 def _fetch_price_range(con: sqlite3.Connection, start: str, end: str) -> pd.DataFrame:
@@ -187,13 +189,21 @@ def show_results(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
         print(chart)
 
 
-def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str) -> None:
+def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: Path | str) -> None:
     with pd.ExcelWriter(path, engine="xlsxwriter") as writer:
         trades.to_excel(writer, sheet_name="trades", index=False)
         summary.to_excel(writer, sheet_name="summary", index=False)
         sheet = writer.sheets["trades"]
         for i, col in enumerate(trades.columns):
-            width = max(10, int(trades[col].astype(str).str.len().max() * 1.1))
+            if len(trades) > 0:
+                # 列の最大文字数を計算（NaNをチェック）
+                max_len = trades[col].astype(str).str.len().max()
+                if pd.notna(max_len):
+                    width = max(10, int(max_len * 1.1))
+                else:
+                    width = 15  # デフォルト幅
+            else:
+                width = 15  # DataFrameが空の場合のデフォルト幅
             sheet.set_column(i, i, width)
 
 
@@ -205,7 +215,7 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str) -> None:
 def parse_args(args=None):
     """コマンドライン引数をパース"""
     parser = argparse.ArgumentParser(description="ML back-test")
-    parser.add_argument("--db", default=DB_PATH, help="SQLite DB path")
+    parser.add_argument("--db", default=get_db_path(), help="SQLite DB path")
     parser.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     parser.add_argument("--end", help="End date YYYY-MM-DD")
     parser.add_argument("--top", type=int, default=10, help="Top N picks per day")
@@ -216,8 +226,10 @@ def parse_args(args=None):
         "--lookback", type=int, default=1095, help="Lookback days for training"
     )
     default_xlsx, default_json = _result_paths("ml")
-    parser.add_argument("--outfile", default=default_xlsx, help="Excel output")
-    parser.add_argument("--json", default=default_json, help="JSON output")
+    parser.add_argument(
+        "--outfile", type=Path, default=default_xlsx, help="Excel output"
+    )
+    parser.add_argument("--json", type=Path, default=default_json, help="JSON output")
     parser.add_argument("--show", action="store_true", help="Show summary on stdout")
     return parser.parse_args(args)
 
@@ -236,8 +248,8 @@ def main():
         lookback=args.lookback,
     )
     summary = summarize(trades)
-    to_excel(trades, summary, args.outfile)
-    trades.to_json(args.json, orient="records", force_ascii=False)
+    to_excel(trades, summary, str(args.outfile))
+    trades.to_json(str(args.json), orient="records", force_ascii=False)
     logger.info("Excel exported → %s", args.outfile)
     logger.info("JSON exported → %s", args.json)
     if args.show:

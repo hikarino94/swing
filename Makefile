@@ -20,10 +20,14 @@ help:
 	@echo "  make fetch-all     - 全データを取得"
 	@echo "  make backtest-all  - 全バックテストを実行"
 	@echo "  make pre-commit    - pre-commitフックを実行"
+	@echo "  make update-token  - J-Quants認証トークンを更新"
+	@echo "  make run-scheduler - スケジューラーを起動"
+	@echo "  make run-gui       - GUIアプリケーションを起動"
+	@echo "  make run-web       - Webサーバーを起動"
 
 # 環境構築
 setup:
-	python3 setup_environment.py
+	python3 scripts/setup_environment.py
 
 # 依存関係のインストール
 install:
@@ -110,16 +114,16 @@ pre-commit:
 
 # トークン更新
 update-token:
-	python3 update_idtoken.py
+	python3 src/cli/update_idtoken.py
 
 # スケジューラー起動
 run-scheduler:
-	python3 scheduler.py
+	python3 -m src.cli.scheduler
 
 # GUI起動
 run-gui:
-	python3 gui.py
+	python3 -m src.ui.legacy.gui
 
 # Webサーバー起動
 run-web:
-	python3 web.py
+	python3 -m src.ui.web

@@ -34,7 +34,7 @@ import requests
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from config import DB_PATH, config  # noqa: E402
+from src.config import config, get_db_path  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Config & logging
@@ -149,7 +149,7 @@ def _to_db(df: pd.DataFrame, conn: sqlite3.Connection) -> None:
 
 
 def update_listed_info() -> None:
-    db_path = Path(DB_PATH).expanduser().resolve()
+    db_path = Path(get_db_path()).expanduser().resolve()
     idtoken = _load_token()
 
     logger.info("上場銘柄情報を取得中 …")

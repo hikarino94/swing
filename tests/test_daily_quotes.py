@@ -34,7 +34,7 @@ class TestHelpers:
         token_file = tmp_path / "idtoken.json"
         token_file.write_text('{"idToken": "test_token_123"}')
 
-        with mock.patch("config.config.get_file_path") as mock_path:
+        with mock.patch("src.config.config.get_file_path") as mock_path:
             mock_path.return_value = token_file
             token = daily_quotes._load_token()
             assert token == "test_token_123"
@@ -44,7 +44,7 @@ class TestHelpers:
         token_file = tmp_path / "idtoken.json"
         token_file.write_text("{}")
 
-        with mock.patch("config.config.get_file_path") as mock_path:
+        with mock.patch("src.config.config.get_file_path") as mock_path:
             mock_path.return_value = token_file
             with pytest.raises(RuntimeError, match="idToken not found"):
                 daily_quotes._load_token()
@@ -353,7 +353,7 @@ class TestIntegration:
             ]
         )
 
-        with mock.patch("fetch.daily_quotes.DB_PATH", test_db):
+        with mock.patch("fetch.daily_quotes.get_db_path", return_value=test_db):
             daily_quotes.fetch_and_load(None, None)
 
         # 株式分割銘柄の全履歴が取得されたか確認
@@ -392,7 +392,7 @@ class TestIntegration:
 
         mock_by_date.side_effect = mock_data
 
-        with mock.patch("fetch.daily_quotes.DB_PATH", test_db):
+        with mock.patch("fetch.daily_quotes.get_db_path", return_value=test_db):
             daily_quotes.fetch_and_load("2024-01-01", "2024-01-07")
 
         # 平日5日分のAPI呼び出しを確認

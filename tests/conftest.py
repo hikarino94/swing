@@ -6,7 +6,12 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 
+import pandas as pd
 import pytest
+
+# テスト用の環境変数を設定
+os.environ["TESTING"] = "1"
+os.environ["FLASK_ENV"] = "testing"
 
 
 @pytest.fixture
@@ -41,13 +46,23 @@ def temp_db() -> Generator[Path, None, None]:
 
         CREATE TABLE IF NOT EXISTS listed_info (
             code TEXT PRIMARY KEY,
+            date TEXT,
             company_name TEXT,
+            company_name_en TEXT,
+            sector17_code TEXT,
+            sector17_name TEXT,
+            sector33_code TEXT,
             sector33_name TEXT,
+            scale_category TEXT,
+            market_code TEXT,
+            market_name TEXT,
+            margin_code TEXT,
+            margin_name TEXT,
             delete_flag INTEGER DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS statements (
-            LocalCode TEXT,
+            Code TEXT,
             DisclosureNumber TEXT PRIMARY KEY,
             DisclosedDate TEXT,
             NetSales REAL,
@@ -63,6 +78,178 @@ def temp_db() -> Generator[Path, None, None]:
 
     # クリーンアップ
     os.unlink(db_path)
+
+
+@pytest.fixture
+def authenticated_client(tmp_path):
+    """認証済みのテストクライアント"""
+    # テスト用の一時データベースパスを設定
+    test_db_path = tmp_path / "test_stock.db"
+    os.environ["DATABASE_PATH"] = str(test_db_path)
+
+    from werkzeug.security import generate_password_hash
+
+    from src.ui.web import app
+
+    app.config["TESTING"] = True
+    app.config["WTF_CSRF_ENABLED"] = False
+
+    with app.test_client() as client:
+        # テスト用データベースを初期化
+        from db.db_schema import init_schema
+
+        init_schema(test_db_path)
+
+        # テストユーザーを作成
+        conn = sqlite3.connect(test_db_path)
+        cursor = conn.cursor()
+
+        # 既存のユーザーを削除（念のため）
+        cursor.execute("DELETE FROM users WHERE email = ?", ("test@example.com",))
+
+        cursor.execute(
+            """
+            INSERT INTO users (username, email, password_hash, role)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                "testuser",
+                "test@example.com",
+                generate_password_hash("testpass123"),
+                "admin",
+            ),
+        )
+        user_id = cursor.lastrowid
+
+        # セッションを作成
+        session_id = "test-session-id"
+        cursor.execute(
+            """
+            INSERT INTO sessions (id, user_id, expires_at)
+            VALUES (?, ?, datetime('now', '+1 day'))
+            """,
+            (session_id, user_id),
+        )
+        conn.commit()
+        conn.close()
+
+        # セッションクッキーを設定
+        with client.session_transaction() as sess:
+            sess["session_id"] = session_id
+            sess["_user_id"] = str(user_id)
+
+        yield client
+
+
+@pytest.fixture
+def sample_prices_df():
+    """テスト用の価格データフレーム"""
+    return pd.DataFrame(
+        {
+            "code": ["1234", "1234", "1234", "5678", "5678"],
+            "date": [
+                "2024-01-01",
+                "2024-01-02",
+                "2024-01-03",
+                "2024-01-01",
+                "2024-01-02",
+            ],
+            "open": [100.0, 101.0, 102.0, 200.0, 201.0],
+            "high": [105.0, 106.0, 107.0, 205.0, 206.0],
+            "low": [95.0, 96.0, 97.0, 195.0, 196.0],
+            "close": [102.0, 103.0, 104.0, 202.0, 203.0],
+            "volume": [10000, 11000, 12000, 20000, 21000],
+            "adjustment_close": [102.0, 103.0, 104.0, 202.0, 203.0],
+        }
+    )
+
+
+@pytest.fixture
+def sample_statements_df():
+    """テスト用の財務諸表データフレーム"""
+    return pd.DataFrame(
+        {
+            "code": ["1234", "1234", "5678"],
+            "disclosure_date": ["2024-01-10", "2023-10-10", "2024-01-10"],
+            "type_of_document": ["1Q", "3Q", "1Q"],
+            "net_sales": [1000000, 900000, 2000000],
+            "operating_profit": [100000, 90000, 200000],
+            "ordinary_profit": [110000, 95000, 210000],
+            "profit_attributable_to_owners_of_parent": [80000, 70000, 150000],
+            "total_assets": [5000000, 4500000, 8000000],
+            "net_assets": [2000000, 1800000, 3000000],
+            "equity_to_asset_ratio": [0.4, 0.4, 0.375],
+            "book_value_per_share": [200.0, 180.0, 300.0],
+        }
+    )
+
+
+@pytest.fixture
+def mock_jquants_response():
+    """J-Quants APIレスポンスのモック"""
+
+    def _create_response(data_type):
+        if data_type == "daily_quotes":
+            return {
+                "daily_quotes": [
+                    {
+                        "Code": "1234",
+                        "Date": "2024-01-01",
+                        "Open": 100,
+                        "High": 105,
+                        "Low": 95,
+                        "Close": 102,
+                        "Volume": 10000,
+                        "TurnoverValue": 1020000,
+                        "AdjustmentFactor": 1.0,
+                        "AdjustmentOpen": 100,
+                        "AdjustmentHigh": 105,
+                        "AdjustmentLow": 95,
+                        "AdjustmentClose": 102,
+                        "AdjustmentVolume": 10000,
+                    }
+                ]
+            }
+        elif data_type == "listed_info":
+            return {
+                "info": [
+                    {
+                        "Code": "1234",
+                        "CompanyName": "テスト会社",
+                        "CompanyNameEnglish": "Test Company",
+                        "Sector17Code": "1",
+                        "Sector17CodeName": "食品",
+                        "Sector33Code": "1050",
+                        "Sector33CodeName": "電気機器",
+                        "ScaleCategory": "TOPIX Core30",
+                        "MarketCode": "0111",
+                        "MarketCodeName": "プライム",
+                    }
+                ]
+            }
+        elif data_type == "statements":
+            return {
+                "statements": [
+                    {
+                        "Code": "1234",
+                        "DisclosureDate": "2024-01-10",
+                        "TypeOfDocument": "1Q",
+                        "NetSales": 1000000,
+                        "OperatingProfit": 100000,
+                        "OrdinaryProfit": 110000,
+                        "ProfitAttributableToOwnersOfParent": 80000,
+                        "TotalAssets": 5000000,
+                        "NetAssets": 2000000,
+                        "EquityToAssetRatio": 0.4,
+                        "BookValuePerShare": 200.0,
+                    }
+                ]
+            }
+        elif data_type == "idtoken":
+            return {"idToken": "test_id_token_12345"}
+        return {}
+
+    return _create_response
 
 
 @pytest.fixture

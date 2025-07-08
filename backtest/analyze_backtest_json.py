@@ -19,10 +19,35 @@ RET_COLUMNS = ["ret_pct", "pnl_pct"]
 
 
 def load_trades(paths: list[str]) -> pd.DataFrame:
-    """Load trade records from JSON files and concatenate them."""
+    """Load trade records from JSON files and concatenate them.
+
+    Paths can be:
+    - Absolute paths
+    - Relative paths from current directory
+    - Just filenames (will search in data/output/backtest/)
+    """
     frames = []
     for p in paths:
-        df = pd.read_json(Path(p))
+        path = Path(p)
+
+        # If the file doesn't exist and it's just a filename, try data/output/backtest/
+        if not path.exists() and not path.is_absolute() and path.parent == Path("."):
+            # Try in the default backtest output directory
+            default_path = Path("data/output/backtest") / path.name
+            if default_path.exists():
+                path = default_path
+            else:
+                # If still not found, raise an error with helpful message
+                print(f"Error: File '{p}' not found.")
+                print(f"Tried: {path.absolute()} and {default_path.absolute()}")
+                print("\nAvailable backtest files:")
+                backtest_dir = Path("data/output/backtest")
+                if backtest_dir.exists():
+                    for f in sorted(backtest_dir.glob("*.json")):
+                        print(f"  {f.name}")
+                raise FileNotFoundError(f"File {p} not found")
+
+        df = pd.read_json(path)
         frames.append(df)
     if not frames:
         return pd.DataFrame()

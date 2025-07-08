@@ -3,6 +3,7 @@
 ## 重要な指示
 
 - 常に日本語で会話する
+- プランの提案についても日本語で行うこと
 - コミットは日本語で実施する
 - 修正した箇所は初心者でもわかりやすいように説明してください
 - コードの変更理由と効果を具体的に説明してください
@@ -16,8 +17,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A Python-based Japanese stock market analysis toolkit using J-Quants API data. The project provides:
 - Stock screening (fundamental, technical, ML-based)
 - Backtesting capabilities
-- Both GUI (Tkinter) and web (Flask) interfaces
+- Modern web interface (Flask) with tabbed UI
+- Legacy GUI interface (Tkinter) - maintained for compatibility
 - Automated data fetching and scheduling
+- Excel export functionality for screening and backtest results
 
 ## Core Commands
 
@@ -54,7 +57,7 @@ pytest --cov=. --cov-report=html --cov-report=term
 python db/db_summary.py
 
 # Update J-Quants authentication token
-python update_idtoken.py
+python src/cli/update_idtoken.py [--mail EMAIL] [--password PASSWORD]
 
 # Fetch daily stock quotes
 python fetch/daily_quotes.py [--start YYYY-MM-DD] [--end YYYY-MM-DD]
@@ -79,25 +82,53 @@ python backtest/backtest_technical.py [--hold-days DAYS] [--capital AMOUNT] [--s
 python backtest/backtest_ml.py [--top N] [--capital AMOUNT] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--show]
 
 # Analyze backtest results
-python backtest/analyze_backtest_json.py result.json [--show-trades] [--side long|short]
+python -m backtest.analyze_backtest_json result.json [--show-trades] [--side long|short]
 
-# Start GUI
-python gui.py
+# Start web interface (Recommended)
+python -m src.ui.web
+# Access at http://localhost:5000
 
-# Start web interface
-python web.py
+# Start GUI (Legacy - for compatibility)
+python -m src.ui.legacy.gui
 
 # Start scheduler for automated data updates
-python scheduler.py
+python -m src.cli.scheduler
+
+# View logs (command line)
+python scripts/log_viewer.py list                         # ログファイル一覧
+python scripts/log_viewer.py view scheduler.log           # ログファイル表示
+python scripts/log_viewer.py tail scheduler.log -n 100    # 末尾100行表示
+python scripts/log_viewer.py tail scheduler.log -f        # リアルタイム追跡
+python scripts/log_viewer.py search ERROR                 # エラーログ検索
 ```
 
 ## Architecture & Data Flow
+
+### Project Structure
+```
+swing/
+├── src/
+│   ├── cli/          # Command-line interfaces (scheduler, update_idtoken)
+│   ├── config/       # Configuration management
+│   ├── ui/           # User interfaces
+│   │   ├── web.py    # Modern Flask web UI
+│   │   └── legacy/   # Legacy Tkinter GUI
+│   └── utils/        # Utility functions (file handling, logging)
+├── fetch/            # Data acquisition from J-Quants API
+├── db/               # SQLite database management and schema
+├── screening/        # Stock filtering algorithms
+├── backtest/         # Strategy validation and performance
+├── templates/        # Flask web interface HTML templates
+├── tests/            # Test suite
+└── scripts/          # Utility scripts (log viewer)
+```
 
 ### Core Modules
 - **`fetch/`**: Data acquisition from J-Quants API (daily_quotes, listed_info, statements)
 - **`db/`**: SQLite database management and schema (stock.db with WAL mode)
 - **`screening/`**: Stock filtering algorithms (fundamental, technical, ML-based)
 - **`backtest/`**: Strategy validation and performance analysis
+- **`src/ui/web.py`**: Modern web interface with Excel export support
 - **`templates/`**: Flask web interface templates
 
 ### Database Tables
@@ -108,11 +139,11 @@ python scheduler.py
 - `technical_indicators`: Technical analysis signals (複数指標のフラグ付き)
 
 ### Configuration Files
-- `account.json`: J-Quants API credentials (mail/password)
-- `login.json`: Web app authentication (optional, falls back to account.json)
-- `idtoken.json`: J-Quants API token (auto-generated)
+- `config/account.json`: J-Quants API credentials (mail/password)
+- `config/login.json`: Web app authentication (optional, falls back to account.json)
+- `config/idtoken.json`: J-Quants API token (auto-generated)
 - `screening/thresholds.json`: Screening parameter configuration
-- `config.json`: General application configuration
+- `config/config.json`: General application configuration
 - `pyproject.toml`: Project metadata and tool configuration
 
 ### Typical Workflow
@@ -126,7 +157,7 @@ python scheduler.py
 - **Black**: Code formatting
 - **Pre-commit hooks**: Enforced on every commit
 - **Testing**: Comprehensive test suite using pytest (tests/ directory)
-- **Coverage**: テストカバレッジレポート生成 (htmlcov/)
+- **Coverage**: テストカバレッジレポート生成 (tests/reports/htmlcov/)
 
 ### Key Dependencies
 - pandas: Data manipulation
@@ -141,12 +172,32 @@ python scheduler.py
 
 ## Important Notes
 
-- All sensitive files (\*.json credentials, \*.db) are in .gitignore
+- All sensitive files (config/\*.json credentials, \*.db) are in .gitignore
 - Scheduler runs daily at 20:00 (quotes), 20:30 (statements), Monday 6:00 (listed info)
-- Results are timestamped and saved as both Excel and JSON formats
+- Results are timestamped and saved to data/output/ as both Excel and JSON formats
 - Database uses SQLite with WAL mode for concurrent access
 - Supports both long and short trading strategies in backtests
 - Test suite includes comprehensive unit and integration tests
-- ML models are saved as pickle files (db/ml_screen_model.pkl)
+- ML models are saved as pickle files (db/models/ml_screen_model.pkl)
 - Web app supports password hashing for secure authentication
 - Backtesting supports various parameters: stop-loss, holding period, capital allocation
+- Web UI automatically generates Excel files for screening results (no --xlsx parameter needed)
+- NumPy warnings are suppressed at the environment level for cleaner output
+
+## 改善計画
+
+詳細な改善提案と実装計画は `IMPROVEMENT_PLAN.md` を参照してください。主な改善点：
+
+1. **テストカバレッジの向上**（現在5% → 目標80%）
+2. **セキュリティ強化**（環境変数の使用、認証情報の適切な管理）
+3. **パフォーマンス最適化**（pandas操作のベクトル化）
+4. **エラーハンドリングとログの統一化**
+5. **ドキュメントの充実**（APIリファレンス、アーキテクチャ設計書）
+
+### 最近の改善
+- ディレクトリ構成の最適化（srcディレクトリ配下への整理）
+- モダンなWeb UIの実装（タブ型インターフェース）
+- スクリーニング結果のExcel出力機能の改善
+- テストスイートの包括的な整備
+
+改善作業を行う際は、必ず `IMPROVEMENT_PLAN.md` の該当セクションを確認し、実装タスクと優先順位に従って作業してください。

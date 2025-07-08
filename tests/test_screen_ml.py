@@ -59,7 +59,7 @@ def ml_db():
     conn.execute(
         """
         CREATE TABLE statements (
-            LocalCode TEXT,
+            code TEXT,
             DisclosedDate DATE,
             NetSales REAL,
             OperatingProfit REAL,
@@ -152,7 +152,7 @@ class TestDatabaseHelpers:
         df = screen_ml._fetch_stmt(conn)
 
         assert not df.empty
-        assert "code" in df.columns  # LocalCode → code にリネームされているはず
+        assert "code" in df.columns  # codeカラムが存在することを確認
         assert "NetSales" in df.columns
         assert len(df) == 2
 
@@ -473,10 +473,8 @@ class TestIntegration:
         conn.commit()
         conn.close()
 
-    @mock.patch("screening.screen_ml.DB_PATH")
-    def test_train_command(self, mock_db_path, ml_db, tmp_path):
+    def test_train_command(self, ml_db, tmp_path):
         """trainコマンドの統合テスト"""
-        mock_db_path.__str__.return_value = ml_db
         model_path = tmp_path / "ml_screen_model.pkl"
 
         # テストデータ作成

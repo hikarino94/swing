@@ -3,6 +3,7 @@ account.json
 idtoken.json
 config.json
 login.json
+.secret_key
 
 # データベースファイル
 *.db
@@ -91,3 +92,6 @@ output/
 # その他
 .env
 .env.*
+
+# 開発ツール
+dev_tools/

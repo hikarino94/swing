@@ -16,14 +16,15 @@ import argparse
 import logging
 import sqlite3
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from config import DB_PATH  # noqa: E402
 from screening.thresholds import (  # noqa: E402
     ADX_THRESHOLD,
     FIRST_LOOKBACK_DAYS,
@@ -34,11 +35,16 @@ from screening.thresholds import (  # noqa: E402
     SIGNAL_COUNT_MIN,
     log_thresholds,
 )
+from src.config import get_db_path  # noqa: E402
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
 logger = logging.getLogger("screen_technical")
 log_thresholds(logger)
+
+# 並列処理の設定
+MAX_WORKERS = 4  # NumPyのGILを考慮してワーカー数を抑える
+BATCH_SIZE = 100  # バッチ挿入のサイズ
 
 # Price history to load for indicator calculation
 # Holidays can create gaps, so keep roughly 80 days of data
@@ -48,6 +54,7 @@ PRICE_LOOKBACK_DAYS = 80
 
 
 def compute_indicators(df):
+    """単一銘柄のテクニカル指標を計算"""
     df = df.copy()
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df = df.dropna(subset=["date"]).sort_values("date").set_index("date")
@@ -167,8 +174,49 @@ def compute_indicators(df):
     return flags
 
 
+def compute_indicators_parallel(code_groups, max_workers=MAX_WORKERS):
+    """複数銘柄のテクニカル指標を並列計算"""
+    results = []
+
+    def process_code(code, group):
+        try:
+            result = compute_indicators(group)
+            if not result.empty:
+                result["code"] = code
+                return result
+        except Exception as e:
+            logger.warning(f"銘柄 {code} の処理中にエラー: {e}")
+        return None
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {}
+        for code, group in code_groups:
+            future = executor.submit(process_code, code, group)
+            futures[future] = code
+
+        for future in as_completed(futures):
+            result = future.result()
+            if result is not None:
+                results.append(result)
+
+            # 進捗状況のログ出力（100銘柄ごと）
+            if len(results) % 100 == 0 and len(results) > 0:
+                logger.info(f"  処理中: {len(results)}/{len(code_groups)} 銘柄完了")
+
+    return results
+
+
 # --- Run indicators ---------------------------------------------------------
-def run_indicators(conn, as_of=None):
+def run_indicators(conn, as_of=None, use_parallel=True, max_workers=MAX_WORKERS):
+    """
+    テクニカル指標を計算してデータベースに保存
+
+    Args:
+        conn: データベース接続
+        as_of: 計算対象日（YYYY-MM-DD）
+        use_parallel: 並列処理を使用するかどうか
+        max_workers: 並列処理のワーカー数
+    """
     if not as_of:
         as_of = datetime.today().strftime("%Y-%m-%d")
     cnt = conn.execute("SELECT COUNT(*) FROM prices WHERE date=?", (as_of,)).fetchone()[
@@ -182,16 +230,25 @@ def run_indicators(conn, as_of=None):
     ).strftime("%Y-%m-%d")
 
     # --- Load price data for all target codes in a single query ---
+    logger.info("価格データを読み込み中...")
+    # 必要なカラムのみを選択し、データ型を最適化
     df_price = pd.read_sql(
         """
         SELECT P.code, P.date, P.adj_open, P.adj_high, P.adj_low, P.adj_close
         FROM prices P
         JOIN listed_info L ON P.code = L.code
         WHERE L.market_code != '0109' AND P.date>=? AND P.date<=?
+        ORDER BY P.code, P.date
         """,
         conn,
         params=(start, as_of),
-    ).sort_values(["code", "date"])
+        dtype={
+            "adj_open": np.float32,
+            "adj_high": np.float32,
+            "adj_low": np.float32,
+            "adj_close": np.float32,
+        },
+    )
 
     if df_price.empty:
         logger.info("対象銘柄なし")
@@ -203,18 +260,25 @@ def run_indicators(conn, as_of=None):
     records = []
 
     # 各銘柄ごとにインジケーターを計算
-    results = []
-    processed_count = 0
-    for code, group in df_price.groupby("code"):
-        result = compute_indicators(group)
-        if not result.empty:
-            result["code"] = code
-            results.append(result)
-            processed_count += 1
+    if use_parallel:
+        # 並列処理
+        code_groups = list(df_price.groupby("code"))
+        results = compute_indicators_parallel(code_groups, max_workers)
+        processed_count = len(results)
+    else:
+        # 逐次処理（従来の方法）
+        results = []
+        processed_count = 0
+        for code, group in df_price.groupby("code"):
+            result = compute_indicators(group)
+            if not result.empty:
+                result["code"] = code
+                results.append(result)
+                processed_count += 1
 
-        # 進捗状況のログ出力（100銘柄ごと）
-        if len(results) % 100 == 0 and len(results) > 0:
-            logger.info("  処理中: %d/%d 銘柄完了", len(results), total)
+            # 進捗状況のログ出力（100銘柄ごと）
+            if len(results) % 100 == 0 and len(results) > 0:
+                logger.info("  処理中: %d/%d 銘柄完了", len(results), total)
 
     if not results:
         logger.info("全ての銘柄で計算結果が空でした (処理銘柄数: %d)", total)
@@ -282,16 +346,26 @@ def run_indicators(conn, as_of=None):
     today_flags["signal_date"] = today_flags["signal_date"].dt.strftime("%Y-%m-%d")
     records = today_flags.to_dict("records")
 
-    for rec in records:
-        logger.info(
-            "  → 完了 (signal_date=%s,signals_count=%s,short_count=%s, overheating=%s, oversold=%s)",
-            rec["signal_date"],
-            rec["signals_count"],
-            rec["signals_short_count"],
-            rec["signals_overheating"],
-            rec["signals_oversold"],
-        )
+    # ログ出力を最小限に抑える（サマリーのみ）
     if records:
+        signal_counts = [
+            r["signals_count"]
+            for r in records
+            if r["signals_count"] >= SIGNAL_COUNT_MIN
+        ]
+        short_counts = [
+            r["signals_short_count"]
+            for r in records
+            if r["signals_short_count"] >= SHORT_SIGNAL_COUNT_MIN
+        ]
+        logger.info(
+            "シグナルサマリー: ロング=%d銘柄, ショート=%d銘柄, 全体=%d銘柄",
+            len(signal_counts),
+            len(short_counts),
+            len(records),
+        )
+
+        # バッチ挿入でパフォーマンスを向上
         sql = """INSERT OR REPLACE INTO technical_indicators
             (code, signal_date, signal_ma, signal_rsi,
             signal_adx, signal_bb, signal_macd,
@@ -306,7 +380,11 @@ def run_indicators(conn, as_of=None):
             :signal_bb_short, :signal_macd_short,
             :signals_count, :signals_short_count,
             :signals_overheating, :signals_oversold, :signals_short_first, :signals_first)"""
-        conn.executemany(sql, records)
+
+        # バッチサイズで挿入
+        for i in range(0, len(records), BATCH_SIZE):
+            batch = records[i : i + BATCH_SIZE]
+            conn.executemany(sql, batch)
         conn.commit()
     logger.info("全処理完了")
 
@@ -335,13 +413,24 @@ if __name__ == "__main__":
         description="スイングトレード向けテクニカルシグナルツール"
     )
     parser.add_argument("command", choices=["indicators", "screen"])
-    parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
+    parser.add_argument("--db", default=get_db_path(), help="SQLite DB のパス")
     parser.add_argument("--as-of", help="計算またはスクリーニング対象日 YYYY-MM-DD")
     parser.add_argument(
         "--lookback",
         type=int,
         default=50,
         help="--as-of から遡る日数",
+    )
+    parser.add_argument(
+        "--no-parallel",
+        action="store_true",
+        help="並列処理を無効化（デバッグ用）",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=MAX_WORKERS,
+        help=f"並列処理のワーカー数（デフォルト: {MAX_WORKERS}）",
     )
     args = parser.parse_args()
     conn = sqlite3.connect(args.db)
@@ -355,9 +444,16 @@ if __name__ == "__main__":
             for i in range(back_days + 1):
                 target = (start_date + timedelta(days=i)).strftime("%Y-%m-%d")
                 logger.info("===== 実行日: %s =====", target)
-                run_indicators(conn, target)
+                run_indicators(
+                    conn,
+                    target,
+                    use_parallel=not args.no_parallel,
+                    max_workers=args.workers,
+                )
         else:
             # 日付指定なしなら従来通り最新日だけ処理
-            run_indicators(conn, None)
+            run_indicators(
+                conn, None, use_parallel=not args.no_parallel, max_workers=args.workers
+            )
     else:
         screen_signals(conn, args.as_of)

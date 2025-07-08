@@ -23,13 +23,13 @@ import pytest
 import requests
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-import update_idtoken
+from src.cli import update_idtoken
 
 
 class TestAuthentication:
     """認証機能のテスト"""
 
-    @mock.patch("update_idtoken.requests.post")
+    @mock.patch("src.cli.update_idtoken.requests.post")
     def test_auth_user_success(self, mock_post):
         """ユーザー認証成功のテスト"""
         # モックレスポンス設定
@@ -53,7 +53,7 @@ class TestAuthentication:
         }
         assert call_args[1]["timeout"] == 30
 
-    @mock.patch("update_idtoken.requests.post")
+    @mock.patch("src.cli.update_idtoken.requests.post")
     def test_auth_user_missing_refresh_token(self, mock_post):
         """リフレッシュトークンが含まれていない場合のテスト"""
         mock_response = mock.Mock()
@@ -64,7 +64,7 @@ class TestAuthentication:
         with pytest.raises(RuntimeError, match="refreshToken not found"):
             update_idtoken._auth_user("test@example.com", "wrong_password")
 
-    @mock.patch("update_idtoken.requests.post")
+    @mock.patch("src.cli.update_idtoken.requests.post")
     def test_auth_user_http_error(self, mock_post):
         """HTTP エラーのテスト"""
         mock_response = mock.Mock()
@@ -126,7 +126,7 @@ class TestAccountLoading:
 class TestTokenRefresh:
     """トークンリフレッシュのテスト"""
 
-    @mock.patch("update_idtoken.requests.post")
+    @mock.patch("src.cli.update_idtoken.requests.post")
     def test_get_id_token_success(self, mock_post):
         """IDトークン取得成功のテスト"""
         mock_response = mock.Mock()
@@ -143,7 +143,7 @@ class TestTokenRefresh:
         call_args = mock_post.call_args
         assert call_args[1]["params"] == {"refreshtoken": "test_refresh_token"}
 
-    @mock.patch("update_idtoken.requests.post")
+    @mock.patch("src.cli.update_idtoken.requests.post")
     def test_get_id_token_missing_token(self, mock_post):
         """IDトークンが含まれていない場合のテスト"""
         mock_response = mock.Mock()
@@ -158,8 +158,8 @@ class TestTokenRefresh:
 class TestUpdateFunction:
     """更新機能のテスト"""
 
-    @mock.patch("update_idtoken._get_id_token")
-    @mock.patch("update_idtoken._auth_user")
+    @mock.patch("src.cli.update_idtoken._get_id_token")
+    @mock.patch("src.cli.update_idtoken._auth_user")
     def test_update_success(self, mock_auth, mock_get_token, tmp_path):
         """トークン更新成功のテスト"""
         # モック設定
@@ -220,8 +220,8 @@ class TestCLI:
         assert args.account == "/path/to/account.json"
         assert args.out == "/path/to/idtoken.json"
 
-    @mock.patch("update_idtoken.update")
-    @mock.patch("update_idtoken._load_account")
+    @mock.patch("src.cli.update_idtoken.update")
+    @mock.patch("src.cli.update_idtoken._load_account")
     def test_cli_with_account_file(self, mock_load_account, mock_update):
         """アカウントファイルを使用したCLI実行のテスト"""
         # モック設定
@@ -240,8 +240,8 @@ class TestCLI:
             "test@example.com", "password123", "idtoken.json"
         )
 
-    @mock.patch("update_idtoken.update")
-    @mock.patch("update_idtoken._load_account")
+    @mock.patch("src.cli.update_idtoken.update")
+    @mock.patch("src.cli.update_idtoken._load_account")
     @mock.patch(
         "sys.argv",
         ["update_idtoken.py", "--mail", "test@example.com", "--password", "testpass"],
@@ -265,8 +265,8 @@ class TestCLI:
         )
         mock_load_account.assert_not_called()
 
-    @mock.patch("update_idtoken.update")
-    @mock.patch("update_idtoken._load_account")
+    @mock.patch("src.cli.update_idtoken.update")
+    @mock.patch("src.cli.update_idtoken._load_account")
     def test_cli_function_fallback_to_account_file(
         self, mock_load_account, mock_update
     ):
@@ -296,7 +296,7 @@ class TestCLI:
             "fallback@example.com", "fallbackpass", "idtoken.json"
         )
 
-    @mock.patch("update_idtoken._load_account")
+    @mock.patch("src.cli.update_idtoken._load_account")
     def test_cli_function_missing_credentials_error(self, mock_load_account):
         """認証情報が不足している場合のエラーテスト"""
         mock_load_account.return_value = ("", "", "")
@@ -320,7 +320,7 @@ class TestCLI:
         "sys.argv",
         ["update_idtoken.py", "--mail", "test@example.com", "--password", "testpass"],
     )
-    @mock.patch("update_idtoken.update")
+    @mock.patch("src.cli.update_idtoken.update")
     def test_actual_cli_function_direct_args(self, mock_update):
         """実際の_cli関数の直接引数テスト"""
         mock_update.return_value = "test_token"
@@ -332,8 +332,8 @@ class TestCLI:
         mock_update.assert_called_once_with("test@example.com", "testpass", mock.ANY)
 
     @mock.patch("sys.argv", ["update_idtoken.py", "--account", "test_account.json"])
-    @mock.patch("update_idtoken._load_account")
-    @mock.patch("update_idtoken.update")
+    @mock.patch("src.cli.update_idtoken._load_account")
+    @mock.patch("src.cli.update_idtoken.update")
     def test_actual_cli_function_account_file(self, mock_update, mock_load_account):
         """実際の_cli関数のアカウントファイルテスト"""
         mock_load_account.return_value = ("file@example.com", "filepass", "hash")
@@ -347,7 +347,7 @@ class TestCLI:
         mock_update.assert_called_once_with("file@example.com", "filepass", mock.ANY)
 
     @mock.patch("sys.argv", ["update_idtoken.py"])
-    @mock.patch("update_idtoken._load_account")
+    @mock.patch("src.cli.update_idtoken._load_account")
     def test_actual_cli_function_missing_credentials(self, mock_load_account):
         """実際の_cli関数の認証情報不足エラーテスト"""
         mock_load_account.return_value = ("", "", "")
@@ -362,8 +362,8 @@ class TestCLI:
 class TestIntegration:
     """統合テスト"""
 
-    @mock.patch("update_idtoken._get_id_token")
-    @mock.patch("update_idtoken._auth_user")
+    @mock.patch("src.cli.update_idtoken._get_id_token")
+    @mock.patch("src.cli.update_idtoken._auth_user")
     def test_full_workflow(self, mock_auth, mock_get_token, tmp_path):
         """完全なワークフローのテスト"""
         # アカウントファイル作成
@@ -408,7 +408,7 @@ class TestIntegration:
 class TestErrorHandling:
     """エラー処理のテスト"""
 
-    @mock.patch("update_idtoken.requests.post")
+    @mock.patch("src.cli.update_idtoken.requests.post")
     def test_network_timeout(self, mock_post):
         """ネットワークタイムアウトのテスト"""
         mock_post.side_effect = requests.Timeout("Request timed out")
@@ -416,7 +416,7 @@ class TestErrorHandling:
         with pytest.raises(requests.Timeout):
             update_idtoken._auth_user("test@example.com", "password123")
 
-    @mock.patch("update_idtoken.requests.post")
+    @mock.patch("src.cli.update_idtoken.requests.post")
     def test_api_server_error(self, mock_post):
         """APIサーバーエラーのテスト"""
         mock_response = mock.Mock()

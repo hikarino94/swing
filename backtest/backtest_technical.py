@@ -45,12 +45,13 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 SCREENING_DIR = Path(__file__).resolve().parents[1] / "screening"
 sys.path.append(str(SCREENING_DIR))
 
-from config import DB_PATH  # noqa: E402
 from screening.thresholds import (  # noqa: E402
     SHORT_SIGNAL_COUNT_MIN,
     SIGNAL_COUNT_MIN,
     log_thresholds,
 )
+from src.config import get_db_path  # noqa: E402
+from src.utils.file_utils import get_timestamped_output_path  # noqa: E402
 
 CAPITAL_DEFAULT = 1_000_000
 HOLD_DAYS_DEFAULT = 60
@@ -67,11 +68,11 @@ log_thresholds(logger)
 # ---------------------------------------------------------------------------
 
 
-def _result_paths(prefix: str) -> tuple[str, str]:
+def _result_paths(prefix: str) -> tuple[Path, Path]:
     """Return Excel and JSON file paths with a timestamp."""
-
-    ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}_{ts}.xlsx", f"{prefix}_{ts}.json"
+    excel_path = get_timestamped_output_path("backtest", prefix, ".xlsx")
+    json_path = get_timestamped_output_path("backtest", prefix, ".json")
+    return excel_path, json_path
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +380,7 @@ def show_results(trades: pd.DataFrame, summary: pd.DataFrame) -> None:
         print(chart)
 
 
-def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str) -> None:
+def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: Path | str) -> None:
     """Save trades and summary to an Excel file."""
 
     with pd.ExcelWriter(path, engine="xlsxwriter") as writer:
@@ -389,7 +390,13 @@ def to_excel(trades: pd.DataFrame, summary: pd.DataFrame, path: str) -> None:
         sheet = writer.sheets["trades"]
 
         for i, col in enumerate(trades.columns):
-            width = max(10, int(trades[col].astype(str).str.len().max() * 1.1))
+            if len(trades) > 0:
+                # 列の最大文字数を計算（NaNをチェック）
+                max_len = trades[col].astype(str).str.len().max()
+                if pd.notna(max_len):
+                    width = max(10, int(max_len * 1.1))
+                else:
+                    width = 15  # デフォルト幅
             sheet.set_column(i, i, width)
 
 
@@ -449,11 +456,11 @@ def run_backtest_range(
     logger.info("=== Summary ===\n%s", summary)
 
     if outfile:
-        to_excel(result, summary, outfile)
+        to_excel(result, summary, str(outfile))
         logger.info("Excel exported → %s", outfile)
 
     if jsonfile:
-        result.to_json(jsonfile, orient="records", force_ascii=False)
+        result.to_json(str(jsonfile), orient="records", force_ascii=False)
         logger.info("JSON exported → %s", jsonfile)
 
     if show:
@@ -468,17 +475,19 @@ def run_backtest_range(
 def parse_args(args=None):
     """コマンドライン引数をパース"""
     parser = argparse.ArgumentParser(description="スイングトレードのバックテストツール")
-    parser.add_argument("--db", default=DB_PATH, help="SQLite DB のパス")
+    parser.add_argument("--db", default=get_db_path(), help="SQLite DB のパス")
     default_xlsx, default_json = _result_paths("technical")
     parser.add_argument("--start", required=True, help="エントリー開始日 YYYY-MM-DD")
     parser.add_argument("--end", help="エントリー終了日 YYYY-MM-DD")
     parser.add_argument(
         "--outfile",
+        type=Path,
         default=default_xlsx,
         help="Excel 出力ファイル",
     )
     parser.add_argument(
         "--json",
+        type=Path,
         default=default_json,
         help="結果を保存するJSONファイル",
     )

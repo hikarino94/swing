@@ -48,8 +48,10 @@ class TestDBSchema:
         )
         conn.commit()
 
-        # データ取得
-        cursor = conn.execute("SELECT * FROM listed_info WHERE code = '1234'")
+        # データ取得（カラム名を指定して取得）
+        cursor = conn.execute(
+            "SELECT code, company_name, sector33_name, delete_flag FROM listed_info WHERE code = '1234'"
+        )
         row = cursor.fetchone()
 
         assert row[0] == "1234"  # code

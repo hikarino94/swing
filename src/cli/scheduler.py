@@ -6,8 +6,9 @@ from pathlib import Path
 
 import schedule
 
-sys.path.append(str(Path(__file__).resolve().parent))
-from config import config
+# プロジェクトルートをPYTHONPATHに追加（スクリプト実行用）
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+from src.config import config
 
 logging.basicConfig(format=config.log_format, level=logging.INFO)
 logger = logging.getLogger("scheduler")
@@ -22,15 +23,15 @@ def _run(cmd: str) -> None:
 
 
 def fetch_quotes() -> None:
-    _run("python fetch/daily_quotes.py")
+    _run("python -m fetch.daily_quotes")
 
 
 def fetch_statements() -> None:
-    _run("python fetch/statements.py 2")
+    _run("python -m fetch.statements 2")
 
 
 def update_listed_info() -> None:
-    _run("python fetch/listed_info.py")
+    _run("python -m fetch.listed_info")
 
 
 # スケジュール設定を設定ファイルから読み込み

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from setup_environment import EnvironmentSetup
+from scripts.setup_environment import EnvironmentSetup
 
 
 class TestEnvironmentSetup:

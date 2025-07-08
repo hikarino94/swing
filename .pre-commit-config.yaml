@@ -25,8 +25,8 @@ repos:
     rev: v1.16.1
     hooks:
       - id: mypy
-        additional_dependencies: [types-requests, pandas-stubs]
-        args: [--ignore-missing-imports]
+        additional_dependencies: [types-requests, pandas-stubs, types-waitress]
+        args: [--ignore-missing-imports, --no-warn-unreachable]
         exclude: ^(docs/|tests/)
 
   # Bandit - Security linter
@@ -34,7 +34,7 @@ repos:
     rev: 1.8.5
     hooks:
       - id: bandit
-        args: [-r, -f, json, -o, bandit-report.json]
+        args: [-r, -f, json, -o, bandit-report.json, -c, .bandit]
         exclude: ^tests/
 
   # Check for large files

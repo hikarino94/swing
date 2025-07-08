@@ -417,10 +417,8 @@ class TestCLI:
 class TestIntegration:
     """統合テスト"""
 
-    @mock.patch("screening.screen_technical.DB_PATH")
-    def test_main_indicators_command(self, mock_db_path, technical_db):
+    def test_main_indicators_command(self, technical_db):
         """indicatorsコマンドの統合テスト"""
-        mock_db_path.__str__.return_value = technical_db
 
         # テストデータ準備
         conn = sqlite3.connect(technical_db)
