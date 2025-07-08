@@ -294,12 +294,14 @@ CREATE TABLE IF NOT EXISTS holdings (
     expected_dividend REAL,
     lending_type TEXT,
     updated_at TEXT DEFAULT (datetime('now')),
+    deleted_at TEXT DEFAULT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE(user_id, code, account_name, account_type)
 );
 CREATE INDEX IF NOT EXISTS idx_holdings_user_id ON holdings(user_id);
 CREATE INDEX IF NOT EXISTS idx_holdings_code ON holdings(code);
 CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_name);
+CREATE INDEX IF NOT EXISTS idx_holdings_deleted ON holdings(deleted_at);
 
 -- transactions -------------------------------------------------------
 CREATE TABLE IF NOT EXISTS transactions (
@@ -399,6 +401,7 @@ def init_schema(db_path: str | Path) -> None:
                     expected_dividend REAL,
                     lending_type TEXT,
                     updated_at TEXT DEFAULT (datetime('now')),
+                    deleted_at TEXT DEFAULT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     UNIQUE(user_id, code, account_name, account_type)
                 )

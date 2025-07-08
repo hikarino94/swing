@@ -346,6 +346,7 @@ class TestHoldingModel:
                 expected_dividend REAL,
                 lending_type TEXT,
                 updated_at TEXT DEFAULT (datetime('now')),
+                deleted_at TEXT DEFAULT NULL,
                 UNIQUE(user_id, code, account_name)
             );
             CREATE TABLE listed_info (
@@ -852,6 +853,7 @@ class TestPortfolioManager:
                 expected_dividend REAL,
                 lending_type TEXT,
                 updated_at TEXT,
+                deleted_at TEXT DEFAULT NULL,
                 UNIQUE(user_id, code, account_name)
             );
             CREATE TABLE prices (
@@ -941,7 +943,8 @@ class TestPortfolioManager:
                 quantity INTEGER,
                 average_price REAL,
                 market_value REAL,
-                profit_loss REAL
+                profit_loss REAL,
+                deleted_at TEXT DEFAULT NULL
             );
             CREATE TABLE transactions (
                 user_id INTEGER,
@@ -954,8 +957,8 @@ class TestPortfolioManager:
         conn.execute(
             """
             INSERT INTO holdings VALUES
-            (1, 100, 2500, 280000, 30000),
-            (1, 50, 13000, 750000, 100000)
+            (1, 100, 2500, 280000, 30000, NULL),
+            (1, 50, 13000, 750000, 100000, NULL)
         """
         )
         conn.execute(
@@ -1009,7 +1012,8 @@ class TestPortfolioManager:
                 actual_bps REAL,
                 expected_dividend REAL,
                 lending_type TEXT,
-                updated_at TEXT
+                updated_at TEXT,
+                deleted_at TEXT DEFAULT NULL
             );
             CREATE TABLE listed_info (
                 code TEXT PRIMARY KEY,
@@ -1022,8 +1026,8 @@ class TestPortfolioManager:
         conn.execute(
             """
             INSERT INTO holdings VALUES
-            (1, 1, '7203', 'SBI', '特定', 100, 2500, 280000, 30000, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-            (2, 1, '7203', '楽天', '特定', 50, 2600, 140000, 10000, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+            (1, 1, '7203', 'SBI', '特定', 100, 2500, 280000, 30000, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+            (2, 1, '7203', '楽天', '特定', 50, 2600, 140000, 10000, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
         """
         )
         conn.execute("INSERT INTO listed_info VALUES ('72030', 'トヨタ自動車')")
@@ -1050,7 +1054,7 @@ class TestPortfolioManager:
 
     @patch("src.portfolio.manager.sqlite3.connect")
     def test_delete_all_holdings(self, mock_connect):
-        """全保有銘柄の削除"""
+        """全保有銘柄の削除（論理削除）"""
         mock_cursor = MagicMock()
         mock_cursor.fetchone.return_value = (3,)  # 3件削除
         mock_conn = MagicMock()
@@ -1061,16 +1065,18 @@ class TestPortfolioManager:
 
         assert count == 3
         mock_cursor.execute.assert_any_call(
-            "SELECT COUNT(*) FROM holdings WHERE user_id = ?", (1,)
+            "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND deleted_at IS NULL",
+            (1,),
         )
         mock_cursor.execute.assert_any_call(
-            "DELETE FROM holdings WHERE user_id = ?", (1,)
+            "UPDATE holdings SET deleted_at = datetime('now') WHERE user_id = ? AND deleted_at IS NULL",
+            (1,),
         )
         mock_conn.commit.assert_called_once()
 
     @patch("src.portfolio.manager.sqlite3.connect")
     def test_delete_holdings_by_account(self, mock_connect):
-        """特定口座の保有銘柄削除"""
+        """特定口座の保有銘柄削除（論理削除）"""
         mock_cursor = MagicMock()
         mock_cursor.fetchone.return_value = (2,)  # 2件削除
         mock_conn = MagicMock()
@@ -1081,11 +1087,12 @@ class TestPortfolioManager:
 
         assert count == 2
         mock_cursor.execute.assert_any_call(
-            "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND account_name = ?",
+            "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
             (1, "SBI"),
         )
         mock_cursor.execute.assert_any_call(
-            "DELETE FROM holdings WHERE user_id = ? AND account_name = ?", (1, "SBI")
+            "UPDATE holdings SET deleted_at = datetime('now') WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
+            (1, "SBI"),
         )
         mock_conn.commit.assert_called_once()
 

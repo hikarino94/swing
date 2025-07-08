@@ -18,7 +18,7 @@ class PortfolioManager:
         user_id: int, holdings_data: list[dict], account_name: str = "default"
     ) -> tuple[int, int]:
         """
-        CSVデータから保有銘柄を追加（重複チェックなし）
+        CSVデータから保有銘柄を追加・更新
 
         Args:
             user_id: ユーザーID
@@ -31,22 +31,159 @@ class PortfolioManager:
         updated_count = 0
         new_count = 0
 
+        # CSVタイプの判定（最初のデータでチェック）
+        is_standard_format = False
+        if holdings_data:
+            first_data = holdings_data[0]
+            # 標準形式の特徴: PER、PBR、配当利回りなどの株価指標が含まれている
+            if any(
+                key in first_data
+                for key in ["expected_per", "actual_pbr", "dividend_yield"]
+            ):
+                is_standard_format = True
+                logger.info("標準形式CSVとして処理します")
+            else:
+                logger.info("SaveFile形式CSVとして処理します")
+
         for data in holdings_data:
             # 口座タイプを取得（デフォルトは"特定"）
             account_type = data.get("account_type", "特定")
 
-            # 新規作成（重複チェックなし - ユーザーの要望により常に新規追加）
-            holding = Holding(
-                user_id=user_id,
-                code=data["code"],
-                account_name=account_name,
-                account_type=account_type,
-            )
-            new_count += 1
+            # 既存の保有銘柄を検索（論理削除されたものも含めて検索）
+            conn = sqlite3.connect(get_db_path())
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    SELECT id, deleted_at FROM holdings
+                    WHERE user_id = ? AND code = ? AND account_name = ? AND account_type = ?
+                    """,
+                    (user_id, data["code"], account_name, account_type),
+                )
+                existing_row = cursor.fetchone()
+                existing_id = existing_row[0] if existing_row else None
+                is_deleted = existing_row[1] is not None if existing_row else False
+            finally:
+                conn.close()
 
-            # データを設定
-            holding.quantity = data["quantity"]
-            holding.average_price = data.get("average_price", 0)
+            existing = None
+            if existing_id and not is_deleted:
+                # 論理削除されていない場合のみ取得
+                existing = Holding.find_by_user_code_and_account(
+                    user_id, data["code"], account_name, account_type
+                )
+            elif existing_id and is_deleted:
+                # 論理削除されている場合は、復活させる処理を行う
+                conn = sqlite3.connect(get_db_path())
+                cursor = conn.cursor()
+                try:
+                    cursor.execute(
+                        """
+                        UPDATE holdings
+                        SET deleted_at = NULL, updated_at = datetime('now')
+                        WHERE id = ?
+                        """,
+                        (existing_id,),
+                    )
+                    conn.commit()
+                    # 復活させた後、既存レコードとして取得
+                    existing = Holding(
+                        user_id=user_id,
+                        code=data["code"],
+                        account_name=account_name,
+                        account_type=account_type,
+                    )
+                    existing.id = existing_id
+                    logger.debug(
+                        f"論理削除されていた銘柄を復活: {data['code']} ({account_type})"
+                    )
+                except sqlite3.Error as e:
+                    logger.error(f"論理削除銘柄の復活エラー: {e}")
+                    conn.rollback()
+                finally:
+                    conn.close()
+
+            if is_standard_format:
+                # 標準形式の処理: 重複時は上書き、PER等の再計算なし
+                if existing:
+                    holding = existing
+                    updated_count += 1
+                    logger.debug(
+                        f"標準形式: 既存銘柄を上書き更新 {data['code']} ({account_type})"
+                    )
+                else:
+                    holding = Holding(
+                        user_id=user_id,
+                        code=data["code"],
+                        account_name=account_name,
+                        account_type=account_type,
+                    )
+                    new_count += 1
+                    logger.debug(
+                        f"標準形式: 新規銘柄追加 {data['code']} ({account_type})"
+                    )
+
+                # データを設定（標準形式は全て上書き）
+                holding.quantity = data["quantity"]
+                holding.average_price = data.get("average_price", 0)
+
+                # 標準形式はPER等のデータを持っているのでそのまま設定
+                holding.expected_per = data.get("expected_per")
+                holding.actual_pbr = data.get("actual_pbr")
+                holding.dividend_yield = data.get("dividend_yield")
+                holding.expected_eps = data.get("expected_eps")
+                holding.actual_bps = data.get("actual_bps")
+                holding.expected_dividend = data.get("expected_dividend")
+                holding.lending_type = data.get("lending_type")
+
+            else:
+                # SaveFile形式の処理: 条件付き更新、PER等の再計算
+                if existing:
+                    holding = existing
+                    updated_count += 1
+                    logger.debug(
+                        f"SaveFile形式: 既存銘柄を更新 {data['code']} ({account_type})"
+                    )
+
+                    # 保有株数と取得単価を更新
+                    holding.quantity = data["quantity"]
+                    holding.average_price = data.get("average_price", 0)
+
+                    # PER等の指標が未設定の場合のみ、後で再計算するためNoneを設定
+                    if holding.expected_per is None:
+                        holding.expected_per = None
+                    if holding.actual_pbr is None:
+                        holding.actual_pbr = None
+                    if holding.dividend_yield is None:
+                        holding.dividend_yield = None
+                    if holding.expected_dividend is None:
+                        holding.expected_dividend = None
+                    # 既存の値がある場合は更新しない（要件通り）
+
+                else:
+                    holding = Holding(
+                        user_id=user_id,
+                        code=data["code"],
+                        account_name=account_name,
+                        account_type=account_type,
+                    )
+                    new_count += 1
+                    logger.debug(
+                        f"SaveFile形式: 新規銘柄追加 {data['code']} ({account_type})"
+                    )
+
+                    # データを設定
+                    holding.quantity = data["quantity"]
+                    holding.average_price = data.get("average_price", 0)
+
+                    # SaveFile形式はPER等のデータを持っていないのでNoneを設定（後で再計算）
+                    holding.expected_per = None
+                    holding.actual_pbr = None
+                    holding.dividend_yield = None
+                    holding.expected_dividend = None
+                    holding.expected_eps = None
+                    holding.actual_bps = None
+                    holding.lending_type = None
 
             # 市場価値と損益は取得価格と数量から再計算
             # CSVからの値はデバッグ用にログ出力のみ
@@ -66,29 +203,78 @@ class PortfolioManager:
             holding.profit_loss = None
             holding.profit_loss_ratio = None
 
-            # 株価指標データを設定
-            holding.expected_per = data.get("expected_per")
-            holding.actual_pbr = data.get("actual_pbr")
-            holding.dividend_yield = data.get("dividend_yield")
-            holding.expected_eps = data.get("expected_eps")
-            holding.actual_bps = data.get("actual_bps")
-            holding.expected_dividend = data.get("expected_dividend")
-            holding.lending_type = data.get("lending_type")
-
             # 保存
             if not holding.save():
                 logger.error(f"保有銘柄の保存に失敗: {data['code']} ({account_type})")
 
-        logger.info(f"保有銘柄追加完了: {new_count}件（口座: {account_name}）")
+        logger.info(
+            f"保有銘柄更新完了: 更新{updated_count}件, 新規{new_count}件（口座: {account_name}）"
+        )
 
-        # 追加した銘柄の株価指標を更新
-        if new_count > 0:
-            added_codes = [data["code"] for data in holdings_data]
-            unique_codes = list(set(added_codes))
-            indicator_count = PortfolioManager.update_stock_indicators(
-                user_id, unique_codes
-            )
-            logger.info(f"株価指標更新: {indicator_count}件")
+        # CSVに含まれていない銘柄を論理削除
+        if holdings_data:  # CSVにデータがある場合のみ処理
+            conn = sqlite3.connect(get_db_path())
+            cursor = conn.cursor()
+            try:
+                # CSVに含まれる銘柄コードのリスト
+                csv_codes = [data["code"] for data in holdings_data]
+                placeholders = ",".join("?" * len(csv_codes))
+
+                # 論理削除の実行
+                cursor.execute(
+                    f"""
+                    UPDATE holdings
+                    SET deleted_at = datetime('now')
+                    WHERE user_id = ?
+                      AND account_name = ?
+                      AND code NOT IN ({placeholders})
+                      AND deleted_at IS NULL
+                    """,
+                    [user_id, account_name, *csv_codes],
+                )
+
+                deleted_count = cursor.rowcount
+                if deleted_count > 0:
+                    logger.info(
+                        f"CSVに存在しない銘柄を論理削除しました: {deleted_count}件"
+                    )
+
+                conn.commit()
+            except sqlite3.Error as e:
+                logger.error(f"論理削除エラー: {e}")
+                conn.rollback()
+            finally:
+                conn.close()
+
+        # SaveFile形式の場合、株価指標の再計算が必要
+        if not is_standard_format and (updated_count > 0 or new_count > 0):
+            # PER等が未設定の銘柄のみ更新
+            conn = sqlite3.connect(get_db_path())
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    SELECT DISTINCT code FROM holdings
+                    WHERE user_id = ?
+                      AND deleted_at IS NULL
+                      AND (expected_per IS NULL
+                           OR actual_pbr IS NULL
+                           OR dividend_yield IS NULL
+                           OR expected_dividend IS NULL)
+                    """,
+                    (user_id,),
+                )
+                codes_to_update = [row[0] for row in cursor.fetchall()]
+            finally:
+                conn.close()
+
+            if codes_to_update:
+                indicator_count = PortfolioManager.update_stock_indicators(
+                    user_id, codes_to_update
+                )
+                logger.info(
+                    f"SaveFile形式: 株価指標を再計算しました（{indicator_count}件）"
+                )
 
         return updated_count, new_count
 
@@ -247,6 +433,7 @@ class PortfolioManager:
                                     WHEN transaction_type = 'sell' THEN -quantity
                                     ELSE 0 END) > 0
                 )
+                AND deleted_at IS NULL
             """,
                 (user_id, user_id),
             )
@@ -374,7 +561,7 @@ class PortfolioManager:
                     MAX(h.lending_type) as lending_type
                 FROM holdings h
                 LEFT JOIN listed_info li ON (h.code || '0') = li.code
-                WHERE h.user_id = ? AND h.quantity > 0
+                WHERE h.user_id = ? AND h.quantity > 0 AND h.deleted_at IS NULL
                 GROUP BY h.code, li.company_name
                 ORDER BY h.code
             """,
@@ -435,11 +622,15 @@ class PortfolioManager:
 
         try:
             cursor.execute(
-                "SELECT COUNT(*) FROM holdings WHERE user_id = ?", (user_id,)
+                "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND deleted_at IS NULL",
+                (user_id,),
             )
             count = cursor.fetchone()[0]
 
-            cursor.execute("DELETE FROM holdings WHERE user_id = ?", (user_id,))
+            cursor.execute(
+                "UPDATE holdings SET deleted_at = datetime('now') WHERE user_id = ? AND deleted_at IS NULL",
+                (user_id,),
+            )
             conn.commit()
 
             logger.info(f"保有銘柄削除完了: {count}件")
@@ -469,13 +660,13 @@ class PortfolioManager:
 
         try:
             cursor.execute(
-                "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND account_name = ?",
+                "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
                 (user_id, account_name),
             )
             count = cursor.fetchone()[0]
 
             cursor.execute(
-                "DELETE FROM holdings WHERE user_id = ? AND account_name = ?",
+                "UPDATE holdings SET deleted_at = datetime('now') WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
                 (user_id, account_name),
             )
             conn.commit()
@@ -514,7 +705,7 @@ class PortfolioManager:
                     f"""
                     SELECT DISTINCT h.code
                     FROM holdings h
-                    WHERE h.user_id = ? AND h.code IN ({placeholders})
+                    WHERE h.user_id = ? AND h.code IN ({placeholders}) AND h.deleted_at IS NULL
                     """,
                     [user_id, *codes],
                 )
@@ -523,7 +714,7 @@ class PortfolioManager:
                     """
                     SELECT DISTINCT code
                     FROM holdings
-                    WHERE user_id = ?
+                    WHERE user_id = ? AND deleted_at IS NULL
                     """,
                     (user_id,),
                 )
@@ -674,7 +865,7 @@ class PortfolioManager:
                         expected_dividend = ?,
                         expected_eps = ?,
                         actual_bps = ?
-                    WHERE user_id = ? AND code = ?
+                    WHERE user_id = ? AND code = ? AND deleted_at IS NULL
                     """,
                     (
                         expected_per,
@@ -730,7 +921,7 @@ class PortfolioManager:
                     SUM(market_value) as total_market_value,
                     SUM(profit_loss) as total_profit_loss
                 FROM holdings
-                WHERE user_id = ? AND quantity > 0
+                WHERE user_id = ? AND quantity > 0 AND deleted_at IS NULL
             """,
                 (user_id,),
             )

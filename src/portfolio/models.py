@@ -67,7 +67,7 @@ class Holding:
                            expected_per, actual_pbr, dividend_yield, expected_eps,
                            actual_bps, expected_dividend, lending_type
                     FROM holdings
-                    WHERE user_id = ? AND code = ? AND account_name = ? AND account_type = ?
+                    WHERE user_id = ? AND code = ? AND account_name = ? AND account_type = ? AND deleted_at IS NULL
                 """,
                     (user_id, code, account_name, account_type),
                 )
@@ -79,7 +79,7 @@ class Holding:
                            expected_per, actual_pbr, dividend_yield, expected_eps,
                            actual_bps, expected_dividend, lending_type
                     FROM holdings
-                    WHERE user_id = ? AND code = ? AND account_name = ?
+                    WHERE user_id = ? AND code = ? AND account_name = ? AND deleted_at IS NULL
                 """,
                     (user_id, code, account_name),
                 )
@@ -157,7 +157,7 @@ class Holding:
                                li.company_name
                         FROM holdings h
                         LEFT JOIN listed_info li ON (h.code || '0') = li.code
-                        WHERE h.user_id = ? AND h.quantity > 0
+                        WHERE h.user_id = ? AND h.quantity > 0 AND h.deleted_at IS NULL
                         ORDER BY h.code, h.account_name, h.account_type
                     """,
                         (user_id,),
@@ -171,7 +171,7 @@ class Holding:
                                h.actual_bps, h.expected_dividend, h.lending_type,
                                NULL as company_name
                         FROM holdings h
-                        WHERE h.user_id = ? AND h.quantity > 0
+                        WHERE h.user_id = ? AND h.quantity > 0 AND h.deleted_at IS NULL
                         ORDER BY h.code, h.account_name, h.account_type
                     """,
                         (user_id,),
@@ -187,7 +187,7 @@ class Holding:
                                li.company_name
                         FROM holdings h
                         LEFT JOIN listed_info li ON (h.code || '0') = li.code
-                        WHERE h.user_id = ? AND h.quantity > 0
+                        WHERE h.user_id = ? AND h.quantity > 0 AND h.deleted_at IS NULL
                         ORDER BY h.code, h.account_name
                     """,
                         (user_id,),
@@ -201,7 +201,7 @@ class Holding:
                                h.actual_bps, h.expected_dividend, h.lending_type,
                                NULL as company_name
                         FROM holdings h
-                        WHERE h.user_id = ? AND h.quantity > 0
+                        WHERE h.user_id = ? AND h.quantity > 0 AND h.deleted_at IS NULL
                         ORDER BY h.code, h.account_name
                     """,
                         (user_id,),
