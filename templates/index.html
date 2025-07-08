@@ -767,6 +767,9 @@
                             <button @click="loadHoldings()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 text-sm">
                                 更新
                             </button>
+                            <button @click="updateStockIndicators()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm">
+                                株価指標一括更新
+                            </button>
                             <button @click="showAddHoldingModal()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm">
                                 手動追加
                             </button>
@@ -856,7 +859,7 @@
                                         </td>
                                         <td x-show="!portfolio.aggregateView" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="holding.account_name || 'default'"></td>
                                         <td x-show="!portfolio.aggregateView" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            <span x-text="holding.account_type || '特定'" 
+                                            <span x-text="holding.account_type || '特定'"
                                                   :class="{
                                                       'bg-blue-100 text-blue-800': holding.account_type === 'NISA',
                                                       'bg-purple-100 text-purple-800': holding.account_type === 'つみたてNISA',
@@ -868,6 +871,18 @@
                                         <td x-show="portfolio.aggregateView" class="px-6 py-4 whitespace-nowrap">
                                             <div class="text-sm text-gray-900" x-text="holding.account_count + '口座'"></div>
                                             <div class="text-xs text-gray-500" x-text="holding.account_names"></div>
+                                            <div x-show="holding.account_types" class="text-xs mt-1">
+                                                <template x-for="atype in (holding.account_types || '').split(',').filter(Boolean)" :key="atype">
+                                                    <span x-text="atype"
+                                                          :class="{
+                                                              'bg-blue-100 text-blue-800': atype === 'NISA',
+                                                              'bg-purple-100 text-purple-800': atype === 'つみたてNISA',
+                                                              'bg-gray-100 text-gray-800': atype === '特定',
+                                                              'bg-yellow-100 text-yellow-800': atype === '一般'
+                                                          }"
+                                                          class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full mr-1"></span>
+                                                </template>
+                                            </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="(holding.quantity || holding.total_quantity).toLocaleString()"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="formatCurrency(holding.average_price || holding.weighted_avg_price)"></td>
@@ -1878,16 +1893,16 @@ function swingApp() {
 
         async loadHoldings() {
             if (!this.isLoggedIn) return;
-            
+
             try {
                 const params = new URLSearchParams();
                 if (this.portfolio.aggregateView) {
                     params.append('aggregate', 'true');
                 }
-                
+
                 console.log('保有銘柄を読み込み中...', params.toString());
                 const result = await apiCall('/portfolio/holdings?' + params.toString(), {}, 'GET');
-                
+
                 if (result.success) {
                     this.portfolio.holdings = result.holdings || [];
                     console.log('保有銘柄数:', this.portfolio.holdings.length);
@@ -1900,7 +1915,7 @@ function swingApp() {
                 this.portfolio.holdings = [];
                 showNotification('error', '保有銘柄の読み込みに失敗しました');
             }
-            
+
             // 口座一覧も取得
             await this.loadAccounts();
         },
@@ -1964,6 +1979,30 @@ function swingApp() {
                 }
             } catch (e) {
                 showNotification('error', 'アップロードに失敗しました');
+            }
+        },
+
+        async updateStockIndicators() {
+            if (!confirm('保有銘柄の株価指標（PER、PBR、配当利回り、予想配当）を最新のデータで更新しますか？')) return;
+
+            try {
+                const response = await fetch('/api/portfolio/indicators/update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('success', result.message);
+                    await this.loadHoldings();
+                } else {
+                    showNotification('error', result.error);
+                }
+            } catch (e) {
+                showNotification('error', '株価指標の更新に失敗しました');
             }
         },
 

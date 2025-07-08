@@ -48,7 +48,7 @@ class Holding:
 
     @classmethod
     def find_by_user_code_and_account(
-        cls, user_id: int, code: str, account_name: str, account_type: str = None
+        cls, user_id: int, code: str, account_name: str, account_type: str | None = None
     ) -> Optional["Holding"]:
         """ユーザーID、銘柄コード、口座名（、口座タイプ）で保有銘柄を検索"""
         conn = sqlite3.connect(get_db_path())

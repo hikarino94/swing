@@ -280,6 +280,7 @@ CREATE TABLE IF NOT EXISTS holdings (
     user_id INTEGER NOT NULL,
     code TEXT NOT NULL,
     account_name TEXT NOT NULL DEFAULT 'default',
+    account_type TEXT NOT NULL DEFAULT '特定',
     quantity INTEGER NOT NULL,
     average_price REAL NOT NULL,
     market_value REAL,
@@ -294,7 +295,7 @@ CREATE TABLE IF NOT EXISTS holdings (
     lending_type TEXT,
     updated_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE(user_id, code, account_name)
+    UNIQUE(user_id, code, account_name, account_type)
 );
 CREATE INDEX IF NOT EXISTS idx_holdings_user_id ON holdings(user_id);
 CREATE INDEX IF NOT EXISTS idx_holdings_code ON holdings(code);
@@ -338,6 +339,104 @@ def init_schema(db_path: str | Path) -> None:
     """
     with sqlite3.connect(db_path) as conn:
         conn.executescript(DDL)
+
+        # 既存テーブルへのカラム追加（マイグレーション）
+        cursor = conn.cursor()
+
+        # account_typeカラムの追加（存在しない場合のみ）
+        try:
+            cursor.execute("SELECT account_type FROM holdings LIMIT 1")
+        except sqlite3.OperationalError:
+            # カラムが存在しない場合は追加
+            cursor.execute(
+                "ALTER TABLE holdings ADD COLUMN account_type TEXT NOT NULL DEFAULT '特定'"
+            )
+            conn.commit()
+            logger.info("holdingsテーブルにaccount_typeカラムを追加しました")
+
+        # UNIQUE制約の確認と更新
+        cursor.execute("PRAGMA index_list(holdings)")
+        indexes = cursor.fetchall()
+
+        # 既存のUNIQUE制約を探す
+        old_unique_found = False
+        for idx in indexes:
+            if idx[2] == 1:  # UNIQUE制約
+                cursor.execute(f"PRAGMA index_info({idx[1]})")
+                cols = cursor.fetchall()
+                if len(cols) == 3:  # 古い3カラムのUNIQUE制約
+                    old_unique_found = True
+                    break
+
+        if old_unique_found:
+            # 古いUNIQUE制約がある場合、テーブルを再作成
+            logger.info("UNIQUE制約を更新するためにholdingsテーブルを再作成します")
+
+            # 既存データをバックアップ
+            cursor.execute("SELECT * FROM holdings")
+            backup_data = cursor.fetchall()
+
+            # テーブルを削除して再作成
+            cursor.execute("DROP TABLE holdings")
+            cursor.execute(
+                """
+                CREATE TABLE holdings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    code TEXT NOT NULL,
+                    account_name TEXT NOT NULL DEFAULT 'default',
+                    account_type TEXT NOT NULL DEFAULT '特定',
+                    quantity INTEGER NOT NULL,
+                    average_price REAL NOT NULL,
+                    market_value REAL,
+                    profit_loss REAL,
+                    profit_loss_ratio REAL,
+                    expected_per REAL,
+                    actual_pbr REAL,
+                    dividend_yield REAL,
+                    expected_eps REAL,
+                    actual_bps REAL,
+                    expected_dividend REAL,
+                    lending_type TEXT,
+                    updated_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    UNIQUE(user_id, code, account_name, account_type)
+                )
+            """
+            )
+
+            # インデックスを再作成
+            cursor.execute("CREATE INDEX idx_holdings_user_id ON holdings(user_id)")
+            cursor.execute("CREATE INDEX idx_holdings_code ON holdings(code)")
+            cursor.execute(
+                "CREATE INDEX idx_holdings_account ON holdings(account_name)"
+            )
+
+            # データを復元（account_typeがない古いデータの場合は'特定'を設定）
+            for row in backup_data:
+                if len(row) == 18:  # 古い形式（account_typeなし）
+                    # id, user_id, code, account_name, quantity, ...
+                    cursor.execute(
+                        """
+                        INSERT INTO holdings (id, user_id, code, account_name, account_type,
+                                            quantity, average_price, market_value, profit_loss,
+                                            profit_loss_ratio, expected_per, actual_pbr,
+                                            dividend_yield, expected_eps, actual_bps,
+                                            expected_dividend, lending_type, updated_at)
+                        VALUES (?, ?, ?, ?, '特定', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                        row,
+                    )
+                else:  # 新しい形式（account_typeあり）
+                    cursor.execute(
+                        """
+                        INSERT INTO holdings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                        row,
+                    )
+
+            conn.commit()
+            logger.info("holdingsテーブルの再作成とデータ復元が完了しました")
 
 
 def main() -> None:  # pragma: no cover

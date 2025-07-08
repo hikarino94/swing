@@ -86,7 +86,7 @@ python -m backtest.analyze_backtest_json result.json [--show-trades] [--side lon
 
 # Start web interface (Recommended)
 python -m src.ui.web
-# Access at http://localhost:5000
+# Access at http://localhost:5005
 
 # Start GUI (Legacy - for compatibility)
 python -m src.ui.legacy.gui

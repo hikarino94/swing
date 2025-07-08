@@ -996,17 +996,20 @@ class TestPortfolioManager:
                 user_id INTEGER,
                 code TEXT,
                 account_name TEXT,
+                account_type TEXT DEFAULT '特定',
                 quantity INTEGER,
                 average_price REAL,
                 market_value REAL,
                 profit_loss REAL,
+                profit_loss_ratio REAL,
                 expected_per REAL,
                 actual_pbr REAL,
                 dividend_yield REAL,
                 expected_eps REAL,
                 actual_bps REAL,
                 expected_dividend REAL,
-                lending_type TEXT
+                lending_type TEXT,
+                updated_at TEXT
             );
             CREATE TABLE listed_info (
                 code TEXT PRIMARY KEY,
@@ -1019,8 +1022,8 @@ class TestPortfolioManager:
         conn.execute(
             """
             INSERT INTO holdings VALUES
-            (1, 1, '7203', 'SBI', 100, 2500, 280000, 30000, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-            (2, 1, '7203', '楽天', 50, 2600, 140000, 10000, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+            (1, 1, '7203', 'SBI', '特定', 100, 2500, 280000, 30000, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+            (2, 1, '7203', '楽天', '特定', 50, 2600, 140000, 10000, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
         """
         )
         conn.execute("INSERT INTO listed_info VALUES ('72030', 'トヨタ自動車')")
