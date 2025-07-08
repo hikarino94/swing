@@ -742,7 +742,7 @@ class PortfolioManager:
                 current_price = price_row[0]
 
                 # 最新のstatementデータを取得（5桁変換）
-                # まず最新のデータを取得
+                # EPSデータが存在するレコードから取得（配当予想修正などのEPS空レコードを除外）
                 cursor.execute(
                     """
                     SELECT
@@ -755,7 +755,13 @@ class PortfolioManager:
                         ResultDividendPerShareAnnual
                     FROM statements
                     WHERE code = ?
-                    ORDER BY DisclosedDate DESC
+                      AND (ForecastEarningsPerShare IS NOT NULL
+                           OR NextYearForecastEarningsPerShare IS NOT NULL
+                           OR EarningsPerShare IS NOT NULL)
+                      AND (ForecastEarningsPerShare != ''
+                           OR NextYearForecastEarningsPerShare != ''
+                           OR EarningsPerShare != '')
+                    ORDER BY CurrentFiscalYearStartDate DESC, DisclosedDate DESC
                     LIMIT 1
                     """,
                     (code_5digit,),
@@ -798,7 +804,7 @@ class PortfolioManager:
                           AND BookValuePerShare IS NOT NULL
                           AND BookValuePerShare != ''
                           AND BookValuePerShare > 0
-                        ORDER BY DisclosedDate DESC
+                        ORDER BY CurrentFiscalYearStartDate DESC, DisclosedDate DESC
                         LIMIT 1
                         """,
                         (code_5digit,),
@@ -842,7 +848,7 @@ class PortfolioManager:
                                OR (ForecastDividendPerShareAnnual IS NOT NULL AND ForecastDividendPerShareAnnual != '')
                                OR (ResultDividendPerShareAnnual IS NOT NULL AND ResultDividendPerShareAnnual != '')
                           )
-                        ORDER BY DisclosedDate DESC
+                        ORDER BY CurrentFiscalYearStartDate DESC, DisclosedDate DESC
                         LIMIT 1
                         """,
                         (code_5digit,),
