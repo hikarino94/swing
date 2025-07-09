@@ -18,28 +18,44 @@ class Holding:
         code: str,
         account_name: str = "default",
         account_type: str = "特定",
+        **kwargs,
     ):
-        self.id: int | None = None
+        self.id: int | None = kwargs.get("id")
         self.user_id: int = user_id
         self.code: str = code
         self.account_name: str = account_name
         self.account_type: str = account_type  # 特定/NISA/つみたてNISA等
-        self.quantity: int = 0
-        self.average_price: float = 0.0
-        self.market_value: float | None = None
-        self.profit_loss: float | None = None
-        self.profit_loss_ratio: float | None = None
-        self.updated_at: str | None = None
+        self.quantity: int = kwargs.get("quantity", 0)
+        self.average_price: float = kwargs.get("average_price", 0.0)
+        self.market_value: float | None = kwargs.get("market_value")
+        self.profit_loss: float | None = kwargs.get("profit_loss")
+        self.profit_loss_ratio: float | None = kwargs.get("profit_loss_ratio")
+        self.updated_at: str | None = kwargs.get("updated_at")
         # 株価指標データ
-        self.expected_per: float | None = None
-        self.actual_pbr: float | None = None
-        self.dividend_yield: float | None = None
-        self.expected_eps: float | None = None
-        self.actual_bps: float | None = None
-        self.expected_dividend: float | None = None
-        self.lending_type: str | None = None
+        self.expected_per: float | None = kwargs.get("expected_per")
+        self.actual_pbr: float | None = kwargs.get("actual_pbr")
+        self.dividend_yield: float | None = kwargs.get("dividend_yield")
+        self.expected_eps: float | None = kwargs.get("expected_eps")
+        self.actual_bps: float | None = kwargs.get("actual_bps")
+        self.expected_dividend: float | None = kwargs.get("expected_dividend")
+        self.lending_type: str | None = kwargs.get("lending_type")
         # 追加情報（DBには保存しない）
-        self.company_name: str | None = None
+        self.company_name: str | None = kwargs.get("company_name")
+
+    @classmethod
+    def from_db_row(cls, row: tuple, description: list) -> "Holding":
+        """データベースの行データからHoldingオブジェクトを作成"""
+        data = {}
+        for i, desc in enumerate(description):
+            data[desc[0]] = row[i]
+
+        # 必須フィールドを取得
+        user_id = data.pop("user_id")
+        code = data.pop("code")
+        account_name = data.pop("account_name", "default")
+        account_type = data.pop("account_type", "特定")
+
+        return cls(user_id, code, account_name, account_type, **data)
 
     @classmethod
     def find_by_user_and_code(cls, user_id: int, code: str) -> Optional["Holding"]:
