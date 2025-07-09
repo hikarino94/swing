@@ -80,15 +80,15 @@ class PortfolioVisualizer:
             stock_fig = go.Figure(
                 data=[
                     go.Pie(
-                        labels=[
-                            f"{row['code']} {row['company_name'] or ''}"
-                            for _, row in stock_data_display.iterrows()
-                        ],
+                        labels=(
+                            stock_data_display["code"]
+                            + " "
+                            + stock_data_display["company_name"].fillna("")
+                        ).tolist(),
                         values=stock_data_display["market_value"],
-                        text=[
-                            f"{row['percentage']:.1f}%"
-                            for _, row in stock_data_display.iterrows()
-                        ],
+                        text=stock_data_display["percentage"]
+                        .apply(lambda x: f"{x:.1f}%")
+                        .tolist(),
                         textposition="inside",
                         textinfo="text",
                         hole=0.3,
@@ -395,27 +395,36 @@ class PortfolioVisualizer:
 
                 # 取引履歴を反映
                 past_trans = trans_df[trans_df["transaction_date"] <= date_str]
-                for _, trans in past_trans.iterrows():
-                    code = trans["code"]
-                    if code not in holdings:
-                        holdings[code] = 0
-                        costs[code] = 0
 
-                    if trans["transaction_type"] == "buy":
-                        holdings[code] += trans["quantity"]
-                        costs[code] += (
-                            trans["quantity"] * trans["price"] + trans["commission"]
-                        )
-                    else:  # sell
-                        holdings[code] -= trans["quantity"]
-                        if holdings[code] > 0:
-                            # 平均取得価格を維持
-                            avg_cost = costs[code] / (
-                                holdings[code] + trans["quantity"]
-                            )
-                            costs[code] = holdings[code] * avg_cost
+                # グループ化して各銘柄の取引を集計
+                for code in past_trans["code"].unique():
+                    code_trans = past_trans[past_trans["code"] == code]
+
+                    # 買い取引の集計
+                    buy_trans = code_trans[code_trans["transaction_type"] == "buy"]
+                    buy_quantity = buy_trans["quantity"].sum()
+                    buy_cost = (
+                        buy_trans["quantity"] * buy_trans["price"]
+                    ).sum() + buy_trans["commission"].sum()
+
+                    # 売り取引の集計
+                    sell_trans = code_trans[code_trans["transaction_type"] == "sell"]
+                    sell_quantity = sell_trans["quantity"].sum()
+
+                    # 保有数量と取得コストの計算
+                    net_quantity = buy_quantity - sell_quantity
+
+                    if net_quantity > 0:
+                        holdings[code] = net_quantity
+                        # 簡易的な平均取得価格の計算
+                        if buy_quantity > 0:
+                            avg_price = buy_cost / buy_quantity
+                            costs[code] = net_quantity * avg_price
                         else:
                             costs[code] = 0
+                    else:
+                        holdings[code] = 0
+                        costs[code] = 0
 
                 # その日の評価額を計算
                 day_prices = price_df[price_df["date"] == date_str]
@@ -564,10 +573,9 @@ class PortfolioVisualizer:
             top_stocks = df.head(20)
 
             # ヒートマップ用のデータを準備
-            stock_labels = [
-                f"{row['code']} {row['company_name'] or ''}"
-                for _, row in top_stocks.iterrows()
-            ]
+            stock_labels = (
+                top_stocks["code"] + " " + top_stocks["company_name"].fillna("")
+            ).tolist()
             # 数値型を確実にしてNaN値を処理
             stock_values_series = pd.to_numeric(
                 top_stocks["profit_loss_ratio"], errors="coerce"

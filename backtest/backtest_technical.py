@@ -150,16 +150,25 @@ def run_backtest(
             exit_date = None
             exit_price = None
 
-            # Iterate dates after entry_dt
-            future = prices[prices["date"].dt.date > entry_dt]
-            for _, row in future.iterrows():
-                d = row["date"].date()
-                p = row["close"]
-                if pd.isna(p):
-                    continue
-                if p <= stop_price or d >= exit_cut_dt:
-                    exit_date, exit_price = d, p
-                    break
+            # Iterate dates after entry_dt using vectorized operations
+            future = prices[prices["date"].dt.date > entry_dt].copy()
+
+            if not future.empty:
+                # 価格が有効なデータのみフィルタリング
+                future = future[future["close"].notna()]
+
+                if not future.empty:
+                    # ストップロスまたは期限切れの条件を満たす最初の日を探す
+                    exit_mask = (future["close"] <= stop_price) | (
+                        future["date"].dt.date >= exit_cut_dt
+                    )
+                    exit_rows = future[exit_mask]
+
+                    if not exit_rows.empty:
+                        # 最初の該当日を取得
+                        first_exit = exit_rows.iloc[0]
+                        exit_date = first_exit["date"].date()
+                        exit_price = first_exit["close"]
 
             # If no exit found, close at last available
             if exit_date is None and not future.empty:
@@ -279,15 +288,24 @@ def run_backtest_short(
             exit_date = None
             exit_price = None
 
-            future = prices[prices["date"].dt.date > entry_dt]
-            for _, row in future.iterrows():
-                d = row["date"].date()
-                p = row["close"]
-                if pd.isna(p):
-                    continue
-                if p >= stop_price or d >= exit_cut_dt:
-                    exit_date, exit_price = d, p
-                    break
+            future = prices[prices["date"].dt.date > entry_dt].copy()
+
+            if not future.empty:
+                # 価格が有効なデータのみフィルタリング
+                future = future[future["close"].notna()]
+
+                if not future.empty:
+                    # ストップロスまたは期限切れの条件を満たす最初の日を探す（空売り用）
+                    exit_mask = (future["close"] >= stop_price) | (
+                        future["date"].dt.date >= exit_cut_dt
+                    )
+                    exit_rows = future[exit_mask]
+
+                    if not exit_rows.empty:
+                        # 最初の該当日を取得
+                        first_exit = exit_rows.iloc[0]
+                        exit_date = first_exit["date"].date()
+                        exit_price = first_exit["close"]
 
             if exit_date is None and not future.empty:
                 last = future.iloc[-1]

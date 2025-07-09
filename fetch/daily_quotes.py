@@ -27,7 +27,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
-import logging
 import sqlite3
 import sys
 import threading
@@ -41,12 +40,11 @@ from requests import Response, Session
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.config import config, get_db_path  # noqa: E402
+from src.utils.logging_config import get_logger  # noqa: E402
 
 API_URL = config.get_api_endpoint("daily_quotes")
 RATE_SLEEP = config.api_rate_limit_sleep
-LOG_FMT = config.log_format
-logging.basicConfig(format=LOG_FMT, level=logging.INFO)
-logger = logging.getLogger("daily_quotes")
+logger = get_logger("fetch.daily_quotes")
 
 # SQLite prices テーブルのカラム順序を定義
 _PRICE_COLS = [

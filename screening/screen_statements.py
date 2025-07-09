@@ -59,7 +59,7 @@ class Config:
 
 
 # ブール列名（statements テーブル側では TEXT 型）
-BOOL_COLS: Final = [
+BOOL_COLS: Final[list[str]] = [
     "MaterialChangesInSubsidiaries",
     "ChangesOtherThanOnesBasedOnRevisionsOfAccountingStandard",
     "ChangesInAccountingEstimates",
@@ -124,7 +124,7 @@ def fetch_statements(conn: sqlite3.Connection, cfg: Config) -> pd.DataFrame:
     df = pd.read_sql(sql, conn, params=(start_date,), dtype={"code": str})
 
     # Cast numerics
-    non_numeric_cols: Final = [
+    non_numeric_cols: Final[list[str]] = [
         "code",
         "DisclosedDate",
         "DisclosedTime",

@@ -110,6 +110,12 @@ exclude = [
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 addopts = "-v --cov=. --cov-report=html --cov-report=term-missing"
+# Parallel execution settings
+minversion = "7.0"
+# Timeout for individual tests (30 seconds)
+timeout = 30
+# Timeout method
+timeout_method = "thread"
 filterwarnings = [
     "ignore::DeprecationWarning:numpy",
     "ignore::RuntimeWarning:numpy",

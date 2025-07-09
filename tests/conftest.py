@@ -67,7 +67,7 @@ def authenticated_client(tmp_path):
                 "testuser",
                 "test@example.com",
                 generate_password_hash("testpass123"),
-                "admin",
+                "user",  # 一般ユーザー権限に変更
             ),
         )
         user_id = cursor.lastrowid
@@ -261,3 +261,86 @@ def test_db() -> Generator[str, None, None]:
 
     # クリーンアップ
     os.unlink(db_path)
+
+
+@pytest.fixture
+def authenticated_admin_client(tmp_path):
+    """管理者権限を持つ認証済みテストクライアント"""
+    # テスト用の一時データベースパスを設定
+    test_db_path = tmp_path / "test_stock.db"
+    os.environ["DATABASE_PATH"] = str(test_db_path)
+
+    from werkzeug.security import generate_password_hash
+
+    from src.ui.web import app
+
+    app.config["TESTING"] = True
+    app.config["WTF_CSRF_ENABLED"] = False
+
+    with app.test_client() as client:
+        # テスト用データベースを初期化
+        from db.db_schema import init_schema
+
+        init_schema(test_db_path)
+
+        # 管理者ユーザーを作成
+        conn = sqlite3.connect(test_db_path)
+        cursor = conn.cursor()
+
+        # 既存のユーザーを削除（念のため）
+        cursor.execute("DELETE FROM users WHERE email = ?", ("admin@example.com",))
+
+        cursor.execute(
+            """
+            INSERT INTO users (username, email, password_hash, role)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                "adminuser",
+                "admin@example.com",
+                generate_password_hash("adminpass123"),
+                "admin",
+            ),
+        )
+        user_id = cursor.lastrowid
+
+        # セッションを作成
+        session_id = "admin-session-id"
+        cursor.execute(
+            """
+            INSERT INTO sessions (id, user_id, expires_at)
+            VALUES (?, ?, datetime('now', '+1 day'))
+            """,
+            (session_id, user_id),
+        )
+        conn.commit()
+        conn.close()
+
+        # セッションクッキーを設定
+        with client.session_transaction() as sess:
+            sess["session_id"] = session_id
+            sess["_user_id"] = str(user_id)
+
+        yield client
+
+
+@pytest.fixture
+def unauthenticated_client(tmp_path):
+    """認証されていないテストクライアント"""
+    # テスト用の一時データベースパスを設定
+    test_db_path = tmp_path / "test_stock.db"
+    os.environ["DATABASE_PATH"] = str(test_db_path)
+
+    from src.ui.web import app
+
+    app.config["TESTING"] = True
+    app.config["WTF_CSRF_ENABLED"] = False
+
+    with app.test_client() as client:
+        # テスト用データベースを初期化
+        from db.db_schema import init_schema
+
+        init_schema(test_db_path)
+
+        # セッションなしでクライアントを返す
+        yield client

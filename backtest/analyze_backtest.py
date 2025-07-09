@@ -1,27 +1,28 @@
 #!/usr/bin/env python
-"""Advanced JSON backtest analysis with visual outputs.
+"""Unified backtest analysis tool.
 
-This module extends the basic analyze_backtest_json.py with:
-- Visual charts (cumulative returns, drawdown, monthly performance)
-- Additional metrics (max drawdown, Calmar ratio, monthly stats)
-- Export capabilities (Excel, PDF reports)
-- Multi-strategy comparison
+This module combines the functionality of analyze_backtest_json.py and
+analyze_json_advanced.py into a single, comprehensive analysis tool.
+
+Basic usage:
+    python -m backtest.analyze_backtest result.json
+
+Advanced usage with visual reports:
+    python -m backtest.analyze_backtest result.json --advanced --export-excel --export-pdf
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-from matplotlib.backends.backend_pdf import PdfPages
 
-# Reuse profit/return column definitions
+# Constants
 PROFIT_COLUMNS = ["profit_jpy", "pnl_yen"]
 RET_COLUMNS = ["ret_pct", "pnl_pct"]
 
@@ -49,11 +50,19 @@ def load_trades(paths: list[str]) -> pd.DataFrame:
                     break
 
             if not found:
-                print(f"Error: File '{p}' not found in any of the expected locations")
-                continue
+                print(f"Error: File '{p}' not found.")
+                print("\nAvailable backtest files:")
+                backtest_dir = Path("data/output/backtest")
+                if backtest_dir.exists():
+                    for f in sorted(backtest_dir.glob("*.json")):
+                        print(f"  {f.name}")
+                raise FileNotFoundError(f"File {p} not found")
 
-        with open(path) as f:
-            data = json.load(f)
+        # Store filename before opening
+        source_filename = path.name
+
+        with open(str(path)) as f:  # type: ignore[assignment]
+            data = json.load(f)  # type: ignore[arg-type]
 
         # Handle different JSON structures
         if isinstance(data, list):
@@ -68,7 +77,7 @@ def load_trades(paths: list[str]) -> pd.DataFrame:
             df = pd.DataFrame([data])
 
         # Add source file info
-        df["source_file"] = path.name
+        df["source_file"] = source_filename
         frames.append(df)
 
     if not frames:
@@ -158,8 +167,91 @@ def calculate_metrics(trades: pd.DataFrame) -> dict[str, Any]:
     }
 
 
-def create_visual_report(trades: pd.DataFrame, output_path: Path | None = None) -> None:
+def format_summary(metrics: dict[str, Any]) -> None:
+    """Print formatted summary to console."""
+    print("\n" + "=" * 60)
+    print("BACKTEST ANALYSIS SUMMARY".center(60))
+    print("=" * 60)
+
+    # Basic metrics
+    print(f"\nTotal Trades: {metrics.get('total_trades', 0)}")
+    print(f"Total Profit: ¥{metrics.get('total_profit', 0):,.0f}")
+    print(f"Win Rate: {metrics.get('win_rate', 0):.2f}%")
+    print(f"Average Return: {metrics.get('avg_return', 0):.2f}%")
+    print(f"Sharpe Ratio: {metrics.get('sharpe_ratio', 0):.2f}")
+
+    # Risk metrics
+    print(f"\nMax Drawdown: ¥{metrics.get('max_drawdown', 0):,.0f}")
+    print(f"Max Drawdown %: {metrics.get('max_drawdown_pct', 0):.2f}%")
+    print(f"Calmar Ratio: {metrics.get('calmar_ratio', 0):.2f}")
+
+    # Trade analysis
+    print(f"\nProfit Factor: {metrics.get('profit_factor', 0):.2f}")
+    print(f"Average Win: ¥{metrics.get('avg_win', 0):,.0f}")
+    print(f"Average Loss: ¥{metrics.get('avg_loss', 0):,.0f}")
+
+    if metrics.get("avg_holding_days") is not None:
+        print(f"Average Holding Days: {metrics.get('avg_holding_days'):.1f}")
+
+    print(f"\nBest Trade: ¥{metrics.get('best_trade', 0):,.0f}")
+    print(f"Worst Trade: ¥{metrics.get('worst_trade', 0):,.0f}")
+
+
+def _ascii_table(df: pd.DataFrame, heavy: bool = False) -> str:
+    """Return a simple ASCII table."""
+    cols = list(df.columns)
+    widths = [max(len(str(v)) for v in [c] + df[c].astype(str).tolist()) for c in cols]
+
+    # Determine which characters to use for drawing
+    h: str = "-"
+    v: str = "|"
+    c: str = "+"
+    if heavy:
+        try:
+            "═╬║".encode(sys.stdout.encoding or "utf-8")
+            h, v, c = "═", "║", "╬"
+        except Exception:
+            heavy = False
+
+    if not heavy:
+        h, v, c = "-", "|", "+"
+
+    def border() -> str:
+        return c + c.join(str(h * (w + 2)) for w in widths) + c
+
+    lines = [border()]
+    header = (
+        v
+        + v.join(f" {cname.ljust(w)} " for cname, w in zip(cols, widths, strict=False))
+        + v
+    )
+    lines.append(header)
+    lines.append(border())
+
+    for idx in range(len(df)):
+        row_values = [
+            str(df.iloc[idx][cname]).rjust(w)
+            for cname, w in zip(cols, widths, strict=False)
+        ]
+        line = v + v.join(f" {val} " for val in row_values) + v
+        lines.append(line)
+        lines.append(border())
+
+    return "\n".join(lines)
+
+
+def create_visual_report(
+    trades: pd.DataFrame, metrics: dict[str, Any], output_path: Path
+) -> None:
     """Create comprehensive visual analysis report."""
+    try:
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from matplotlib.backends.backend_pdf import PdfPages
+    except ImportError:
+        print("Warning: matplotlib not available. Skipping visual report generation.")
+        return
+
     if trades.empty:
         print("No trades to visualize")
         return
@@ -173,7 +265,7 @@ def create_visual_report(trades: pd.DataFrame, output_path: Path | None = None) 
 
     # 1. Cumulative Returns
     ax1 = plt.subplot(3, 2, 1)
-    cumulative_returns = (1 + trades[ret_col] / 100).cumprod()  # type: ignore[var-annotated]
+    cumulative_returns: pd.Series = (1 + trades[ret_col] / 100).cumprod()
     cumulative_returns.plot(ax=ax1, linewidth=2)
     ax1.set_title("Cumulative Returns", fontsize=14, fontweight="bold")
     ax1.set_xlabel("Trade Number")
@@ -185,7 +277,7 @@ def create_visual_report(trades: pd.DataFrame, output_path: Path | None = None) 
     cumulative_profit = trades[profit_col].cumsum()
     running_max = cumulative_profit.expanding().max()
     drawdown_pct = ((cumulative_profit - running_max) / running_max * 100).fillna(0)
-    drawdown_pct.plot(ax=ax2, color="red", linewidth=2, fill=True, alpha=0.3)
+    drawdown_pct.plot(ax=ax2, color="red", linewidth=2)
     ax2.set_title("Drawdown %", fontsize=14, fontweight="bold")
     ax2.set_xlabel("Trade Number")
     ax2.set_ylabel("Drawdown %")
@@ -198,18 +290,6 @@ def create_visual_report(trades: pd.DataFrame, output_path: Path | None = None) 
     ax3.set_title("Return Distribution", fontsize=14, fontweight="bold")
     ax3.set_xlabel("Return %")
     ax3.set_ylabel("Frequency")
-
-    # Add normal distribution overlay
-    mean_ret = trades[ret_col].mean()
-    std_ret = trades[ret_col].std()
-    x = np.linspace(trades[ret_col].min(), trades[ret_col].max(), 100)
-    from scipy import stats
-
-    ax3_twin = ax3.twinx()
-    ax3_twin.plot(
-        x, stats.norm.pdf(x, mean_ret, std_ret), "r-", linewidth=2, label="Normal"
-    )
-    ax3_twin.set_ylabel("Density")
 
     # 4. Monthly Performance
     ax4 = plt.subplot(3, 2, 4)
@@ -254,10 +334,9 @@ def create_visual_report(trades: pd.DataFrame, output_path: Path | None = None) 
     ax6 = plt.subplot(3, 2, 6)
     ax6.axis("off")
 
-    metrics = calculate_metrics(trades)
     table_data = []
     for key, value in metrics.items():
-        if value is not None:
+        if value is not None and not isinstance(value, float) or not np.isinf(value):
             if isinstance(value, float):
                 if "pct" in key or "rate" in key or "return" in key:
                     formatted = f"{value:.2f}%"
@@ -278,18 +357,33 @@ def create_visual_report(trades: pd.DataFrame, output_path: Path | None = None) 
 
     plt.tight_layout()
 
-    if output_path:
-        plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    else:
-        plt.show()
+    if output_path.suffix == ".pdf":
+        with PdfPages(output_path) as pdf:
+            pdf.savefig(bbox_inches="tight")
+            plt.close()
 
-    plt.close()
+            # Add metadata
+            d = pdf.infodict()
+            d["Title"] = "Backtest Analysis Report"
+            d["Author"] = "Swing Trading System"
+            d["Subject"] = "Backtest Performance Analysis"
+            d["Keywords"] = "Trading, Backtest, Performance"
+            d["CreationDate"] = datetime.now()
+    else:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+        plt.close()
 
 
 def export_to_excel(
     trades: pd.DataFrame, metrics: dict[str, Any], output_path: Path
 ) -> None:
     """Export analysis results to Excel with formatting."""
+    try:
+        import xlsxwriter  # noqa: F401
+    except ImportError:
+        print("Warning: xlsxwriter not available. Skipping Excel export.")
+        return
+
     with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
         # Summary sheet
         summary_df = pd.DataFrame([metrics]).T.reset_index()
@@ -324,82 +418,17 @@ def export_to_excel(
         worksheet.set_column("B:B", 20)
 
 
-def compare_strategies(
-    files_by_strategy: dict[str, list[str]], output_dir: Path
-) -> None:
-    """Compare multiple strategies side by side."""
-    strategy_metrics: dict[str, dict[str, Any]] = {}
-    all_trades = []
-
-    for strategy, files in files_by_strategy.items():
-        trades = load_trades(files)
-        if not trades.empty:
-            trades["strategy"] = strategy
-            all_trades.append(trades)
-            strategy_metrics[strategy] = calculate_metrics(trades)
-
-    if not all_trades:
-        print("No trades loaded for comparison")
-        return
-
-    # Combine all trades (for potential future use)
-    # combined_trades = pd.concat(all_trades, ignore_index=True)
-
-    # Create comparison DataFrame
-    comparison_df = pd.DataFrame(strategy_metrics).T
-
-    # Visual comparison
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-
-    # 1. Strategy Returns Comparison
-    ax1 = axes[0, 0]
-    comparison_df[["avg_return", "sharpe_ratio"]].plot(kind="bar", ax=ax1)
-    ax1.set_title("Return & Risk Metrics")
-    ax1.set_ylabel("Value")
-
-    # 2. Win Rate & Profit Factor
-    ax2 = axes[0, 1]
-    comparison_df[["win_rate", "profit_factor"]].plot(kind="bar", ax=ax2)
-    ax2.set_title("Win Rate & Profit Factor")
-
-    # 3. Drawdown Comparison
-    ax3 = axes[1, 0]
-    comparison_df["max_drawdown_pct"].abs().plot(kind="bar", ax=ax3, color="red")
-    ax3.set_title("Maximum Drawdown %")
-    ax3.set_ylabel("Drawdown %")
-
-    # 4. Total Profit
-    ax4 = axes[1, 1]
-    comparison_df["total_profit"].plot(kind="bar", ax=ax4, color="green")
-    ax4.set_title("Total Profit")
-    ax4.set_ylabel("Profit (JPY)")
-
-    plt.tight_layout()
-    plt.savefig(output_dir / "strategy_comparison.png", dpi=300, bbox_inches="tight")
-    plt.close()
-
-    # Export comparison to Excel
-    comparison_df.to_excel(output_dir / "strategy_comparison.xlsx")
-
-    print(f"\nStrategy comparison saved to {output_dir}")
-
-
 def main(argv: list[str] | None = None) -> None:
-    """Enhanced backtest analyzer with visual outputs."""
+    """Unified backtest analyzer."""
     ap = argparse.ArgumentParser(
-        description="Advanced backtest JSON analyzer with visual reports"
+        description="Analyze backtest results from JSON files",
+        epilog="Example: python -m backtest.analyze_backtest result.json --advanced",
     )
     ap.add_argument("files", nargs="+", help="JSON files to analyze")
     ap.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("data/output/analysis"),
-        help="Output directory for reports (default: data/output/analysis)",
-    )
-    ap.add_argument(
         "--show-trades",
         action="store_true",
-        help="Include detailed trade table in console output",
+        help="Display detailed trade table",
     )
     ap.add_argument(
         "--side",
@@ -408,25 +437,28 @@ def main(argv: list[str] | None = None) -> None:
         help="Analyze only long or short trades (default: all)",
     )
     ap.add_argument(
+        "--advanced",
+        action="store_true",
+        help="Enable advanced analysis features (visual reports, Excel export)",
+    )
+    ap.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("data/output/analysis"),
+        help="Output directory for reports (default: data/output/analysis)",
+    )
+    ap.add_argument(
         "--export-excel",
         action="store_true",
-        help="Export results to Excel file",
+        help="Export results to Excel file (requires --advanced)",
     )
     ap.add_argument(
         "--export-pdf",
         action="store_true",
-        help="Export visual report as PDF",
-    )
-    ap.add_argument(
-        "--compare",
-        action="store_true",
-        help="Compare multiple strategies (group files by strategy name)",
+        help="Export visual report as PDF (requires --advanced)",
     )
 
     args = ap.parse_args(argv)
-
-    # Create output directory
-    args.output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load trades
     trades = load_trades(args.files)
@@ -445,94 +477,37 @@ def main(argv: list[str] | None = None) -> None:
     # Calculate metrics
     metrics = calculate_metrics(trades)
 
-    # Console output
-    print("\n" + "=" * 60)
-    print("BACKTEST ANALYSIS REPORT".center(60))
-    print("=" * 60)
-    print(f"\nAnalyzed files: {len(args.files)}")
-    print(f"Total trades: {metrics['total_trades']}")
-    print(
-        f"Date range: {trades.iloc[0]['entry_date'] if 'entry_date' in trades.columns else 'N/A'} to "
-        f"{trades.iloc[-1]['exit_date'] if 'exit_date' in trades.columns else 'N/A'}"
-    )
-
-    print("\n" + "-" * 60)
-    print("PERFORMANCE METRICS".center(60))
-    print("-" * 60)
-
-    for key, value in metrics.items():
-        if value is not None:
-            label = key.replace("_", " ").title()
-            if isinstance(value, float):
-                if "pct" in key or "rate" in key or "return" in key:
-                    print(f"{label:.<30} {value:>20.2f}%")
-                elif "profit" in key or "drawdown" in key and "pct" not in key:
-                    print(f"{label:.<30} ¥{value:>19,.0f}")
-                else:
-                    print(f"{label:.<30} {value:>20.2f}")
-            else:
-                print(f"{label:.<30} {value:>20}")
+    # Basic console output
+    format_summary(metrics)
 
     # Show trades if requested
     if args.show_trades:
         print("\n" + "=" * 60)
         print("TRADE DETAILS".center(60))
         print("=" * 60)
-        print(trades.to_string(max_rows=50))
+        print(_ascii_table(trades.head(50), heavy=True))
+        if len(trades) > 50:
+            print(f"\n... and {len(trades) - 50} more trades")
 
-    # Generate visual report
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Advanced features
+    if args.advanced or args.export_excel or args.export_pdf:
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # Visual charts
-    chart_path = args.output_dir / f"backtest_analysis_{timestamp}.png"
-    create_visual_report(trades, chart_path)
-    print(f"\nVisual report saved to: {chart_path}")
-
-    # Excel export
-    if args.export_excel:
-        excel_path = args.output_dir / f"backtest_analysis_{timestamp}.xlsx"
-        export_to_excel(trades, metrics, excel_path)
-        print(f"Excel report saved to: {excel_path}")
-
-    # PDF export
-    if args.export_pdf:
-        pdf_path = args.output_dir / f"backtest_analysis_{timestamp}.pdf"
-        with PdfPages(pdf_path) as pdf:
-            # Create report pages
-            create_visual_report(trades, None)
-            pdf.savefig(bbox_inches="tight")
-            plt.close()
-
-            # Add metadata
-            d = pdf.infodict()
-            d["Title"] = "Backtest Analysis Report"
-            d["Author"] = "Swing Trading System"
-            d["Subject"] = "Backtest Performance Analysis"
-            d["Keywords"] = "Trading, Backtest, Performance"
-            d["CreationDate"] = datetime.now()
-
-        print(f"PDF report saved to: {pdf_path}")
-
-    # Strategy comparison
-    if args.compare:
-        # Group files by strategy name (assuming filename contains strategy)
-        strategies: dict[str, list[str]] = {}
-        for f in args.files:
-            # Extract strategy name from filename
-            filename = Path(f).stem
-            strategy = filename.split("_")[
-                0
-            ]  # Assuming format: strategy_YYYYMMDD_HHMMSS.json
-            if strategy not in strategies:
-                strategies[strategy] = []
-            strategies[strategy].append(f)
-
-        if len(strategies) > 1:
-            compare_strategies(strategies, args.output_dir)
-        else:
-            print(
-                "\nNote: Only one strategy found. Comparison requires multiple strategies."
+        # Visual report
+        if args.advanced or args.export_pdf:
+            output_format = "pdf" if args.export_pdf else "png"
+            chart_path = (
+                args.output_dir / f"backtest_analysis_{timestamp}.{output_format}"
             )
+            create_visual_report(trades, metrics, chart_path)
+            print(f"\nVisual report saved to: {chart_path}")
+
+        # Excel export
+        if args.export_excel:
+            excel_path = args.output_dir / f"backtest_analysis_{timestamp}.xlsx"
+            export_to_excel(trades, metrics, excel_path)
+            print(f"Excel report saved to: {excel_path}")
 
 
 if __name__ == "__main__":

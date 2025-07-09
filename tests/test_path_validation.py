@@ -38,7 +38,6 @@ class TestPathValidation:
             "src",
             "src/cli",
             "src/ui",
-            "src/ui/legacy",
             "src/utils",
             "templates",
             "tests",
@@ -56,8 +55,6 @@ class TestPathValidation:
         """主要なスクリプトファイルの存在を確認"""
         main_scripts = [
             "src/ui/web.py",
-            "src/ui/legacy/gui.py",
-            "src/ui/legacy/web.py",
             "src/cli/scheduler.py",
             "src/cli/update_idtoken.py",
             "scripts/setup_environment.py",
@@ -102,7 +99,7 @@ class TestPathValidation:
             "backtest/backtest_statements.py",
             "backtest/backtest_technical.py",
             "backtest/backtest_ml.py",
-            "backtest/analyze_backtest_json.py",
+            "backtest/analyze_backtest.py",
         ]
 
         for module in backtest_modules:
@@ -171,9 +168,11 @@ class TestPathValidation:
         """Webアプリケーションのパス設定を検証"""
         from src.ui.web import (
             app,
-            template_dir,
         )
         from src.ui.web import project_root as web_project_root
+        from src.ui.web import (
+            template_dir,
+        )
 
         # プロジェクトルートが正しく設定されているか
         assert web_project_root == project_root
@@ -269,6 +268,9 @@ class TestPathValidation:
 
     def test_legacy_gui_subprocess_commands(self):
         """レガシーGUIで使用されているコマンドパスの問題を検出"""
+        # レガシーGUIは削除されたためスキップ
+        pytest.skip("レガシーGUIは削除されました")
+        return
         legacy_gui_path = project_root / "src/ui/legacy/gui.py"
         content = legacy_gui_path.read_text()
 

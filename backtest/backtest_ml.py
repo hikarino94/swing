@@ -117,34 +117,52 @@ def run_backtest(
         daily = daily.copy()
         daily["prob"] = model.predict_proba(X)[:, 1]
         picks = daily.sort_values("prob", ascending=False).head(top)
-        for _, row in picks.iterrows():
-            entry_price = row["adj_close"]
-            exit_price = row["future_close"]
-            exit_date = row["future_date"]
-            if pd.isna(exit_price) or pd.isna(exit_date):
-                continue
-            shares = int(capital // entry_price)
-            if shares <= 0:
-                continue
-            pnl_yen = (exit_price - entry_price) * shares
-            # ゼロ除算を防ぐためentry_priceが0でないことを確認
-            if entry_price != 0:
-                pnl_pct = (exit_price - entry_price) / entry_price * 100
-            else:
-                pnl_pct = 0.0
-            trades.append(
-                {
-                    "code": row["code"],
-                    "entry_date": as_of,
-                    "exit_date": pd.to_datetime(exit_date).date(),
-                    "entry_price": entry_price,
-                    "exit_price": exit_price,
-                    "shares": shares,
-                    "pnl_yen": round(pnl_yen, 0),
-                    "pnl_pct": round(pnl_pct, 2),
-                    "prob": row["prob"],
-                }
-            )
+        # ベクトル化した処理
+        # 有効な取引のフィルタリング
+        valid_mask = picks["future_close"].notna() & picks["future_date"].notna()
+        valid_picks = picks[valid_mask].copy()
+
+        if len(valid_picks) > 0:
+            # 株数の計算
+            valid_picks["shares"] = (capital // valid_picks["adj_close"]).astype(int)
+
+            # 株数が0より大きいもののみ取引
+            tradeable = valid_picks[valid_picks["shares"] > 0].copy()
+
+            if len(tradeable) > 0:
+                # 損益の計算
+                tradeable["pnl_yen"] = (
+                    (tradeable["future_close"] - tradeable["adj_close"])
+                    * tradeable["shares"]
+                ).round(0)
+
+                # 損益率の計算（ゼロ除算を防ぐ）
+                tradeable["pnl_pct"] = 0.0  # デフォルト値
+                non_zero_mask = tradeable["adj_close"] != 0
+                tradeable.loc[non_zero_mask, "pnl_pct"] = (
+                    (
+                        tradeable.loc[non_zero_mask, "future_close"]
+                        - tradeable.loc[non_zero_mask, "adj_close"]
+                    )
+                    / tradeable.loc[non_zero_mask, "adj_close"]
+                    * 100
+                ).round(2)
+
+                # 取引データの作成（ベクトル化）
+                trade_records = pd.DataFrame(
+                    {
+                        "code": tradeable["code"],
+                        "entry_date": as_of,
+                        "exit_date": pd.to_datetime(tradeable["future_date"]).dt.date,
+                        "entry_price": tradeable["adj_close"],
+                        "exit_price": tradeable["future_close"],
+                        "shares": tradeable["shares"],
+                        "pnl_yen": tradeable["pnl_yen"],
+                        "pnl_pct": tradeable["pnl_pct"],
+                        "prob": tradeable["prob"],
+                    }
+                )
+                trades.extend(trade_records.to_dict("records"))
     return pd.DataFrame(trades)
 
 
