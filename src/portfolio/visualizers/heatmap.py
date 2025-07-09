@@ -46,9 +46,9 @@ class HeatmapVisualizer(BaseVisualizer):
             stats = self._calculate_performance_stats(df)
 
             return {
-                "stock_heatmap": stock_heatmap,
-                "sector_heatmap": sector_heatmap,
-                "distribution_chart": distribution_chart,
+                "stock_heatmap": stock_heatmap.to_json(),
+                "sector_heatmap": sector_heatmap.to_json(),
+                "distribution_chart": distribution_chart.to_json(),
                 "stats": stats,
             }
 

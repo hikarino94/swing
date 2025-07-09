@@ -83,9 +83,9 @@ class PerformanceVisualizer(BaseVisualizer):
             benchmark_fig = self._create_benchmark_chart(daily_values)
 
             return {
-                "value_chart": value_fig,
-                "return_chart": return_fig,
-                "benchmark_chart": benchmark_fig,
+                "value_chart": value_fig.to_json(),
+                "return_chart": return_fig.to_json(),
+                "benchmark_chart": benchmark_fig.to_json(),
             }
 
         finally:
@@ -93,7 +93,7 @@ class PerformanceVisualizer(BaseVisualizer):
 
     def _calculate_holdings_by_date(
         self, trans_df: pd.DataFrame, date_range: pd.DatetimeIndex
-    ) -> dict[str, dict[str, float]]:
+    ) -> dict[pd.Timestamp | Any, dict[str, float]]:
         """日付ごとの保有銘柄数を計算"""
         holdings_by_date = {}
 
@@ -325,4 +325,8 @@ class PerformanceVisualizer(BaseVisualizer):
             height=400,
         )
 
-        return {"value_chart": fig, "return_chart": None, "benchmark_chart": None}
+        return {
+            "value_chart": fig.to_json(),
+            "return_chart": None,
+            "benchmark_chart": None,
+        }

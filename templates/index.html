@@ -2813,20 +2813,20 @@ function swingApp() {
                                     }
                                 });
 
-                                if (data.stock_chart) {
-                                    const stockData = JSON.parse(data.stock_chart);
+                                if (data.stock_composition) {
+                                    const stockData = JSON.parse(data.stock_composition);
                                     Plotly.newPlot('stock-composition-chart', stockData.data, stockData.layout, config);
                                 }
-                                if (data.sector_chart) {
-                                    const sectorData = JSON.parse(data.sector_chart);
+                                if (data.sector_composition) {
+                                    const sectorData = JSON.parse(data.sector_composition);
                                     Plotly.newPlot('sector-composition-chart', sectorData.data, sectorData.layout, config);
                                 }
-                                if (data.market_chart) {
-                                    const marketData = JSON.parse(data.market_chart);
+                                if (data.market_composition) {
+                                    const marketData = JSON.parse(data.market_composition);
                                     Plotly.newPlot('market-composition-chart', marketData.data, marketData.layout, config);
                                 }
-                                if (data.account_chart) {
-                                    const accountData = JSON.parse(data.account_chart);
+                                if (data.account_composition) {
+                                    const accountData = JSON.parse(data.account_composition);
                                     Plotly.newPlot('account-composition-chart', accountData.data, accountData.layout, config);
                                 }
                             });
@@ -2859,9 +2859,9 @@ function swingApp() {
                                     const valueData = JSON.parse(data.value_chart);
                                     Plotly.newPlot('value-performance-chart', valueData.data, valueData.layout, config);
                                 }
-                                if (data.profit_chart) {
-                                    const profitData = JSON.parse(data.profit_chart);
-                                    Plotly.newPlot('profit-performance-chart', profitData.data, profitData.layout, config);
+                                if (data.return_chart) {
+                                    const returnData = JSON.parse(data.return_chart);
+                                    Plotly.newPlot('profit-performance-chart', returnData.data, returnData.layout, config);
                                 }
                                 if (data.benchmark_chart) {
                                     const benchmarkData = JSON.parse(data.benchmark_chart);
@@ -2893,12 +2893,12 @@ function swingApp() {
                                     }
                                 });
 
-                                if (data.stocks_heatmap) {
-                                    const stocksData = JSON.parse(data.stocks_heatmap);
+                                if (data.stock_heatmap) {
+                                    const stocksData = JSON.parse(data.stock_heatmap);
                                     Plotly.newPlot('stocks-heatmap', stocksData.data, stocksData.layout, config);
                                 }
-                                if (data.sectors_heatmap) {
-                                    const sectorsData = JSON.parse(data.sectors_heatmap);
+                                if (data.sector_heatmap) {
+                                    const sectorsData = JSON.parse(data.sector_heatmap);
                                     Plotly.newPlot('sectors-heatmap', sectorsData.data, sectorsData.layout, config);
                                 }
                                 if (data.distribution_chart) {

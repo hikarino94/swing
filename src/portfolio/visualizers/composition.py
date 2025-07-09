@@ -49,10 +49,10 @@ class CompositionVisualizer(BaseVisualizer):
             account_fig = self._create_account_composition_chart(df, total_value)
 
             return {
-                "stock_composition": stock_fig,
-                "sector_composition": sector_fig,
-                "market_composition": market_fig,
-                "account_composition": account_fig,
+                "stock_composition": stock_fig.to_json(),
+                "sector_composition": sector_fig.to_json(),
+                "market_composition": market_fig.to_json(),
+                "account_composition": account_fig.to_json(),
                 "total_value": total_value,
             }
 
