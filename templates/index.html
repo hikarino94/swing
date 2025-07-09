@@ -954,7 +954,7 @@
                                     class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
                                 アップロード
                             </button>
-                            <button @click="loadTransactions()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 text-sm">
+                            <button @click="portfolio.currentPage = 1; loadTransactions()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 text-sm">
                                 更新
                             </button>
                             <button @click="showAddTransactionModal()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm">
@@ -994,6 +994,11 @@
                         </div>
                     </div>
 
+                    <!-- 件数表示 -->
+                    <div class="mb-2 text-sm text-gray-600">
+                        <span x-text="`全${portfolio.totalCount}件中 ${(portfolio.currentPage - 1) * portfolio.perPage + 1}～${Math.min(portfolio.currentPage * portfolio.perPage, portfolio.totalCount)}件を表示`"></span>
+                    </div>
+
                     <!-- 取引履歴一覧 -->
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
@@ -1012,7 +1017,7 @@
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <template x-for="trans in filteredTransactions()" :key="trans.id">
+                                <template x-for="trans in portfolio.transactions" :key="trans.id">
                                     <tr>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="trans.transaction_date"></td>
                                         <td class="px-6 py-4 whitespace-nowrap">
@@ -1045,6 +1050,59 @@
                                 </template>
                             </tbody>
                         </table>
+                    </div>
+
+                    <!-- ページネーション -->
+                    <div x-show="portfolio.totalPages > 1" class="mt-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <button @click="loadTransactions(1)"
+                                    :disabled="portfolio.currentPage === 1"
+                                    class="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                最初
+                            </button>
+                            <button @click="loadTransactions(portfolio.currentPage - 1)"
+                                    :disabled="portfolio.currentPage === 1"
+                                    class="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                前へ
+                            </button>
+
+                            <!-- ページ番号 -->
+                            <template x-for="page in Array.from({length: Math.min(5, portfolio.totalPages)}, (_, i) => {
+                                if (portfolio.totalPages <= 5) return i + 1;
+                                if (portfolio.currentPage <= 3) return i + 1;
+                                if (portfolio.currentPage >= portfolio.totalPages - 2) return portfolio.totalPages - 4 + i;
+                                return portfolio.currentPage - 2 + i;
+                            }).filter(p => p > 0 && p <= portfolio.totalPages)" :key="page">
+                                <button @click="loadTransactions(page)"
+                                        :class="page === portfolio.currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'"
+                                        class="px-3 py-1 text-sm border border-gray-300 rounded-md">
+                                    <span x-text="page"></span>
+                                </button>
+                            </template>
+
+                            <button @click="loadTransactions(portfolio.currentPage + 1)"
+                                    :disabled="portfolio.currentPage === portfolio.totalPages"
+                                    class="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                次へ
+                            </button>
+                            <button @click="loadTransactions(portfolio.totalPages)"
+                                    :disabled="portfolio.currentPage === portfolio.totalPages"
+                                    class="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                最後
+                            </button>
+                        </div>
+
+                        <!-- 表示件数切り替え -->
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm text-gray-700">表示件数:</label>
+                            <select x-model="portfolio.perPage" @change="portfolio.currentPage = 1; loadTransactions()"
+                                    class="text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="20">20件</option>
+                                <option value="50">50件</option>
+                                <option value="100">100件</option>
+                                <option value="200">200件</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -1673,6 +1731,11 @@ function swingApp() {
                 startDate: '',
                 endDate: ''
             },
+            // ページネーション
+            currentPage: 1,
+            perPage: 50,
+            totalPages: 1,
+            totalCount: 0,
             accountName: '',
             aggregateView: false,
             accounts: [],
@@ -2045,16 +2108,23 @@ function swingApp() {
             }
         },
 
-        async loadTransactions() {
+        async loadTransactions(page = 1) {
             if (!this.isLoggedIn) return;
             const params = new URLSearchParams();
             if (this.portfolio.filter.code) params.append('code', this.portfolio.filter.code);
             if (this.portfolio.filter.startDate) params.append('start_date', this.portfolio.filter.startDate);
             if (this.portfolio.filter.endDate) params.append('end_date', this.portfolio.filter.endDate);
+            params.append('page', page.toString());
+            params.append('per_page', this.portfolio.perPage.toString());
 
             const result = await apiCall('/portfolio/transactions?' + params.toString(), {}, 'GET');
             if (result.success) {
                 this.portfolio.transactions = result.transactions;
+                if (result.pagination) {
+                    this.portfolio.currentPage = result.pagination.page;
+                    this.portfolio.totalPages = result.pagination.pages;
+                    this.portfolio.totalCount = result.pagination.total;
+                }
             }
         },
 
