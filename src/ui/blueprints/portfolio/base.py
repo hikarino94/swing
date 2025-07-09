@@ -158,18 +158,24 @@ def get_accounts():
         )
 
         accounts = []
+        account_list = []  # プルダウン用のシンプルなリスト
         for row in cursor.fetchall():
             accounts.append(
                 {
                     "account_name": row[0],
                     "account_type": row[1],
                     "holdings_count": row[2],
+                    "display_name": f"{row[0]} ({row[1]})",  # 表示用の名前
                 }
             )
+            # プルダウン用のリストに追加
+            account_list.append(f"{row[0]} ({row[1]})")
 
         conn.close()
 
-        return jsonify({"success": True, "accounts": accounts})
+        return jsonify(
+            {"success": True, "accounts": accounts, "account_list": account_list}
+        )
 
     except Exception as e:
         logger.error(f"口座一覧取得エラー: {str(e)}")
@@ -188,17 +194,23 @@ def search_stocks():
         conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
-        # コードまたは会社名で部分一致検索
+        # コードまたは会社名で部分一致検索（コードの前方一致を優先）
         cursor.execute(
             """
-            SELECT DISTINCT code, company_name, market_product
+            SELECT DISTINCT code, company_name, market_code
             FROM listed_info
             WHERE (code LIKE ? OR company_name LIKE ?)
             AND delete_flag = 0
-            ORDER BY code
+            ORDER BY
+                CASE
+                    WHEN code LIKE ? THEN 0  -- コードの前方一致を最優先
+                    WHEN code LIKE ? THEN 1  -- コードの部分一致
+                    ELSE 2                   -- 会社名の一致
+                END,
+                code
             LIMIT 50
             """,
-            (f"%{query}%", f"%{query}%"),
+            (f"%{query}%", f"%{query}%", f"{query}%", f"%{query}%"),
         )
 
         stocks = []

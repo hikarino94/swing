@@ -36,6 +36,7 @@ def get_transactions():
         code = get_args_value(request, "code")
         start_date = get_args_value(request, "start_date")
         end_date = get_args_value(request, "end_date")
+        transaction_type = get_args_value(request, "transaction_type")
         page = int(get_args_value(request, "page", "1"))
         per_page = int(get_args_value(request, "per_page", "50"))  # デフォルト50件
 
@@ -60,6 +61,25 @@ def get_transactions():
             if end_date:
                 query_conditions.append("t.transaction_date <= ?")
                 query_params.append(end_date)
+
+            # 取引タイプでのフィルタリング
+            if transaction_type:
+                if transaction_type == "new_buy":
+                    query_conditions.append(
+                        "t.transaction_type = 'buy' AND t.detailed_type = '新規買い'"
+                    )
+                elif transaction_type == "new_sell":
+                    query_conditions.append(
+                        "t.transaction_type = 'sell' AND t.detailed_type = '新規売り'"
+                    )
+                elif transaction_type == "close_buy":
+                    query_conditions.append(
+                        "t.transaction_type = 'buy' AND t.detailed_type = '決済買い'"
+                    )
+                elif transaction_type == "close_sell":
+                    query_conditions.append(
+                        "t.transaction_type = 'sell' AND t.detailed_type = '決済売り'"
+                    )
 
             where_clause = " AND ".join(query_conditions)
 
@@ -278,12 +298,19 @@ def add_transaction():
     """取引履歴を手動で追加"""
     try:
         code = get_json_value(request, "code", "").strip()
+        # 証券コードが5桁の場合は末尾1桁を削除
+        if len(code) == 5 and code.isdigit():
+            code = code[:4]
+
         transaction_date = get_json_value(request, "transaction_date", "").strip()
         transaction_type = get_json_value(request, "transaction_type", "").strip()
+        detailed_type = get_json_value(request, "detailed_type", "").strip()
+        is_margin = get_json_value(request, "is_margin", False)
         quantity = get_json_value(request, "quantity")
         price = get_json_value(request, "price")
         commission = get_json_value(request, "commission", 0)
         tax = get_json_value(request, "tax", 0)
+        realized_profit = get_json_value(request, "realized_profit")
         remarks = get_json_value(request, "remarks", "").strip()
 
         # バリデーション
@@ -298,11 +325,11 @@ def add_transaction():
                     "error": "取引種別は buy または sell を指定してください",
                 }
             )
-        if not quantity or quantity <= 0:
+        if quantity is None or quantity <= 0:
             return jsonify(
                 {"success": False, "error": "数量は正の数を入力してください"}
             )
-        if not price or price <= 0:
+        if price is None or price <= 0:
             return jsonify(
                 {"success": False, "error": "価格は正の数を入力してください"}
             )
@@ -321,13 +348,32 @@ def add_transaction():
         transaction.commission = commission
         transaction.tax = tax
         transaction.total_amount = quantity * price
-        transaction.remarks = remarks
+        # 信用取引の場合、remarksに追記
+        if is_margin:
+            if remarks:
+                transaction.remarks = f"{remarks} (信用)"
+            else:
+                transaction.remarks = "信用"
+        else:
+            transaction.remarks = remarks
 
         # 詳細タイプを設定
-        if transaction_type == "buy":
-            transaction.detailed_type = "新規買い"
+        if detailed_type:
+            transaction.detailed_type = {
+                "new_buy": "新規買い",
+                "new_sell": "新規売り",
+                "close_buy": "決済買い",
+                "close_sell": "決済売り",
+            }.get(detailed_type, detailed_type)
         else:
-            transaction.detailed_type = "新規売り"
+            # フォールバック
+            transaction.detailed_type = (
+                "新規買い" if transaction_type == "buy" else "新規売り"
+            )
+
+        # 実現損益を設定（決済取引時かつ手動入力がある場合）
+        if detailed_type in ["close_sell", "close_buy"] and realized_profit is not None:
+            transaction.realized_profit = realized_profit
 
         # 保存
         if transaction.save():
@@ -410,11 +456,18 @@ def update_transaction(transaction_id):
         if transaction_type:
             update_fields.append("transaction_type = ?")
             update_values.append(transaction_type)
-            # 詳細タイプも更新
+
+        # 詳細タイプの更新
+        detailed_type = get_json_value(request, "detailed_type")
+        if detailed_type:
             update_fields.append("detailed_type = ?")
-            update_values.append(
-                "新規買い" if transaction_type == "buy" else "新規売り"
-            )
+            detailed_value = {
+                "new_buy": "新規買い",
+                "new_sell": "新規売り",
+                "close_buy": "決済買い",
+                "close_sell": "決済売り",
+            }.get(detailed_type, detailed_type)
+            update_values.append(detailed_value)
 
         if quantity is not None:
             update_fields.append("quantity = ?")
@@ -432,9 +485,35 @@ def update_transaction(transaction_id):
             update_fields.append("tax = ?")
             update_values.append(get_json_value(request, "tax"))
 
-        if has_json_key(request, "remarks"):
+        # remarksの更新（信用取引の場合は追記）
+        if has_json_key(request, "remarks") or has_json_key(request, "is_margin"):
+            remarks = get_json_value(request, "remarks", "")
+            is_margin = get_json_value(request, "is_margin", False)
+
+            if is_margin:
+                if remarks and remarks != "信用" and "(信用)" not in remarks:
+                    final_remarks = f"{remarks} (信用)"
+                elif not remarks:
+                    final_remarks = "信用"
+                else:
+                    final_remarks = remarks
+            else:
+                # 信用フラグが外された場合、"(信用)"を削除
+                final_remarks = (
+                    remarks.replace(" (信用)", "").replace("信用", "")
+                    if remarks
+                    else ""
+                )
+
             update_fields.append("remarks = ?")
-            update_values.append(get_json_value(request, "remarks"))
+            update_values.append(final_remarks)
+
+        # 実現損益の更新（売却時のみ）
+        if has_json_key(request, "realized_profit"):
+            realized_profit = get_json_value(request, "realized_profit")
+            if realized_profit is not None:
+                update_fields.append("realized_profit = ?")
+                update_values.append(realized_profit)
 
         # total_amountを再計算
         if quantity is not None or price is not None:

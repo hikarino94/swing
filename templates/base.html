@@ -148,7 +148,7 @@
     <!-- グローバルスクリプト -->
     <script>
         // API呼び出しのヘルパー関数
-        async function apiCall(endpoint, data = {}, method = 'POST') {
+        async function apiCall(endpoint, data = {}, method = 'POST', silent = false) {
             try {
                 const options = {
                     method: method,
@@ -165,15 +165,25 @@
                 const response = await fetch(`/api${endpoint}`, options);
                 const result = await response.json();
 
-                if (result.success) {
-                    showNotification('success', result.description + ' - 完了');
-                } else {
-                    showNotification('error', result.description + ' - エラー: ' + result.error);
+                if (!silent) {
+                    if (result.success) {
+                        if (result.description) {
+                            showNotification('success', result.description + ' - 完了');
+                        }
+                    } else {
+                        if (result.description) {
+                            showNotification('error', result.description + ' - エラー: ' + result.error);
+                        } else {
+                            showNotification('error', result.error || 'エラーが発生しました');
+                        }
+                    }
                 }
 
                 return result;
             } catch (error) {
-                showNotification('error', 'API呼び出しエラー: ' + error.message);
+                if (!silent) {
+                    showNotification('error', 'API呼び出しエラー: ' + error.message);
+                }
                 return { success: false, error: error.message };
             }
         }

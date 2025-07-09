@@ -350,18 +350,23 @@ def add_holding():
     """保有銘柄を手動で追加"""
     try:
         code = get_json_value(request, "code", "").strip()
+        # 証券コードが5桁の場合は末尾1桁を削除
+        if len(code) == 5 and code.isdigit():
+            code = code[:4]
+
         account_name = get_json_value(request, "account_name", "default").strip()
         quantity = get_json_value(request, "quantity")
         average_price = get_json_value(request, "average_price")
+        company_name = get_json_value(request, "company_name", "").strip()
 
         # バリデーション
         if not code:
             return jsonify({"success": False, "error": "銘柄コードは必須です"})
-        if not quantity or quantity <= 0:
+        if quantity is None or quantity <= 0:
             return jsonify(
                 {"success": False, "error": "数量は正の数を入力してください"}
             )
-        if not average_price or average_price <= 0:
+        if average_price is None or average_price <= 0:
             return jsonify(
                 {"success": False, "error": "平均取得価格は正の数を入力してください"}
             )
@@ -388,6 +393,9 @@ def add_holding():
             )
             existing.quantity = quantity
             existing.average_price = average_price
+            # 銘柄名を設定（DBには保存されないが、ログ用）
+            if company_name:
+                existing.company_name = company_name
 
         # 保存
         if existing.save():
@@ -398,6 +406,7 @@ def add_holding():
             )
             return jsonify({"success": True, "message": "保有銘柄を追加しました"})
         else:
+            logger.error(f"保有銘柄の保存に失敗: {code} (口座: {account_name})")
             return jsonify({"success": False, "error": "保有銘柄の保存に失敗しました"})
 
     except Exception as e:
