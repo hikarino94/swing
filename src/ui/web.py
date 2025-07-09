@@ -14,6 +14,7 @@ import sys
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
+from typing import Any, cast
 
 import pandas as pd
 from flask import (
@@ -22,11 +23,13 @@ from flask import (
     make_response,
     redirect,
     render_template,
+)
+from flask import request as flask_request
+from flask import (
     send_file,
     session,
     url_for,
 )
-from flask import request as flask_request
 from werkzeug.serving import WSGIRequestHandler
 
 from src.types.flask_types import (
@@ -43,7 +46,7 @@ from src.utils.cache import cache_result, clear_cache_by_prefix
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 # 型付きrequest
-request: RequestWithUser = flask_request
+request: RequestWithUser = cast(RequestWithUser, flask_request)
 
 # データベース初期化のインポート
 from db.db_schema import init_schema
@@ -570,7 +573,7 @@ def screen_technical():
     logger.info("テクニカルスクリーニングAPIが呼び出されました")
     try:
         # 高速版を使用
-        cmd = [sys.executable, "screening/screen_technical_fast.py"]
+        cmd = [sys.executable, "screening/screen_technical.py"]
 
         action = get_json_value(request, "action", "screen")
         cmd.append(action)
@@ -1495,7 +1498,7 @@ def get_transactions():
         try:
             # 基本的なクエリ条件
             query_conditions = ["t.user_id = ?"]
-            query_params = [request.current_user.id]
+            query_params: list[Any] = [request.current_user.id]
 
             if code:
                 query_conditions.append("t.code = ?")
