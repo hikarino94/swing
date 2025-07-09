@@ -19,35 +19,10 @@ class TestPortfolioAccountType:
         fd, path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
 
-        # テーブル作成
-        conn = sqlite3.connect(path)
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            CREATE TABLE holdings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                code TEXT NOT NULL,
-                account_name TEXT DEFAULT 'default',
-                account_type TEXT DEFAULT '特定',
-                quantity INTEGER DEFAULT 0,
-                average_price REAL DEFAULT 0.0,
-                market_value REAL,
-                profit_loss REAL,
-                profit_loss_ratio REAL,
-                expected_per REAL,
-                actual_pbr REAL,
-                dividend_yield REAL,
-                expected_eps REAL,
-                actual_bps REAL,
-                expected_dividend REAL,
-                lending_type TEXT,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """
-        )
-        conn.commit()
-        conn.close()
+        # init_schemaを使用してすべてのテーブルを作成
+        from db.db_schema import init_schema
+
+        init_schema(path)
 
         yield path
 

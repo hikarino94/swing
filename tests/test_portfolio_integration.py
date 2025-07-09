@@ -17,59 +17,15 @@ def test_db():
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = Path(f.name)
 
-    # テーブル作成
+    # init_schemaを使用してすべてのテーブルを作成
+    from db.db_schema import init_schema
+
+    init_schema(db_path)
+
+    # テストユーザーを追加
     conn = sqlite3.connect(db_path)
-    conn.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            email TEXT,
-            is_active INTEGER DEFAULT 1,
-            created_at TEXT DEFAULT (datetime('now'))
-        );
-
-        CREATE TABLE IF NOT EXISTS holdings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            code TEXT NOT NULL,
-            account_name TEXT NOT NULL DEFAULT 'default',
-            quantity INTEGER NOT NULL,
-            average_price REAL NOT NULL,
-            market_value REAL,
-            profit_loss REAL,
-            profit_loss_ratio REAL,
-            updated_at TEXT DEFAULT (datetime('now')),
-            expected_per REAL,
-            actual_pbr REAL,
-            dividend_yield REAL,
-            expected_eps REAL,
-            actual_bps REAL,
-            expected_dividend REAL,
-            lending_type TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-
-        CREATE TABLE IF NOT EXISTS listed_info (
-            code TEXT PRIMARY KEY,
-            date TEXT,
-            company_name TEXT,
-            company_name_en TEXT,
-            sector17_code TEXT,
-            sector17_name TEXT,
-            sector33_code TEXT,
-            sector33_name TEXT,
-            scale_category TEXT,
-            market_code TEXT,
-            market_name TEXT,
-            margin_code TEXT,
-            margin_name TEXT,
-            delete_flag INTEGER
-        );
-
-        INSERT INTO users (username, password_hash) VALUES ('test_user', 'dummy_hash');
-    """
+    conn.execute(
+        "INSERT INTO users (username, email, password_hash) VALUES ('test_user', 'test@example.com', 'dummy_hash')"
     )
     conn.commit()
     conn.close()

@@ -18,7 +18,7 @@ class PortfolioManager:
         user_id: int, holdings_data: list[dict], account_name: str = "default"
     ) -> tuple[int, int]:
         """
-        CSVデータから保有銘柄を追加（重複チェックなし）
+        CSVデータから保有銘柄を追加・更新
 
         Args:
             user_id: ユーザーID
@@ -31,22 +31,314 @@ class PortfolioManager:
         updated_count = 0
         new_count = 0
 
+        # CSVタイプの判定（最初のデータでチェック）
+        is_standard_format = False
+        if holdings_data:
+            first_data = holdings_data[0]
+            # 標準形式の特徴: PER、PBR、配当利回りなどの株価指標が含まれている
+            if any(
+                key in first_data
+                for key in ["expected_per", "actual_pbr", "dividend_yield"]
+            ):
+                is_standard_format = True
+                logger.info("標準形式CSVとして処理します")
+            else:
+                logger.info("SaveFile形式CSVとして処理します")
+
         for data in holdings_data:
+            # 投資信託かどうかをチェック
+            is_fund = data.get("is_fund", False)
+
             # 口座タイプを取得（デフォルトは"特定"）
             account_type = data.get("account_type", "特定")
 
-            # 新規作成（重複チェックなし - ユーザーの要望により常に新規追加）
-            holding = Holding(
-                user_id=user_id,
-                code=data["code"],
-                account_name=account_name,
-                account_type=account_type,
-            )
-            new_count += 1
+            if is_fund:
+                # 投資信託の場合
+                fund_name = data.get("fund_name", "")
+                if not fund_name:
+                    logger.warning("投資信託名が空のデータをスキップ")
+                    continue
 
-            # データを設定
-            holding.quantity = data["quantity"]
-            holding.average_price = data.get("average_price", 0)
+                # 必須項目のチェック
+                quantity = data.get("quantity")
+                if quantity is None or quantity == 0:
+                    logger.warning(
+                        f"投資信託の口数が無効: {fund_name} (quantity={quantity})"
+                    )
+                    continue
+
+                average_price = data.get("average_price", 0)
+                if average_price is None:
+                    average_price = 0
+
+                # fund_masterからfund_idを取得または作成
+                conn = sqlite3.connect(get_db_path())
+                cursor = conn.cursor()
+                try:
+                    # 既存のファンドを検索
+                    cursor.execute(
+                        "SELECT fund_id FROM fund_master WHERE fund_name = ?",
+                        (fund_name,),
+                    )
+                    fund_row = cursor.fetchone()
+
+                    if fund_row:
+                        fund_id = fund_row[0]
+                    else:
+                        # 新規ファンドとして登録
+                        cursor.execute(
+                            """
+                            INSERT INTO fund_master (fund_name, is_active)
+                            VALUES (?, 1)
+                            """,
+                            (fund_name,),
+                        )
+                        fund_id = cursor.lastrowid
+                        conn.commit()
+                        logger.info(f"新規ファンドを登録: {fund_name} (ID: {fund_id})")
+
+                    # 既存の投資信託保有情報を検索
+                    cursor.execute(
+                        """
+                        SELECT id, deleted_at FROM fund_holdings
+                        WHERE user_id = ? AND fund_id = ? AND account_name = ? AND account_type = ?
+                        """,
+                        (user_id, fund_id, account_name, account_type),
+                    )
+                    existing_fund_row = cursor.fetchone()
+
+                    if existing_fund_row:
+                        # 既存データを更新
+                        cursor.execute(
+                            """
+                            UPDATE fund_holdings
+                            SET quantity = ?, average_price = ?,
+                                market_value = ?, profit_loss = ?,
+                                profit_loss_ratio = ?,
+                                updated_at = datetime('now'),
+                                deleted_at = NULL
+                            WHERE id = ?
+                            """,
+                            (
+                                quantity,
+                                average_price,
+                                data.get("market_value"),
+                                data.get("profit_loss"),
+                                data.get("profit_loss_ratio"),
+                                existing_fund_row[0],
+                            ),
+                        )
+                        updated_count += 1
+                        logger.info(f"投資信託更新: {fund_name} ({account_type})")
+                    else:
+                        # 新規データを挿入
+                        cursor.execute(
+                            """
+                            INSERT INTO fund_holdings
+                            (user_id, fund_id, account_name, account_type,
+                             quantity, average_price, market_value, profit_loss,
+                             profit_loss_ratio)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                user_id,
+                                fund_id,
+                                account_name,
+                                account_type,
+                                quantity,
+                                average_price,
+                                data.get("market_value"),
+                                data.get("profit_loss"),
+                                data.get("profit_loss_ratio"),
+                            ),
+                        )
+                        new_count += 1
+                        logger.info(f"投資信託追加: {fund_name} ({account_type})")
+
+                    # 基準価額履歴を更新（現在の基準価額がある場合）
+                    current_price = data.get("current_price")
+                    if current_price:
+                        from datetime import datetime
+
+                        today = datetime.now().strftime("%Y-%m-%d")
+
+                        # 今日のデータがあるか確認
+                        cursor.execute(
+                            """
+                            SELECT nav FROM fund_prices
+                            WHERE fund_id = ? AND date = ?
+                            """,
+                            (fund_id, today),
+                        )
+                        price_row = cursor.fetchone()
+
+                        if price_row:
+                            # 既存データを更新
+                            cursor.execute(
+                                """
+                                UPDATE fund_prices
+                                SET nav = ?
+                                WHERE fund_id = ? AND date = ?
+                                """,
+                                (current_price, fund_id, today),
+                            )
+                        else:
+                            # 新規データを挿入
+                            cursor.execute(
+                                """
+                                INSERT INTO fund_prices (fund_id, date, nav)
+                                VALUES (?, ?, ?)
+                                """,
+                                (fund_id, today, current_price),
+                            )
+
+                    conn.commit()
+
+                except sqlite3.Error as e:
+                    logger.error(f"投資信託データ処理エラー: {e}")
+                    conn.rollback()
+                finally:
+                    conn.close()
+
+                # 投資信託の場合は次のデータへ
+                continue
+
+            # 以下は株式の処理
+            # 既存の保有銘柄を検索（論理削除されたものも含めて検索）
+            conn = sqlite3.connect(get_db_path())
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    SELECT id, deleted_at FROM holdings
+                    WHERE user_id = ? AND code = ? AND account_name = ? AND account_type = ?
+                    """,
+                    (user_id, data["code"], account_name, account_type),
+                )
+                existing_row = cursor.fetchone()
+                existing_id = existing_row[0] if existing_row else None
+                is_deleted = existing_row[1] is not None if existing_row else False
+            finally:
+                conn.close()
+
+            existing = None
+            if existing_id and not is_deleted:
+                # 論理削除されていない場合のみ取得
+                existing = Holding.find_by_user_code_and_account(
+                    user_id, data["code"], account_name, account_type
+                )
+            elif existing_id and is_deleted:
+                # 論理削除されている場合は、復活させる処理を行う
+                conn = sqlite3.connect(get_db_path())
+                cursor = conn.cursor()
+                try:
+                    cursor.execute(
+                        """
+                        UPDATE holdings
+                        SET deleted_at = NULL, updated_at = datetime('now')
+                        WHERE id = ?
+                        """,
+                        (existing_id,),
+                    )
+                    conn.commit()
+                    # 復活させた後、既存レコードとして取得
+                    existing = Holding(
+                        user_id=user_id,
+                        code=data["code"],
+                        account_name=account_name,
+                        account_type=account_type,
+                    )
+                    existing.id = existing_id
+                    logger.debug(
+                        f"論理削除されていた銘柄を復活: {data['code']} ({account_type})"
+                    )
+                except sqlite3.Error as e:
+                    logger.error(f"論理削除銘柄の復活エラー: {e}")
+                    conn.rollback()
+                finally:
+                    conn.close()
+
+            if is_standard_format:
+                # 標準形式の処理: 重複時は上書き、PER等の再計算なし
+                if existing:
+                    holding = existing
+                    updated_count += 1
+                    logger.debug(
+                        f"標準形式: 既存銘柄を上書き更新 {data['code']} ({account_type})"
+                    )
+                else:
+                    holding = Holding(
+                        user_id=user_id,
+                        code=data["code"],
+                        account_name=account_name,
+                        account_type=account_type,
+                    )
+                    new_count += 1
+                    logger.debug(
+                        f"標準形式: 新規銘柄追加 {data['code']} ({account_type})"
+                    )
+
+                # データを設定（標準形式は全て上書き）
+                holding.quantity = data["quantity"]
+                holding.average_price = data.get("average_price", 0)
+
+                # 標準形式はPER等のデータを持っているのでそのまま設定
+                holding.expected_per = data.get("expected_per")
+                holding.actual_pbr = data.get("actual_pbr")
+                holding.dividend_yield = data.get("dividend_yield")
+                holding.expected_eps = data.get("expected_eps")
+                holding.actual_bps = data.get("actual_bps")
+                holding.expected_dividend = data.get("expected_dividend")
+                holding.lending_type = data.get("lending_type")
+
+            else:
+                # SaveFile形式の処理: 条件付き更新、PER等の再計算
+                if existing:
+                    holding = existing
+                    updated_count += 1
+                    logger.debug(
+                        f"SaveFile形式: 既存銘柄を更新 {data['code']} ({account_type})"
+                    )
+
+                    # 保有株数と取得単価を更新
+                    holding.quantity = data["quantity"]
+                    holding.average_price = data.get("average_price", 0)
+
+                    # PER等の指標が未設定の場合のみ、後で再計算するためNoneを設定
+                    if holding.expected_per is None:
+                        holding.expected_per = None
+                    if holding.actual_pbr is None:
+                        holding.actual_pbr = None
+                    if holding.dividend_yield is None:
+                        holding.dividend_yield = None
+                    if holding.expected_dividend is None:
+                        holding.expected_dividend = None
+                    # 既存の値がある場合は更新しない（要件通り）
+
+                else:
+                    holding = Holding(
+                        user_id=user_id,
+                        code=data["code"],
+                        account_name=account_name,
+                        account_type=account_type,
+                    )
+                    new_count += 1
+                    logger.debug(
+                        f"SaveFile形式: 新規銘柄追加 {data['code']} ({account_type})"
+                    )
+
+                    # データを設定
+                    holding.quantity = data["quantity"]
+                    holding.average_price = data.get("average_price", 0)
+
+                    # SaveFile形式はPER等のデータを持っていないのでNoneを設定（後で再計算）
+                    holding.expected_per = None
+                    holding.actual_pbr = None
+                    holding.dividend_yield = None
+                    holding.expected_dividend = None
+                    holding.expected_eps = None
+                    holding.actual_bps = None
+                    holding.lending_type = None
 
             # 市場価値と損益は取得価格と数量から再計算
             # CSVからの値はデバッグ用にログ出力のみ
@@ -66,29 +358,175 @@ class PortfolioManager:
             holding.profit_loss = None
             holding.profit_loss_ratio = None
 
-            # 株価指標データを設定
-            holding.expected_per = data.get("expected_per")
-            holding.actual_pbr = data.get("actual_pbr")
-            holding.dividend_yield = data.get("dividend_yield")
-            holding.expected_eps = data.get("expected_eps")
-            holding.actual_bps = data.get("actual_bps")
-            holding.expected_dividend = data.get("expected_dividend")
-            holding.lending_type = data.get("lending_type")
-
             # 保存
             if not holding.save():
                 logger.error(f"保有銘柄の保存に失敗: {data['code']} ({account_type})")
 
-        logger.info(f"保有銘柄追加完了: {new_count}件（口座: {account_name}）")
+        logger.info(
+            f"保有銘柄更新完了: 更新{updated_count}件, 新規{new_count}件（口座: {account_name}）"
+        )
 
-        # 追加した銘柄の株価指標を更新
-        if new_count > 0:
-            added_codes = [data["code"] for data in holdings_data]
-            unique_codes = list(set(added_codes))
-            indicator_count = PortfolioManager.update_stock_indicators(
-                user_id, unique_codes
-            )
-            logger.info(f"株価指標更新: {indicator_count}件")
+        # CSVに含まれていない銘柄を論理削除
+        if holdings_data:  # CSVにデータがある場合のみ処理
+            conn = sqlite3.connect(get_db_path())
+            cursor = conn.cursor()
+            try:
+                # 株式と投資信託を分離
+                stock_data = [
+                    data for data in holdings_data if not data.get("is_fund", False)
+                ]
+                fund_data = [
+                    data for data in holdings_data if data.get("is_fund", False)
+                ]
+
+                # 株式の論理削除
+                if stock_data:
+                    csv_codes = [
+                        data["code"] for data in stock_data if data.get("code")
+                    ]
+                    if csv_codes:
+                        placeholders = ",".join("?" * len(csv_codes))
+                        cursor.execute(
+                            f"""
+                            UPDATE holdings
+                            SET deleted_at = datetime('now')
+                            WHERE user_id = ?
+                              AND account_name = ?
+                              AND code NOT IN ({placeholders})
+                              AND deleted_at IS NULL
+                            """,
+                            [user_id, account_name, *csv_codes],
+                        )
+                        stock_deleted_count = cursor.rowcount
+                    else:
+                        # CSVに株式データがない場合は全ての株式を削除
+                        cursor.execute(
+                            """
+                            UPDATE holdings
+                            SET deleted_at = datetime('now')
+                            WHERE user_id = ?
+                              AND account_name = ?
+                              AND deleted_at IS NULL
+                            """,
+                            (user_id, account_name),
+                        )
+                        stock_deleted_count = cursor.rowcount
+                else:
+                    # CSVに株式データがない場合は全ての株式を削除
+                    cursor.execute(
+                        """
+                        UPDATE holdings
+                        SET deleted_at = datetime('now')
+                        WHERE user_id = ?
+                          AND account_name = ?
+                          AND deleted_at IS NULL
+                        """,
+                        (user_id, account_name),
+                    )
+                    stock_deleted_count = cursor.rowcount
+
+                # 投資信託の論理削除
+                if fund_data:
+                    csv_fund_names = [
+                        data["fund_name"] for data in fund_data if data.get("fund_name")
+                    ]
+                    if csv_fund_names:
+                        # CSVに含まれるファンド名からfund_idを取得
+                        fund_placeholders = ",".join("?" * len(csv_fund_names))
+                        cursor.execute(
+                            f"""
+                            SELECT fund_id FROM fund_master
+                            WHERE fund_name IN ({fund_placeholders})
+                            """,
+                            csv_fund_names,
+                        )
+                        csv_fund_ids = [row[0] for row in cursor.fetchall()]
+
+                        if csv_fund_ids:
+                            fund_id_placeholders = ",".join("?" * len(csv_fund_ids))
+                            cursor.execute(
+                                f"""
+                                UPDATE fund_holdings
+                                SET deleted_at = datetime('now')
+                                WHERE user_id = ?
+                                  AND account_name = ?
+                                  AND fund_id NOT IN ({fund_id_placeholders})
+                                  AND deleted_at IS NULL
+                                """,
+                                [user_id, account_name, *csv_fund_ids],
+                            )
+                            fund_deleted_count = cursor.rowcount
+                        else:
+                            fund_deleted_count = 0
+                    else:
+                        # CSVに投資信託データがない場合は全ての投資信託を削除
+                        cursor.execute(
+                            """
+                            UPDATE fund_holdings
+                            SET deleted_at = datetime('now')
+                            WHERE user_id = ?
+                              AND account_name = ?
+                              AND deleted_at IS NULL
+                            """,
+                            (user_id, account_name),
+                        )
+                        fund_deleted_count = cursor.rowcount
+                else:
+                    # CSVに投資信託データがない場合は全ての投資信託を削除
+                    cursor.execute(
+                        """
+                        UPDATE fund_holdings
+                        SET deleted_at = datetime('now')
+                        WHERE user_id = ?
+                          AND account_name = ?
+                          AND deleted_at IS NULL
+                        """,
+                        (user_id, account_name),
+                    )
+                    fund_deleted_count = cursor.rowcount
+
+                if stock_deleted_count > 0 or fund_deleted_count > 0:
+                    logger.info(
+                        f"CSVに存在しない銘柄を論理削除しました: "
+                        f"株式{stock_deleted_count}件、投資信託{fund_deleted_count}件"
+                    )
+
+                conn.commit()
+            except sqlite3.Error as e:
+                logger.error(f"論理削除エラー: {e}")
+                conn.rollback()
+            finally:
+                conn.close()
+
+        # SaveFile形式の場合、株価指標の再計算が必要
+        if not is_standard_format and (updated_count > 0 or new_count > 0):
+            # PER等が未設定の銘柄のみ更新
+            conn = sqlite3.connect(get_db_path())
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    SELECT DISTINCT code FROM holdings
+                    WHERE user_id = ?
+                      AND deleted_at IS NULL
+                      AND (expected_per IS NULL
+                           OR actual_pbr IS NULL
+                           OR dividend_yield IS NULL
+                           OR expected_dividend IS NULL)
+                    """,
+                    (user_id,),
+                )
+                codes_to_update = [row[0] for row in cursor.fetchall()]
+            finally:
+                conn.close()
+
+            if codes_to_update:
+                indicator_count = PortfolioManager.update_stock_indicators(
+                    user_id, codes_to_update
+                )
+                logger.info(
+                    f"SaveFile形式: 株価指標を再計算しました（{indicator_count}件）"
+                )
 
         return updated_count, new_count
 
@@ -247,6 +685,7 @@ class PortfolioManager:
                                     WHEN transaction_type = 'sell' THEN -quantity
                                     ELSE 0 END) > 0
                 )
+                AND deleted_at IS NULL
             """,
                 (user_id, user_id),
             )
@@ -374,7 +813,7 @@ class PortfolioManager:
                     MAX(h.lending_type) as lending_type
                 FROM holdings h
                 LEFT JOIN listed_info li ON (h.code || '0') = li.code
-                WHERE h.user_id = ? AND h.quantity > 0
+                WHERE h.user_id = ? AND h.quantity > 0 AND h.deleted_at IS NULL
                 GROUP BY h.code, li.company_name
                 ORDER BY h.code
             """,
@@ -384,6 +823,7 @@ class PortfolioManager:
             aggregated_holdings = []
             for row in cursor.fetchall():
                 holding = {
+                    "type": "stock",  # 株式であることを示す
                     "code": row[0],
                     "company_name": row[1],
                     "total_quantity": row[2],
@@ -422,7 +862,7 @@ class PortfolioManager:
     @staticmethod
     def delete_all_holdings(user_id: int) -> int:
         """
-        ユーザーの全保有銘柄を削除
+        ユーザーの全保有銘柄を削除（株式と投資信託の両方）
 
         Args:
             user_id: ユーザーID
@@ -434,16 +874,39 @@ class PortfolioManager:
         cursor = conn.cursor()
 
         try:
+            # 株式の削除対象件数を取得
             cursor.execute(
-                "SELECT COUNT(*) FROM holdings WHERE user_id = ?", (user_id,)
+                "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND deleted_at IS NULL",
+                (user_id,),
             )
-            count = cursor.fetchone()[0]
+            stock_count = cursor.fetchone()[0]
 
-            cursor.execute("DELETE FROM holdings WHERE user_id = ?", (user_id,))
+            # 投資信託の削除対象件数を取得
+            cursor.execute(
+                "SELECT COUNT(*) FROM fund_holdings WHERE user_id = ? AND deleted_at IS NULL",
+                (user_id,),
+            )
+            fund_count = cursor.fetchone()[0]
+
+            # 株式を論理削除
+            cursor.execute(
+                "UPDATE holdings SET deleted_at = datetime('now') WHERE user_id = ? AND deleted_at IS NULL",
+                (user_id,),
+            )
+
+            # 投資信託を論理削除
+            cursor.execute(
+                "UPDATE fund_holdings SET deleted_at = datetime('now') WHERE user_id = ? AND deleted_at IS NULL",
+                (user_id,),
+            )
+
             conn.commit()
 
-            logger.info(f"保有銘柄削除完了: {count}件")
-            return int(count)
+            total_count = stock_count + fund_count
+            logger.info(
+                f"保有銘柄削除完了: 株式{stock_count}件、投資信託{fund_count}件（合計{total_count}件）"
+            )
+            return int(total_count)
 
         except sqlite3.Error as e:
             logger.error(f"保有銘柄削除エラー: {e}")
@@ -455,7 +918,7 @@ class PortfolioManager:
     @staticmethod
     def delete_holdings_by_account(user_id: int, account_name: str) -> int:
         """
-        特定口座の保有銘柄を削除
+        特定口座の保有銘柄を削除（株式と投資信託の両方）
 
         Args:
             user_id: ユーザーID
@@ -468,20 +931,39 @@ class PortfolioManager:
         cursor = conn.cursor()
 
         try:
+            # 株式の削除対象件数を取得
             cursor.execute(
-                "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND account_name = ?",
+                "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
                 (user_id, account_name),
             )
-            count = cursor.fetchone()[0]
+            stock_count = cursor.fetchone()[0]
 
+            # 投資信託の削除対象件数を取得
             cursor.execute(
-                "DELETE FROM holdings WHERE user_id = ? AND account_name = ?",
+                "SELECT COUNT(*) FROM fund_holdings WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
                 (user_id, account_name),
             )
+            fund_count = cursor.fetchone()[0]
+
+            # 株式を論理削除
+            cursor.execute(
+                "UPDATE holdings SET deleted_at = datetime('now') WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
+                (user_id, account_name),
+            )
+
+            # 投資信託を論理削除
+            cursor.execute(
+                "UPDATE fund_holdings SET deleted_at = datetime('now') WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
+                (user_id, account_name),
+            )
+
             conn.commit()
 
-            logger.info(f"保有銘柄削除完了: {count}件（口座: {account_name}）")
-            return int(count)
+            total_count = stock_count + fund_count
+            logger.info(
+                f"保有銘柄削除完了: 株式{stock_count}件、投資信託{fund_count}件（合計{total_count}件）（口座: {account_name}）"
+            )
+            return int(total_count)
 
         except sqlite3.Error as e:
             logger.error(f"保有銘柄削除エラー: {e}")
@@ -514,7 +996,7 @@ class PortfolioManager:
                     f"""
                     SELECT DISTINCT h.code
                     FROM holdings h
-                    WHERE h.user_id = ? AND h.code IN ({placeholders})
+                    WHERE h.user_id = ? AND h.code IN ({placeholders}) AND h.deleted_at IS NULL
                     """,
                     [user_id, *codes],
                 )
@@ -523,7 +1005,7 @@ class PortfolioManager:
                     """
                     SELECT DISTINCT code
                     FROM holdings
-                    WHERE user_id = ?
+                    WHERE user_id = ? AND deleted_at IS NULL
                     """,
                     (user_id,),
                 )
@@ -551,7 +1033,7 @@ class PortfolioManager:
                 current_price = price_row[0]
 
                 # 最新のstatementデータを取得（5桁変換）
-                # まず最新のデータを取得
+                # まず最新のデータを取得（BPSや配当データも含む）
                 cursor.execute(
                     """
                     SELECT
@@ -564,7 +1046,7 @@ class PortfolioManager:
                         ResultDividendPerShareAnnual
                     FROM statements
                     WHERE code = ?
-                    ORDER BY DisclosedDate DESC
+                    ORDER BY CurrentFiscalYearStartDate DESC, DisclosedDate DESC
                     LIMIT 1
                     """,
                     (code_5digit,),
@@ -587,7 +1069,40 @@ class PortfolioManager:
                 # 予想EPSを優先的に使用（なければ実績EPSを使用）
                 expected_eps = forecast_eps or next_year_eps or eps
 
-                # PER計算（予想EPSベース）
+                # 予想EPSがない場合、別のレコードから取得を試みる
+                if not expected_eps:
+                    cursor.execute(
+                        """
+                        SELECT
+                            ForecastEarningsPerShare,
+                            NextYearForecastEarningsPerShare,
+                            EarningsPerShare
+                        FROM statements
+                        WHERE code = ?
+                          AND (ForecastEarningsPerShare IS NOT NULL
+                               AND ForecastEarningsPerShare != ''
+                               AND ForecastEarningsPerShare > 0
+                               OR NextYearForecastEarningsPerShare IS NOT NULL
+                               AND NextYearForecastEarningsPerShare != ''
+                               AND NextYearForecastEarningsPerShare > 0
+                               OR EarningsPerShare IS NOT NULL
+                               AND EarningsPerShare != ''
+                               AND EarningsPerShare > 0)
+                        ORDER BY CurrentFiscalYearStartDate DESC, DisclosedDate DESC
+                        LIMIT 1
+                        """,
+                        (code_5digit,),
+                    )
+                    eps_row = cursor.fetchone()
+                    if eps_row:
+                        forecast_eps = eps_row[0]
+                        next_year_eps = eps_row[1]
+                        eps = eps_row[2]
+                        expected_eps = forecast_eps or next_year_eps or eps
+                    else:
+                        logger.debug(f"No EPS data found for {code}")
+
+                # PER計算（予想EPSを優先、なければ実績EPS）
                 expected_per = None
                 if expected_eps and expected_eps > 0:
                     expected_per = round(current_price / expected_eps, 2)
@@ -607,7 +1122,7 @@ class PortfolioManager:
                           AND BookValuePerShare IS NOT NULL
                           AND BookValuePerShare != ''
                           AND BookValuePerShare > 0
-                        ORDER BY DisclosedDate DESC
+                        ORDER BY CurrentFiscalYearStartDate DESC, DisclosedDate DESC
                         LIMIT 1
                         """,
                         (code_5digit,),
@@ -651,7 +1166,7 @@ class PortfolioManager:
                                OR (ForecastDividendPerShareAnnual IS NOT NULL AND ForecastDividendPerShareAnnual != '')
                                OR (ResultDividendPerShareAnnual IS NOT NULL AND ResultDividendPerShareAnnual != '')
                           )
-                        ORDER BY DisclosedDate DESC
+                        ORDER BY CurrentFiscalYearStartDate DESC, DisclosedDate DESC
                         LIMIT 1
                         """,
                         (code_5digit,),
@@ -674,7 +1189,7 @@ class PortfolioManager:
                         expected_dividend = ?,
                         expected_eps = ?,
                         actual_bps = ?
-                    WHERE user_id = ? AND code = ?
+                    WHERE user_id = ? AND code = ? AND deleted_at IS NULL
                     """,
                     (
                         expected_per,
@@ -690,10 +1205,16 @@ class PortfolioManager:
 
                 if cursor.rowcount > 0:
                     updated_count += cursor.rowcount
-                    logger.info(
-                        f"Updated indicators for {code}: PER={expected_per}, "
-                        f"PBR={actual_pbr}, Yield={dividend_yield}%"
-                    )
+                    if expected_per is not None:
+                        logger.info(
+                            f"Updated indicators for {code}: PER={expected_per}, "
+                            f"PBR={actual_pbr}, Yield={dividend_yield}%"
+                        )
+                    else:
+                        logger.info(
+                            f"Updated indicators for {code}: PER=N/A (no EPS data), "
+                            f"PBR={actual_pbr}, Yield={dividend_yield}%"
+                        )
 
             conn.commit()
             logger.info(f"株価指標更新完了: {updated_count}件")
@@ -721,7 +1242,7 @@ class PortfolioManager:
         cursor = conn.cursor()
 
         try:
-            # 保有銘柄の集計
+            # 株式の集計
             cursor.execute(
                 """
                 SELECT
@@ -730,18 +1251,35 @@ class PortfolioManager:
                     SUM(market_value) as total_market_value,
                     SUM(profit_loss) as total_profit_loss
                 FROM holdings
-                WHERE user_id = ? AND quantity > 0
+                WHERE user_id = ? AND quantity > 0 AND deleted_at IS NULL
             """,
                 (user_id,),
             )
 
-            row = cursor.fetchone()
+            stock_row = cursor.fetchone()
 
+            # 投資信託の集計
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) as fund_count,
+                    SUM(quantity * average_price / 10000) as total_cost,
+                    SUM(market_value) as total_market_value,
+                    SUM(profit_loss) as total_profit_loss
+                FROM fund_holdings
+                WHERE user_id = ? AND quantity > 0 AND deleted_at IS NULL
+            """,
+                (user_id,),
+            )
+
+            fund_row = cursor.fetchone()
+
+            # 合計値を計算
             summary = {
-                "stock_count": row[0] or 0,
-                "total_cost": row[1] or 0,
-                "total_market_value": row[2] or 0,
-                "total_profit_loss": row[3] or 0,
+                "stock_count": (stock_row[0] or 0) + (fund_row[0] or 0),
+                "total_cost": (stock_row[1] or 0) + (fund_row[1] or 0),
+                "total_market_value": (stock_row[2] or 0) + (fund_row[2] or 0),
+                "total_profit_loss": (stock_row[3] or 0) + (fund_row[3] or 0),
                 "total_profit_loss_ratio": 0,
             }
 

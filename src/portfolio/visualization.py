@@ -6,7 +6,9 @@ from typing import Any
 
 import japanize_matplotlib
 import matplotlib
+import numpy as np
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 
 from src.config import DB_PATH
@@ -31,7 +33,7 @@ class PortfolioVisualizer:
         """ポートフォリオ構成円グラフを作成"""
         conn = sqlite3.connect(DB_PATH)
         try:
-            # 保有銘柄データを取得
+            # 保有銘柄データを取得（論理削除されていないもののみ）
             query = """
                 SELECT h.code, h.market_value, h.account_name,
                        li.company_name, li.sector17_name, li.sector33_name,
@@ -39,6 +41,7 @@ class PortfolioVisualizer:
                 FROM holdings h
                 LEFT JOIN listed_info li ON (h.code || '0') = li.code
                 WHERE h.user_id = ? AND h.quantity > 0 AND h.market_value > 0
+                      AND h.deleted_at IS NULL
             """
             df = pd.read_sql(query, conn, params=[self.user_id])
 
@@ -288,7 +291,7 @@ class PortfolioVisualizer:
                 SELECT p.date, p.code, p.close
                 FROM prices p
                 INNER JOIN (
-                    SELECT DISTINCT code FROM holdings WHERE user_id = ?
+                    SELECT DISTINCT code FROM holdings WHERE user_id = ? AND deleted_at IS NULL
                     UNION
                     SELECT DISTINCT code FROM transactions WHERE user_id = ?
                 ) h ON p.code = h.code
@@ -307,7 +310,7 @@ class PortfolioVisualizer:
                     SELECT h.code, h.quantity, h.average_price, h.market_value,
                            h.profit_loss, h.profit_loss_ratio, h.updated_at
                     FROM holdings h
-                    WHERE h.user_id = ? AND h.quantity > 0
+                    WHERE h.user_id = ? AND h.quantity > 0 AND h.deleted_at IS NULL
                 """
                 holdings_df = pd.read_sql(holdings_query, conn, params=[self.user_id])
 
@@ -548,7 +551,7 @@ class PortfolioVisualizer:
                        li.company_name, li.sector17_name, li.sector33_name
                 FROM holdings h
                 LEFT JOIN listed_info li ON (h.code || '0') = li.code
-                WHERE h.user_id = ? AND h.quantity > 0
+                WHERE h.user_id = ? AND h.quantity > 0 AND h.deleted_at IS NULL
                 ORDER BY h.profit_loss_ratio DESC
             """
             df = pd.read_sql(query, conn, params=[self.user_id])
@@ -565,38 +568,94 @@ class PortfolioVisualizer:
                 f"{row['code']} {row['company_name'] or ''}"
                 for _, row in top_stocks.iterrows()
             ]
-            stock_values = top_stocks["profit_loss_ratio"].values
-            stock_sizes = top_stocks["market_value"].values
+            # 数値型を確実にしてNaN値を処理
+            stock_values_series = pd.to_numeric(
+                top_stocks["profit_loss_ratio"], errors="coerce"
+            )
+            stock_values = np.nan_to_num(stock_values_series.to_numpy(), nan=0.0)
+            stock_sizes_series = pd.to_numeric(
+                top_stocks["market_value"], errors="coerce"
+            )
+            stock_sizes = np.nan_to_num(stock_sizes_series.to_numpy(), nan=0.0)
+
+            # デバッグ情報をログに出力
+            logger.info(
+                f"ヒートマップデータ: 銘柄数={len(stock_labels)}, 損益率型={stock_values.dtype}, 最小={stock_values.min():.1f}, 最大={stock_values.max():.1f}"
+            )
 
             # Treemapで銘柄別損益率を表示
-            fig_stocks = go.Figure(
-                go.Treemap(
-                    labels=stock_labels,
-                    values=stock_sizes,
-                    parents=[""] * len(stock_labels),
-                    text=[f"{val:.1f}%" for val in stock_values],
-                    textposition="middle center",
-                    marker={
-                        "colorscale": "RdYlGn",
-                        "cmid": 0,
-                        "colorbar": {"title": "損益率(%)"},
-                        "line": {"width": 2},
-                        "cmin": -20,
-                        "cmax": 20,
-                        "colorbar_thickness": 15,
-                    },
-                    customdata=stock_values,
-                    hovertemplate="<b>%{label}</b><br>損益率: %{customdata:.1f}%<br>評価額: ¥%{value:,.0f}<extra></extra>",
+            # Plotly Expressを使用した実装に変更
+            try:
+                # データフレームを準備
+                treemap_data = pd.DataFrame(
+                    {
+                        "labels": stock_labels,
+                        "values": stock_sizes,
+                        "colors": stock_values,
+                    }
                 )
-            )
-            fig_stocks.update_traces(marker_colorbar_thickness=15)
-            fig_stocks.update_layout(
-                title="銘柄別損益率ヒートマップ（上位20銘柄）",
-                font={
-                    "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
-                },
-                margin={"t": 50, "l": 25, "r": 25, "b": 25},
-            )
+
+                # Plotly Expressでツリーマップを作成
+                fig_stocks = px.treemap(
+                    treemap_data,
+                    path=["labels"],
+                    values="values",
+                    color="colors",
+                    color_continuous_scale="RdYlGn",
+                    color_continuous_midpoint=0,
+                    range_color=[-20, 20],
+                    title="銘柄別損益率ヒートマップ（上位20銘柄）",
+                )
+
+                # カスタマイズ
+                fig_stocks.update_traces(
+                    textposition="middle center",
+                    texttemplate="%{label}<br>%{color:.1f}%",
+                    hovertemplate="<b>%{label}</b><br>損益率: %{color:.1f}%<br>評価額: ¥%{value:,.0f}<extra></extra>",
+                )
+
+                fig_stocks.update_layout(
+                    coloraxis_colorbar_title="損益率(%)",
+                    font={
+                        "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
+                    },
+                    margin={"t": 50, "l": 25, "r": 25, "b": 25},
+                )
+
+            except Exception as e:
+                logger.warning(
+                    f"Plotly Express実装でエラー: {e}. go.Treemapにフォールバック"
+                )
+                # フォールバック: go.Treemapを使用
+                fig_stocks = go.Figure(
+                    go.Treemap(
+                        labels=stock_labels,
+                        values=stock_sizes,
+                        parents=[""] * len(stock_labels),
+                        text=[f"{val:.1f}%" for val in stock_values],
+                        textposition="middle center",
+                        marker={
+                            "colors": stock_values.tolist(),
+                            "colorscale": "RdYlGn",
+                            "cmid": 0,
+                            "cmin": -20,
+                            "cmax": 20,
+                            "showscale": True,
+                            "colorbar": {"title": "損益率(%)", "thickness": 15},
+                            "line": {"width": 2, "color": "white"},
+                        },
+                        customdata=stock_values,
+                        hovertemplate="<b>%{label}</b><br>損益率: %{customdata:.1f}%<br>評価額: ¥%{value:,.0f}<extra></extra>",
+                    )
+                )
+                fig_stocks.update_traces(marker_colorbar_thickness=15)
+                fig_stocks.update_layout(
+                    title="銘柄別損益率ヒートマップ（上位20銘柄）",
+                    font={
+                        "family": "Noto Sans JP, Hiragino Sans, Yu Gothic, Meiryo, sans-serif"
+                    },
+                    margin={"t": 50, "l": 25, "r": 25, "b": 25},
+                )
 
             # 2. セクター別パフォーマンスヒートマップ
             sector_perf = (
@@ -606,20 +665,32 @@ class PortfolioVisualizer:
             )
             sector_perf = sector_perf.sort_values("profit_loss_ratio", ascending=False)
 
+            # 数値型を確実にしてNaN値を処理
+            sector_values_series = pd.to_numeric(
+                sector_perf["profit_loss_ratio"], errors="coerce"
+            )
+            sector_values = np.nan_to_num(sector_values_series.to_numpy(), nan=0.0)
+            sector_sizes_series = pd.to_numeric(
+                sector_perf["market_value"], errors="coerce"
+            )
+            sector_sizes = np.nan_to_num(sector_sizes_series.to_numpy(), nan=0.0)
+
             fig_sectors = go.Figure(
                 go.Treemap(
                     labels=sector_perf["sector17_name"],
-                    values=sector_perf["market_value"],
+                    values=sector_sizes,
                     parents=[""] * len(sector_perf),
-                    text=[f"{val:.1f}%" for val in sector_perf["profit_loss_ratio"]],
+                    text=[f"{val:.1f}%" for val in sector_values],
                     textposition="middle center",
                     marker={
+                        "colors": sector_values.tolist(),
                         "colorscale": "RdYlGn",
                         "cmid": 0,
-                        "colorbar": {"title": "平均損益率(%)"},
-                        "line": {"width": 2},
                         "cmin": -10,
                         "cmax": 10,
+                        "showscale": True,
+                        "colorbar": {"title": "平均損益率(%)", "thickness": 15},
+                        "line": {"width": 2, "color": "white"},
                     },
                     customdata=sector_perf["profit_loss_ratio"],
                     hovertemplate="<b>%{label}</b><br>平均損益率: %{customdata:.1f}%<br>評価額合計: ¥%{value:,.0f}<extra></extra>",

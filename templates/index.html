@@ -851,11 +851,19 @@
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <template x-for="holding in sortedHoldings()" :key="holding.code + '_' + (holding.account_name || 'default') + '_' + (holding.account_type || '特定')">
+                                <template x-for="holding in sortedHoldings()" :key="(holding.code || holding.fund_name || '') + '_' + (holding.account_name || 'default') + '_' + (holding.account_type || '特定')">
                                     <tr>
                                         <td class="px-6 py-4 whitespace-nowrap">
-                                            <div class="text-sm font-medium text-gray-900" x-text="holding.code"></div>
-                                            <div class="text-sm text-gray-500" x-text="holding.company_name"></div>
+                                            <div x-show="holding.type === 'stock' || (!holding.type && holding.code)">
+                                                <div class="text-sm font-medium text-gray-900" x-text="holding.code"></div>
+                                                <div class="text-sm text-gray-500" x-text="holding.company_name"></div>
+                                            </div>
+                                            <div x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)">
+                                                <div class="text-sm font-medium text-gray-900">
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">投信</span>
+                                                </div>
+                                                <div class="text-sm text-gray-500" x-text="holding.fund_name"></div>
+                                            </div>
                                         </td>
                                         <td x-show="!portfolio.aggregateView" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="holding.account_name || 'default'"></td>
                                         <td x-show="!portfolio.aggregateView" class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -884,7 +892,10 @@
                                                 </template>
                                             </div>
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="(holding.quantity || holding.total_quantity).toLocaleString()"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <span x-show="holding.type === 'stock' || (!holding.type && holding.code)" x-text="(holding.quantity || holding.total_quantity).toLocaleString()"></span>
+                                            <span x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)" x-text="(holding.quantity || holding.total_quantity).toLocaleString() + '口'"></span>
+                                        </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="formatCurrency(holding.average_price || holding.weighted_avg_price)"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="formatCurrency(holding.market_value || holding.total_market_value)"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium"
@@ -894,23 +905,30 @@
                                             :class="holding.profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'"
                                             x-text="formatPercentage(holding.profit_loss_ratio)"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            <span x-text="holding.expected_per ? holding.expected_per.toFixed(2) : '-'"
+                                            <span x-show="holding.type === 'stock' || (!holding.type && holding.code)" x-text="holding.expected_per ? holding.expected_per.toFixed(2) : '-'"
                                                   :class="holding.expected_per < 15 ? 'text-green-600' : (holding.expected_per > 30 ? 'text-red-600' : '')"></span>
+                                            <span x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)">-</span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            <span x-text="holding.actual_pbr ? holding.actual_pbr.toFixed(2) : '-'"
+                                            <span x-show="holding.type === 'stock' || (!holding.type && holding.code)" x-text="holding.actual_pbr ? holding.actual_pbr.toFixed(2) : '-'"
                                                   :class="holding.actual_pbr < 1 ? 'text-green-600' : (holding.actual_pbr > 3 ? 'text-red-600' : '')"></span>
+                                            <span x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)">-</span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            <span x-text="holding.dividend_yield ? holding.dividend_yield.toFixed(2) + '%' : '-'"
+                                            <span x-show="holding.type === 'stock' || (!holding.type && holding.code)" x-text="holding.dividend_yield ? holding.dividend_yield.toFixed(2) + '%' : '-'"
                                                   :class="holding.dividend_yield > 3 ? 'text-green-600' : ''"></span>
+                                            <span x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)">-</span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            <span x-text="holding.expected_dividend ? formatCurrency(holding.expected_dividend) : '-'"></span>
+                                            <span x-show="holding.type === 'stock' || (!holding.type && holding.code)" x-text="holding.expected_dividend ? formatCurrency(holding.expected_dividend) : '-'"></span>
+                                            <span x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)" class="text-xs text-gray-500">
+                                                <span x-text="holding.current_nav ? '基準価額:' + holding.current_nav.toLocaleString() : '-'"></span>
+                                            </span>
                                         </td>
                                         <td x-show="!portfolio.aggregateView" class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <button @click="showEditHoldingModal(holding)" class="text-blue-600 hover:text-blue-900 mr-3">編集</button>
-                                            <button @click="deleteSingleHolding(holding.code, holding.account_name)" class="text-red-600 hover:text-red-900">削除</button>
+                                            <button x-show="holding.type === 'stock' || (!holding.type && holding.code)" @click="showEditHoldingModal(holding)" class="text-blue-600 hover:text-blue-900 mr-3">編集</button>
+                                            <button x-show="holding.type === 'stock' || (!holding.type && holding.code)" @click="deleteSingleHolding(holding.code, holding.account_name)" class="text-red-600 hover:text-red-900">削除</button>
+                                            <span x-show="holding.type === 'fund' || (!holding.type && holding.fund_name)" class="text-gray-400">-</span>
                                         </td>
                                     </tr>
                                 </template>
@@ -936,7 +954,7 @@
                                     class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
                                 アップロード
                             </button>
-                            <button @click="loadTransactions()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 text-sm">
+                            <button @click="portfolio.currentPage = 1; loadTransactions()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 text-sm">
                                 更新
                             </button>
                             <button @click="showAddTransactionModal()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm">
@@ -976,6 +994,11 @@
                         </div>
                     </div>
 
+                    <!-- 件数表示 -->
+                    <div class="mb-2 text-sm text-gray-600">
+                        <span x-text="`全${portfolio.totalCount}件中 ${(portfolio.currentPage - 1) * portfolio.perPage + 1}～${Math.min(portfolio.currentPage * portfolio.perPage, portfolio.totalCount)}件を表示`"></span>
+                    </div>
+
                     <!-- 取引履歴一覧 -->
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
@@ -994,7 +1017,7 @@
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <template x-for="trans in filteredTransactions()" :key="trans.id">
+                                <template x-for="trans in portfolio.transactions" :key="trans.id">
                                     <tr>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="trans.transaction_date"></td>
                                         <td class="px-6 py-4 whitespace-nowrap">
@@ -1028,6 +1051,59 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- ページネーション -->
+                    <div x-show="portfolio.totalPages > 1" class="mt-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <button @click="loadTransactions(1)"
+                                    :disabled="portfolio.currentPage === 1"
+                                    class="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                最初
+                            </button>
+                            <button @click="loadTransactions(portfolio.currentPage - 1)"
+                                    :disabled="portfolio.currentPage === 1"
+                                    class="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                前へ
+                            </button>
+
+                            <!-- ページ番号 -->
+                            <template x-for="page in Array.from({length: Math.min(5, portfolio.totalPages)}, (_, i) => {
+                                if (portfolio.totalPages <= 5) return i + 1;
+                                if (portfolio.currentPage <= 3) return i + 1;
+                                if (portfolio.currentPage >= portfolio.totalPages - 2) return portfolio.totalPages - 4 + i;
+                                return portfolio.currentPage - 2 + i;
+                            }).filter(p => p > 0 && p <= portfolio.totalPages)" :key="page">
+                                <button @click="loadTransactions(page)"
+                                        :class="page === portfolio.currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'"
+                                        class="px-3 py-1 text-sm border border-gray-300 rounded-md">
+                                    <span x-text="page"></span>
+                                </button>
+                            </template>
+
+                            <button @click="loadTransactions(portfolio.currentPage + 1)"
+                                    :disabled="portfolio.currentPage === portfolio.totalPages"
+                                    class="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                次へ
+                            </button>
+                            <button @click="loadTransactions(portfolio.totalPages)"
+                                    :disabled="portfolio.currentPage === portfolio.totalPages"
+                                    class="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                最後
+                            </button>
+                        </div>
+
+                        <!-- 表示件数切り替え -->
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm text-gray-700">表示件数:</label>
+                            <select x-model="portfolio.perPage" @change="portfolio.currentPage = 1; loadTransactions()"
+                                    class="text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="20">20件</option>
+                                <option value="50">50件</option>
+                                <option value="100">100件</option>
+                                <option value="200">200件</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 可視化タブ -->
@@ -1042,12 +1118,12 @@
                                 <div class="font-medium">構成比</div>
                                 <div class="text-xs text-gray-500">銘柄・セクター別</div>
                             </button>
-                            <button @click="portfolio.visualizationType = 'performance'; loadVisualization('performance')"
+                            <button @click="portfolio.visualizationType = 'performance'; loadTransactionPerformance()"
                                     :class="portfolio.visualizationType === 'performance' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'"
                                     class="border-2 rounded-lg p-4 text-center hover:bg-gray-50 transition-colors">
                                 <div class="text-2xl mb-2">📈</div>
                                 <div class="font-medium">パフォーマンス</div>
-                                <div class="text-xs text-gray-500">推移・損益率</div>
+                                <div class="text-xs text-gray-500">取引履歴分析</div>
                             </button>
                             <button @click="portfolio.visualizationType = 'heatmap'; loadVisualization('heatmap')"
                                     :class="portfolio.visualizationType === 'heatmap' ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-300'"
@@ -1059,6 +1135,139 @@
                         </div>
                     </div>
 
+                    <!-- パフォーマンス表示（取引履歴分析） -->
+                    <div x-show="portfolio.visualizationType === 'performance'" class="space-y-6">
+                        <!-- 期間選択とオプション -->
+                        <div class="mb-4 flex items-center gap-4">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">表示期間：</label>
+                                <select x-model="portfolio.performancePeriod" @change="loadTransactionPerformance()"
+                                        class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                                    <option value="all">全期間</option>
+                                    <option value="1y">過去1年</option>
+                                    <option value="6m">過去6ヶ月</option>
+                                    <option value="3m">過去3ヶ月</option>
+                                    <option value="1m">過去1ヶ月</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" id="includeHoldings" x-model="portfolio.includeHoldings" @change="loadTransactionPerformance()"
+                                       class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <label for="includeHoldings" class="ml-2 text-sm text-gray-700">現在の保有銘柄を含める</label>
+                            </div>
+                        </div>
+
+                        <div x-show="portfolio.visualizationLoading" class="text-center py-8">
+                            <div class="spinner mx-auto mb-4"></div>
+                            <p class="text-gray-600">パフォーマンスデータを読み込み中...</p>
+                        </div>
+
+                        <div x-show="!portfolio.visualizationLoading && portfolio.transactionPerformanceData">
+                        <!-- 注記 -->
+                        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm text-yellow-700">
+                                        現物取引（株式現物売）は集計対象外です。信用取引の損益のみを表示しています。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- サマリー情報 -->
+                        <div x-show="portfolio.transactionPerformanceData.summary" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+                            <div class="bg-gray-50 p-4 rounded-lg text-center">
+                                <div class="text-sm text-gray-600">実現損益</div>
+                                <div class="text-xl font-bold"
+                                     :class="portfolio.transactionPerformanceData.summary.total_realized_profit >= 0 ? 'text-green-600' : 'text-red-600'"
+                                     x-text="formatCurrency(portfolio.transactionPerformanceData.summary.total_realized_profit)"></div>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg text-center">
+                                <div class="text-sm text-gray-600">収益率</div>
+                                <div class="text-xl font-bold"
+                                     :class="portfolio.transactionPerformanceData.summary.profit_rate >= 0 ? 'text-green-600' : 'text-red-600'"
+                                     x-text="formatPercentage(portfolio.transactionPerformanceData.summary.profit_rate)"></div>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg text-center">
+                                <div class="text-sm text-gray-600">取引回数</div>
+                                <div class="text-xl font-bold text-gray-900" x-text="portfolio.transactionPerformanceData.summary.transaction_count"></div>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg text-center">
+                                <div class="text-sm text-gray-600">銘柄数</div>
+                                <div class="text-xl font-bold text-gray-900" x-text="portfolio.transactionPerformanceData.summary.stock_count"></div>
+                            </div>
+                        </div>
+
+                        <!-- 銘柄別パフォーマンス -->
+                        <div class="bg-white shadow rounded-lg p-6 mb-6">
+                            <h3 class="text-lg font-semibold mb-4">銘柄別パフォーマンス</h3>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">銘柄</th>
+                                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">買付金額</th>
+                                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">売却金額</th>
+                                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">実現損益</th>
+                                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">保有数量</th>
+                                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">ソース</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        <template x-for="stock in portfolio.transactionPerformanceData.stock_performance" :key="stock.code">
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-sm font-medium text-gray-900" x-text="stock.code"></div>
+                                                    <div class="text-sm text-gray-500" x-text="stock.company_name"></div>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right" x-text="formatCurrency(stock.total_buy_amount)"></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right" x-text="formatCurrency(stock.total_sell_amount)"></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right"
+                                                    :class="stock.realized_profit >= 0 ? 'text-green-600' : 'text-red-600'"
+                                                    x-text="formatCurrency(stock.realized_profit)"></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right" x-text="stock.net_quantity > 0 ? stock.net_quantity.toLocaleString() : '-'"></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-center">
+                                                    <span x-show="stock.source === 'both'" class="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">取引+保有</span>
+                                                    <span x-show="stock.source === 'transaction'" class="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">取引履歴</span>
+                                                    <span x-show="stock.source === 'holdings'" class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">保有のみ</span>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- 分析チャート -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="bg-white p-4 rounded-lg shadow">
+                                <h3 class="text-lg font-semibold mb-2">月別損益</h3>
+                                <p class="text-sm text-gray-600 mb-4">月別の実現損益を表示します。</p>
+                                <div id="monthly-pnl-chart" style="height: 400px;"></div>
+                            </div>
+                            <div class="bg-white p-4 rounded-lg shadow">
+                                <h3 class="text-lg font-semibold mb-2">累積損益</h3>
+                                <p class="text-sm text-gray-600 mb-4">累積の実現損益推移を表示します。</p>
+                                <div id="cumulative-pnl-chart" style="height: 400px;"></div>
+                            </div>
+                            <div class="bg-white p-4 rounded-lg shadow">
+                                <h3 class="text-lg font-semibold mb-2">取引時間帯分布</h3>
+                                <p class="text-sm text-gray-600 mb-4">取引の時間帯別分布を表示します。</p>
+                                <div id="trading-hours-chart" style="height: 400px;"></div>
+                            </div>
+                            <div class="bg-white p-4 rounded-lg shadow">
+                                <h3 class="text-lg font-semibold mb-2">保有期間分布</h3>
+                                <p class="text-sm text-gray-600 mb-4">銘柄の保有期間分布を表示します。</p>
+                                <div id="holding-period-chart" style="height: 400px;"></div>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+
                     <!-- 構成比表示 -->
                     <div x-show="portfolio.visualizationType === 'composition'" class="space-y-6">
                         <div x-show="portfolio.visualizationLoading" class="text-center py-8">
@@ -1066,7 +1275,7 @@
                             <p class="text-gray-600">グラフを読み込み中...</p>
                         </div>
 
-                        <div x-show="!portfolio.visualizationLoading && portfolio.compositionData">
+                        <div x-show="!portfolio.visualizationLoading && portfolio.compositionData && !portfolio.compositionData.error">
                             <!-- サマリー情報 -->
                             <div x-show="portfolio.compositionData.summary" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                                 <div class="bg-gray-50 p-4 rounded-lg text-center">
@@ -1090,78 +1299,37 @@
                             <!-- グラフ表示エリア -->
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div class="bg-white p-4 rounded-lg shadow overflow-hidden">
+                                    <h3 class="text-lg font-semibold mb-2">銘柄別構成比</h3>
+                                    <p class="text-sm text-gray-600 mb-4">各銘柄が占める評価額の割合を表示します。</p>
                                     <div id="stock-composition-chart" class="w-full" style="height: 400px;"></div>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow overflow-hidden">
+                                    <h3 class="text-lg font-semibold mb-2">セクター別構成比</h3>
+                                    <p class="text-sm text-gray-600 mb-4">業種別の投資配分を表示します。</p>
                                     <div id="sector-composition-chart" class="w-full" style="height: 400px;"></div>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow overflow-hidden">
+                                    <h3 class="text-lg font-semibold mb-2">市場別構成比</h3>
+                                    <p class="text-sm text-gray-600 mb-4">上場市場別の配分を表示します。</p>
                                     <div id="market-composition-chart" class="w-full" style="height: 400px;"></div>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow overflow-hidden">
+                                    <h3 class="text-lg font-semibold mb-2">口座別構成比</h3>
+                                    <p class="text-sm text-gray-600 mb-4">口座別の配分を表示します。</p>
                                     <div id="account-composition-chart" class="w-full" style="height: 400px;"></div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- パフォーマンス表示 -->
-                    <div x-show="portfolio.visualizationType === 'performance'" class="space-y-6">
-                        <!-- 期間選択 -->
-                        <div class="flex items-center space-x-4 mb-4">
-                            <label class="text-sm font-medium text-gray-700">表示期間：</label>
-                            <select x-model="portfolio.performanceDays" @change="loadVisualization('performance')"
-                                    class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
-                                <option value="30">過去30日</option>
-                                <option value="90">過去90日</option>
-                                <option value="180">過去180日</option>
-                                <option value="365">過去1年</option>
-                            </select>
-                        </div>
-
-                        <div x-show="portfolio.visualizationLoading" class="text-center py-8">
-                            <div class="spinner mx-auto mb-4"></div>
-                            <p class="text-gray-600">グラフを読み込み中...</p>
-                        </div>
-
-                        <div x-show="!portfolio.visualizationLoading && portfolio.performanceData">
-                            <!-- パフォーマンスサマリー -->
-                            <div x-show="portfolio.performanceData.summary" class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
-                                <div class="bg-gray-50 p-4 rounded-lg text-center">
-                                    <div class="text-sm text-gray-600">開始時評価額</div>
-                                    <div class="text-lg font-bold text-gray-900" x-text="formatCurrency(portfolio.performanceData.summary.start_value)"></div>
-                                </div>
-                                <div class="bg-gray-50 p-4 rounded-lg text-center">
-                                    <div class="text-sm text-gray-600">現在評価額</div>
-                                    <div class="text-lg font-bold text-gray-900" x-text="formatCurrency(portfolio.performanceData.summary.end_value)"></div>
-                                </div>
-                                <div class="bg-gray-50 p-4 rounded-lg text-center">
-                                    <div class="text-sm text-gray-600">最高値</div>
-                                    <div class="text-lg font-bold text-gray-900" x-text="formatCurrency(portfolio.performanceData.summary.max_value)"></div>
-                                </div>
-                                <div class="bg-gray-50 p-4 rounded-lg text-center">
-                                    <div class="text-sm text-gray-600">最安値</div>
-                                    <div class="text-lg font-bold text-gray-900" x-text="formatCurrency(portfolio.performanceData.summary.min_value)"></div>
-                                </div>
-                                <div class="bg-gray-50 p-4 rounded-lg text-center">
-                                    <div class="text-sm text-gray-600">期間リターン</div>
-                                    <div class="text-lg font-bold"
-                                         :class="portfolio.performanceData.summary.total_return >= 0 ? 'text-green-600' : 'text-red-600'"
-                                         x-text="formatPercentage(portfolio.performanceData.summary.total_return)"></div>
-                                </div>
-                            </div>
-
-                            <!-- グラフ表示エリア -->
-                            <div class="space-y-6">
-                                <div class="bg-white p-4 rounded-lg shadow">
-                                    <div id="value-performance-chart" style="height: 400px;"></div>
-                                </div>
-                                <div class="bg-white p-4 rounded-lg shadow">
-                                    <div id="profit-performance-chart" style="height: 400px;"></div>
-                                </div>
-                                <div class="bg-white p-4 rounded-lg shadow">
-                                    <div id="benchmark-comparison-chart" style="height: 400px;"></div>
-                                </div>
+                        <!-- エラー表示 -->
+                        <div x-show="!portfolio.visualizationLoading && portfolio.compositionData && portfolio.compositionData.error"
+                             class="text-center py-8">
+                            <div class="text-gray-500">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                </svg>
+                                <p class="mt-2 text-sm" x-text="portfolio.compositionData.error || '保有銘柄データがありません'"></p>
                             </div>
                         </div>
                     </div>
@@ -1201,13 +1369,19 @@
                             <!-- ヒートマップ表示エリア -->
                             <div class="space-y-6">
                                 <div class="bg-white p-4 rounded-lg shadow">
-                                    <div id="stocks-heatmap" style="height: 500px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">銘柄別損益率ヒートマップ</h3>
+                                    <p class="text-sm text-gray-600 mb-4">各銘柄の損益率を色で表示します。</p>
+                                    <div id="stocks-heatmap" style="height: 600px;"></div>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow">
-                                    <div id="sectors-heatmap" style="height: 400px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">セクター別損益率ヒートマップ</h3>
+                                    <p class="text-sm text-gray-600 mb-4">セクター別の平均損益率を表示します。</p>
+                                    <div id="sectors-heatmap" style="height: 500px;"></div>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow">
-                                    <div id="distribution-chart" style="height: 300px;"></div>
+                                    <h3 class="text-lg font-semibold mb-2">損益率分布</h3>
+                                    <p class="text-sm text-gray-600 mb-4">銘柄の損益率の分布を表示します。</p>
+                                    <div id="distribution-chart" style="height: 400px;"></div>
                                 </div>
                             </div>
                         </div>
@@ -1557,6 +1731,11 @@ function swingApp() {
                 startDate: '',
                 endDate: ''
             },
+            // ページネーション
+            currentPage: 1,
+            perPage: 50,
+            totalPages: 1,
+            totalCount: 0,
             accountName: '',
             aggregateView: false,
             accounts: [],
@@ -1595,9 +1774,10 @@ function swingApp() {
             visualizationType: 'composition',
             visualizationLoading: false,
             compositionData: null,
-            performanceData: null,
+            transactionPerformanceData: null,
             heatmapData: null,
-            performanceDays: 180
+            performancePeriod: 'all',
+            includeHoldings: false
         },
 
         // メソッド
@@ -1928,16 +2108,23 @@ function swingApp() {
             }
         },
 
-        async loadTransactions() {
+        async loadTransactions(page = 1) {
             if (!this.isLoggedIn) return;
             const params = new URLSearchParams();
             if (this.portfolio.filter.code) params.append('code', this.portfolio.filter.code);
             if (this.portfolio.filter.startDate) params.append('start_date', this.portfolio.filter.startDate);
             if (this.portfolio.filter.endDate) params.append('end_date', this.portfolio.filter.endDate);
+            params.append('page', page.toString());
+            params.append('per_page', this.portfolio.perPage.toString());
 
             const result = await apiCall('/portfolio/transactions?' + params.toString(), {}, 'GET');
             if (result.success) {
                 this.portfolio.transactions = result.transactions;
+                if (result.pagination) {
+                    this.portfolio.currentPage = result.pagination.page;
+                    this.portfolio.totalPages = result.pagination.pages;
+                    this.portfolio.totalCount = result.pagination.total;
+                }
             }
         },
 
@@ -1983,7 +2170,13 @@ function swingApp() {
         },
 
         async updateStockIndicators() {
-            if (!confirm('保有銘柄の株価指標（PER、PBR、配当利回り、予想配当）を最新のデータで更新しますか？')) return;
+            const confirmMessage = '保有銘柄の株価指標（PER、PBR、配当利回り、予想配当）を最新のデータで更新しますか？\n\n' +
+                '【注意事項】\n' +
+                '・PERなどの財務指標は株式分割や通期予想が未定の場合、正しく表示されない可能性があります\n' +
+                '・最新の財務データが未公表の場合、古いデータが使用される可能性があります\n' +
+                '・更新処理には時間がかかる場合があります';
+
+            if (!confirm(confirmMessage)) return;
 
             try {
                 const response = await fetch('/api/portfolio/indicators/update', {
@@ -2438,7 +2631,134 @@ function swingApp() {
             }
         },
 
-        // 可視化関連メソッド
+        // パフォーマンス関連メソッド
+        async loadTransactionPerformance() {
+            this.portfolio.visualizationLoading = true;
+
+            try {
+                const params = {
+                    period: this.portfolio.performancePeriod,
+                    include_holdings: this.portfolio.includeHoldings
+                };
+
+                const queryString = new URLSearchParams(params).toString();
+                const url = `/api/portfolio/transactions/performance?${queryString}`;
+
+                const response = await fetch(url);
+                const result = await response.json();
+
+                if (result.success) {
+                    this.portfolio.transactionPerformanceData = result.data;
+
+                    // Plotlyでグラフを描画
+                    this.$nextTick(() => {
+                        const config = {
+                            responsive: true,
+                            displayModeBar: false,
+                            locale: 'ja'
+                        };
+
+                        // 月別損益グラフ
+                        if (result.data.monthly_pnl) {
+                            const months = Object.keys(result.data.monthly_pnl).sort();
+                            const values = months.map(m => result.data.monthly_pnl[m]);
+
+                            const monthlyData = [{
+                                x: months,
+                                y: values,
+                                type: 'bar',
+                                marker: {
+                                    color: values.map(v => v >= 0 ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)')
+                                }
+                            }];
+
+                            const monthlyLayout = {
+                                title: '月別実現損益',
+                                xaxis: { title: '月' },
+                                yaxis: { title: '損益額（円）' },
+                                showlegend: false
+                            };
+
+                            Plotly.newPlot('monthly-pnl-chart', monthlyData, monthlyLayout, config);
+                        }
+
+                        // 累積損益グラフ
+                        if (result.data.cumulative_pnl && result.data.cumulative_pnl.length > 0) {
+                            const cumulativeData = [{
+                                x: result.data.cumulative_pnl.map(item => item.month),
+                                y: result.data.cumulative_pnl.map(item => item.cumulative_profit),
+                                type: 'scatter',
+                                mode: 'lines+markers',
+                                line: { color: 'rgb(59, 130, 246)', width: 3 },
+                                marker: { size: 6 }
+                            }];
+
+                            const cumulativeLayout = {
+                                title: '累積実現損益',
+                                xaxis: { title: '月' },
+                                yaxis: { title: '累積損益額（円）' },
+                                showlegend: false
+                            };
+
+                            Plotly.newPlot('cumulative-pnl-chart', cumulativeData, cumulativeLayout, config);
+                        }
+
+                        // 取引時間帯分布
+                        if (result.data.trading_hours) {
+                            const hours = Object.keys(result.data.trading_hours);
+                            const counts = Object.values(result.data.trading_hours);
+
+                            const hoursData = [{
+                                x: hours,
+                                y: counts,
+                                type: 'bar',
+                                marker: { color: 'rgba(99, 102, 241, 0.8)' }
+                            }];
+
+                            const hoursLayout = {
+                                title: '取引時間帯分布',
+                                xaxis: { title: '時間帯' },
+                                yaxis: { title: '取引回数' },
+                                showlegend: false
+                            };
+
+                            Plotly.newPlot('trading-hours-chart', hoursData, hoursLayout, config);
+                        }
+
+                        // 保有期間分布
+                        if (result.data.holding_periods) {
+                            const periods = Object.keys(result.data.holding_periods);
+                            const counts = Object.values(result.data.holding_periods);
+
+                            const periodsData = [{
+                                labels: periods,
+                                values: counts,
+                                type: 'pie',
+                                hole: 0.4,
+                                textinfo: 'label+percent',
+                                textposition: 'outside'
+                            }];
+
+                            const periodsLayout = {
+                                title: '保有期間分布',
+                                showlegend: true
+                            };
+
+                            Plotly.newPlot('holding-period-chart', periodsData, periodsLayout, config);
+                        }
+                    });
+                } else {
+                    showNotification('error', result.error || 'パフォーマンスデータの取得に失敗しました');
+                }
+            } catch (e) {
+                console.error('Performance error:', e);
+                showNotification('error', 'パフォーマンスデータの取得に失敗しました');
+            } finally {
+                this.portfolio.visualizationLoading = false;
+            }
+        },
+
+        // 可視化関連メソッド（後方互換性のため残す）
         async loadVisualization(type) {
             this.portfolio.visualizationLoading = true;
 
@@ -2478,6 +2798,21 @@ function swingApp() {
                                     locale: 'ja'
                                 };
 
+                                // グラフを描画する前に既存のグラフをクリア
+                                const chartIds = [
+                                    'stock-composition-chart',
+                                    'sector-composition-chart',
+                                    'market-composition-chart',
+                                    'account-composition-chart'
+                                ];
+
+                                chartIds.forEach(id => {
+                                    const element = document.getElementById(id);
+                                    if (element) {
+                                        Plotly.purge(element);
+                                    }
+                                });
+
                                 if (data.stock_chart) {
                                     const stockData = JSON.parse(data.stock_chart);
                                     Plotly.newPlot('stock-composition-chart', stockData.data, stockData.layout, config);
@@ -2506,6 +2841,20 @@ function swingApp() {
                                     locale: 'ja'
                                 };
 
+                                // グラフを描画する前に既存のグラフをクリア
+                                const perfChartIds = [
+                                    'value-performance-chart',
+                                    'profit-performance-chart',
+                                    'benchmark-comparison-chart'
+                                ];
+
+                                perfChartIds.forEach(id => {
+                                    const element = document.getElementById(id);
+                                    if (element) {
+                                        Plotly.purge(element);
+                                    }
+                                });
+
                                 if (data.value_chart) {
                                     const valueData = JSON.parse(data.value_chart);
                                     Plotly.newPlot('value-performance-chart', valueData.data, valueData.layout, config);
@@ -2529,6 +2878,20 @@ function swingApp() {
                                     displayModeBar: false,
                                     locale: 'ja'
                                 };
+
+                                // グラフを描画する前に既存のグラフをクリア
+                                const heatmapChartIds = [
+                                    'stocks-heatmap',
+                                    'sectors-heatmap',
+                                    'distribution-chart'
+                                ];
+
+                                heatmapChartIds.forEach(id => {
+                                    const element = document.getElementById(id);
+                                    if (element) {
+                                        Plotly.purge(element);
+                                    }
+                                });
 
                                 if (data.stocks_heatmap) {
                                     const stocksData = JSON.parse(data.stocks_heatmap);

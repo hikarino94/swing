@@ -37,47 +37,13 @@ def ml_db():
     import os
     import tempfile
 
+    from db.db_schema import init_schema
+
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
 
-    conn = sqlite3.connect(db_path)
-
-    # prices テーブル作成
-    conn.execute(
-        """
-        CREATE TABLE prices (
-            code TEXT,
-            date DATE,
-            adj_close REAL,
-            adj_volume INTEGER,
-            PRIMARY KEY (code, date)
-        )
-    """
-    )
-
-    # statements テーブル作成（簡略版）
-    conn.execute(
-        """
-        CREATE TABLE statements (
-            code TEXT,
-            DisclosedDate DATE,
-            NetSales REAL,
-            OperatingProfit REAL,
-            OrdinaryProfit REAL,
-            Profit REAL,
-            TotalAssets REAL,
-            Equity REAL,
-            EquityToAssetRatio REAL,
-            BookValuePerShare REAL,
-            CashFlowsFromOperatingActivities REAL,
-            CashFlowsFromInvestingActivities REAL,
-            CashFlowsFromFinancingActivities REAL
-        )
-    """
-    )
-
-    conn.commit()
-    conn.close()
+    # 正しいスキーマでデータベースを初期化
+    init_schema(db_path)
 
     yield db_path
 
@@ -109,11 +75,11 @@ class TestDatabaseHelpers:
             date = (today - timedelta(days=i)).strftime("%Y-%m-%d")
             conn.execute(
                 """
-                INSERT INTO prices VALUES
-                ('1234', ?, 1000 + ?, 100000),
-                ('5678', ?, 2000 - ?, 200000)
+                INSERT INTO prices (code, date, adj_close, adj_volume) VALUES
+                ('1234', ?, ?, ?),
+                ('5678', ?, ?, ?)
             """,
-                (date, i * 10, date, i * 5),
+                (date, 1000 + i * 10, 100000, date, 2000 - i * 5, 200000),
             )
         conn.commit()
         conn.close()
@@ -137,10 +103,16 @@ class TestDatabaseHelpers:
         # テストデータ挿入
         conn.execute(
             """
-            INSERT INTO statements VALUES
-            ('1234', '2024-01-01', 1000000, 100000, 90000, 60000,
+            INSERT INTO statements (
+                code, DisclosedDate, DisclosureNumber,
+                NetSales, OperatingProfit, OrdinaryProfit, Profit,
+                TotalAssets, Equity, EquityToAssetRatio, BookValuePerShare,
+                CashFlowsFromOperatingActivities, CashFlowsFromInvestingActivities,
+                CashFlowsFromFinancingActivities
+            ) VALUES
+            ('1234', '2024-01-01', 'DISC001', 1000000, 100000, 90000, 60000,
              5000000, 2000000, 0.4, 100, 120000, -50000, -30000),
-            ('5678', '2024-01-01', 2000000, 200000, 180000, 120000,
+            ('5678', '2024-01-01', 'DISC002', 2000000, 200000, 180000, 120000,
              8000000, 3000000, 0.375, 150, 250000, -100000, -50000)
         """
         )
@@ -442,7 +414,7 @@ class TestIntegration:
 
                 conn.execute(
                     """
-                    INSERT INTO prices VALUES (?, ?, ?, ?)
+                    INSERT INTO prices (code, date, adj_close, adj_volume) VALUES (?, ?, ?, ?)
                 """,
                     (code, date, price, volume),
                 )
@@ -451,11 +423,18 @@ class TestIntegration:
         for code_idx, code in enumerate(codes):
             conn.execute(
                 """
-                INSERT INTO statements VALUES
-                (?, '2024-03-15', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO statements (
+                    code, DisclosedDate, DisclosureNumber,
+                    NetSales, OperatingProfit, OrdinaryProfit, Profit,
+                    TotalAssets, Equity, EquityToAssetRatio, BookValuePerShare,
+                    CashFlowsFromOperatingActivities, CashFlowsFromInvestingActivities,
+                    CashFlowsFromFinancingActivities
+                ) VALUES
+                (?, '2024-03-15', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     code,
+                    f"DISC{code_idx:03d}",  # DisclosureNumber
                     1000000 * (code_idx + 1),  # NetSales
                     100000 * (code_idx + 1),  # OperatingProfit
                     90000 * (code_idx + 1),  # OrdinaryProfit

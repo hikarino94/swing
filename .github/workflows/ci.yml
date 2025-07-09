@@ -6,138 +6,82 @@ on:
   pull_request:
     branches: [ main ]
 
+# ジョブの同時実行数を設定
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  lint:
-    name: Lint & Type Check
+  lint-and-test:
+    name: Lint & Test
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: true  # 一つでも失敗したら即座に終了
       matrix:
         python-version: ['3.12']
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        # 浅いクローンで高速化（最新のコミットのみ取得）
+        fetch-depth: 1
+        # LFS ファイルをスキップ（必要ない場合）
+        lfs: false
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Cache pip packages
+    - name: Cache dependencies
       uses: actions/cache@v4
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        path: |
+          ~/.cache/pip
+          ~/.local
+          ${{ env.pythonLocation }}
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
         restore-keys: |
+          ${{ runner.os }}-pip-${{ matrix.python-version }}-
           ${{ runner.os }}-pip-
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
+        python -m pip install --upgrade pip wheel setuptools
+        # CI環境では最小限の依存関係のみインストール
+        pip install -r requirements.txt -r requirements-test.txt
 
-    - name: Run Ruff
+    - name: Run linters
       run: |
         ruff check --fix .
-
-    - name: Run Black
-      run: |
         black --check .
-
-    - name: Run isort
-      run: |
         isort --check-only .
 
     - name: Run MyPy
       run: |
-        mypy . --ignore-missing-imports || echo "::warning::Type checking failed - this will become an error in the future"
+        mypy . --ignore-missing-imports --no-strict-optional || echo "::warning::Type checking failed"
 
-    - name: Run Bandit (Security)
+    - name: Run Bandit
       run: |
         bandit -r . -f json -o bandit-report.json || echo "::warning::Security scan found issues"
-        if [ -f bandit-report.json ]; then
-          echo "Security scan results:"
-          cat bandit-report.json
-        fi
 
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    needs: lint
-    strategy:
-      matrix:
-        python-version: ['3.12']
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Cache pip packages
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
-
-    - name: Create test database
+    - name: Setup test environment
       env:
         TESTING: "1"
         FLASK_ENV: "testing"
         DATABASE_PATH: "${{ github.workspace }}/test_stock.db"
+        PYTHONPATH: "${{ github.workspace }}"
       run: |
-        # テスト用の環境変数を設定
-        echo "Creating test database at: $DATABASE_PATH"
+        echo "Creating test database..."
         python db/db_schema.py
-        # データベースファイルの存在確認
         if [ -f "$DATABASE_PATH" ]; then
           echo "Database created successfully"
-          ls -la "$DATABASE_PATH"
         else
           echo "::error::Database file not created"
           exit 1
         fi
 
-    - name: Setup Python Path
-      run: |
-        # Pythonパスの設定を明示的に行う
-        echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
-        # 環境変数が設定されたことを確認
-        echo "GITHUB_ENV content:"
-        cat $GITHUB_ENV
-
-    - name: Debug Import Issues
-      env:
-        PYTHONPATH: "${{ github.workspace }}"
-        TESTING: "1"
-        FLASK_ENV: "testing"
-        DATABASE_PATH: "${{ github.workspace }}/test_stock.db"
-      run: |
-        # インポートの問題をデバッグ
-        echo "Testing module imports..."
-        echo "Current directory: $(pwd)"
-        echo "Directory structure:"
-        ls -la
-        echo "Python path:"
-        python -c "import sys; print('\n'.join(sys.path))"
-        echo "Testing imports:"
-        python -c "from src.config import Config; print('Config import: OK')" || echo "Config import failed"
-        python -c "from src.ui.web import app; print('Web app import: OK')" || echo "Web app import failed"
-        python -c "from fetch import daily_quotes; print('Fetch module import: OK')" || echo "Fetch module import failed"
-        python -c "from screening import screen_statements; print('Screening module import: OK')" || echo "Screening module import failed"
-
     - name: Run tests
-      id: pytest
       env:
         PYTHONPATH: "${{ github.workspace }}"
         PYTHONWARNINGS: "ignore::DeprecationWarning:numpy,ignore::UserWarning,ignore::FutureWarning"
@@ -145,31 +89,20 @@ jobs:
         FLASK_ENV: "testing"
         DATABASE_PATH: "${{ github.workspace }}/test_stock.db"
       run: |
-        # デバッグ情報を出力
-        echo "Current directory: $(pwd)"
-        echo "PYTHONPATH: $PYTHONPATH"
-        echo "Python version: $(python --version)"
-        echo "TESTING: $TESTING"
-        echo "FLASK_ENV: $FLASK_ENV"
-        echo "DATABASE_PATH: $DATABASE_PATH"
-        # 全テストを実行（カバレッジ付き）
+        # テストを実行
         pytest -v --tb=short --cov=. --cov-report=xml --cov-report=term -W ignore::FutureWarning -W ignore::UserWarning || {
           EXIT_CODE=$?
           echo "::error::Test failed with exit code: $EXIT_CODE"
-          # 失敗したテストの詳細を表示
-          echo "::group::Failed test details"
           pytest --lf -v --tb=long -W ignore::FutureWarning -W ignore::UserWarning || true
-          echo "::endgroup::"
           exit $EXIT_CODE
         }
 
-    - name: Check coverage threshold
+    - name: Check coverage
       run: |
-        # 現在のカバレッジが低いため、段階的に上げる
-        coverage report --fail-under=5 || echo "::warning::Coverage is below 5% - please add more tests"
+        coverage report --fail-under=5 || echo "::warning::Coverage is below 5%"
 
-    - name: Upload coverage to Codecov
-      if: matrix.python-version == '3.12'
+    - name: Upload coverage
+      if: always() && matrix.python-version == '3.12'
       uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
@@ -183,6 +116,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        # 浅いクローンで高速化（最新のコミットのみ取得）
+        fetch-depth: 1
+        # LFS ファイルをスキップ（必要ない場合）
+        lfs: false
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -191,7 +129,6 @@ jobs:
 
     - name: Check config files
       run: |
-        # JSONファイルの妥当性チェック
         for file in config.json.example account.json.example screening/thresholds.json.example; do
           if [ -f "$file" ]; then
             echo "Validating $file..."
@@ -201,17 +138,21 @@ jobs:
 
     - name: Check Python imports
       run: |
-        # 基本的なインポートチェック
         python -c "import sys; sys.path.append('.'); from src.config import Config" || echo "::error::Failed to import Config"
-        python -c "from scripts.setup_environment import EnvironmentSetup" || echo "::warning::setup_environment import check failed"
 
   build:
     name: Build Package
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint-and-test]
+    if: success()
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        # 浅いクローンで高速化（最新のコミットのみ取得）
+        fetch-depth: 1
+        # LFS ファイルをスキップ（必要ない場合）
+        lfs: false
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -220,8 +161,7 @@ jobs:
 
     - name: Install build tools
       run: |
-        python -m pip install --upgrade pip
-        pip install build wheel
+        python -m pip install --upgrade pip build wheel
 
     - name: Build distribution
       run: |

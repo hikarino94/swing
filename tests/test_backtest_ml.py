@@ -33,58 +33,13 @@ def ml_backtest_db():
     """機械学習バックテスト用のテストデータベース"""
     import os
 
+    from db.db_schema import init_schema
+
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
 
-    conn = sqlite3.connect(db_path)
-
-    # prices テーブル作成
-    conn.execute(
-        """
-        CREATE TABLE prices (
-            code TEXT,
-            date TEXT,
-            adj_close REAL,
-            adj_volume INTEGER,
-            PRIMARY KEY (code, date)
-        )
-    """
-    )
-
-    # statements テーブル作成
-    conn.execute(
-        """
-        CREATE TABLE statements (
-            code TEXT,
-            DisclosedDate DATE,
-            NetSales REAL,
-            OperatingProfit REAL,
-            OrdinaryProfit REAL,
-            Profit REAL,
-            TotalAssets REAL,
-            Equity REAL,
-            EquityToAssetRatio REAL,
-            BookValuePerShare REAL,
-            CashFlowsFromOperatingActivities REAL,
-            CashFlowsFromInvestingActivities REAL,
-            CashFlowsFromFinancingActivities REAL
-        )
-    """
-    )
-
-    # listed_info テーブル作成
-    conn.execute(
-        """
-        CREATE TABLE listed_info (
-            code TEXT PRIMARY KEY,
-            market TEXT,
-            comp_name TEXT
-        )
-    """
-    )
-
-    conn.commit()
-    conn.close()
+    # 正しいスキーマでデータベースを初期化
+    init_schema(db_path)
 
     yield db_path
 
@@ -127,7 +82,7 @@ class TestHelpers:
             for i, date in enumerate(dates):
                 price = 1000 + i * 10 if code == "1234" else 2000 - i * 5
                 conn.execute(
-                    "INSERT INTO prices VALUES (?, ?, ?, ?)",
+                    "INSERT INTO prices (code, date, adj_close, adj_volume) VALUES (?, ?, ?, ?)",
                     (code, date.strftime("%Y-%m-%d"), price, 100000 + i * 100),
                 )
         conn.commit()
@@ -157,7 +112,7 @@ class TestHelpers:
                     else 2000 + np.cos(i / 30) * 200
                 )
                 conn.execute(
-                    "INSERT INTO prices VALUES (?, ?, ?, ?)",
+                    "INSERT INTO prices (code, date, adj_close, adj_volume) VALUES (?, ?, ?, ?)",
                     (code, date.strftime("%Y-%m-%d"), price, 100000),
                 )
 
@@ -165,11 +120,17 @@ class TestHelpers:
         for code in ["1234", "5678"]:
             conn.execute(
                 """
-                INSERT INTO statements VALUES
-                (?, '2023-03-15', 1000000, 100000, 90000, 60000,
+                INSERT INTO statements (
+                    code, DisclosedDate, DisclosureNumber,
+                    NetSales, OperatingProfit, OrdinaryProfit, Profit,
+                    TotalAssets, Equity, EquityToAssetRatio, BookValuePerShare,
+                    CashFlowsFromOperatingActivities, CashFlowsFromInvestingActivities,
+                    CashFlowsFromFinancingActivities
+                ) VALUES
+                (?, '2023-03-15', ?, 1000000, 100000, 90000, 60000,
                  5000000, 2000000, 0.4, 100, 120000, -50000, -30000)
             """,
-                (code,),
+                (code, f"DISC{code}"),
             )
 
         conn.commit()
@@ -200,7 +161,8 @@ class TestBacktestCore:
         ]
         for code, market, name in companies:
             conn.execute(
-                "INSERT INTO listed_info VALUES (?, ?, ?)", (code, market, name)
+                "INSERT INTO listed_info (code, market_code, company_name, delete_flag) VALUES (?, ?, ?, ?)",
+                (code, market, name, 0),
             )
 
         # 価格データ（異なるパフォーマンスパターン）
@@ -222,7 +184,7 @@ class TestBacktestCore:
 
                 volume = 100000 + np.random.randint(-10000, 10000)
                 conn.execute(
-                    "INSERT INTO prices VALUES (?, ?, ?, ?)",
+                    "INSERT INTO prices (code, date, adj_close, adj_volume) VALUES (?, ?, ?, ?)",
                     (
                         code,
                         date.strftime("%Y-%m-%d"),
@@ -241,12 +203,19 @@ class TestBacktestCore:
 
                 conn.execute(
                     """
-                    INSERT INTO statements VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO statements (
+                        code, DisclosedDate, DisclosureNumber,
+                        NetSales, OperatingProfit, OrdinaryProfit, Profit,
+                        TotalAssets, Equity, EquityToAssetRatio, BookValuePerShare,
+                        CashFlowsFromOperatingActivities, CashFlowsFromInvestingActivities,
+                        CashFlowsFromFinancingActivities
+                    ) VALUES
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         code,
                         quarter_date.strftime("%Y-%m-%d"),
+                        f'DISC{code}{quarter_date.strftime("%Y%m%d")}',  # DisclosureNumber
                         net_sales,
                         operating_profit,
                         operating_profit * 0.9,

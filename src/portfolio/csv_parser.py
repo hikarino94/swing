@@ -131,10 +131,17 @@ class SBICSVParser:
 
             code = SBICSVParser._normalize_code(row[0])
             if not code:
+                # 銘柄コードが空の場合（投資信託など）はスキップ
+                logger.debug(f"銘柄コードが空のためスキップ: {row[1]}")
                 continue
 
             trade_type = row[3].strip()
             transaction_type, detailed_type = SBICSVParser._parse_trade_type(trade_type)
+
+            # 現引きや投資信託取引はスキップ
+            if transaction_type == "skip":
+                logger.info(f"{detailed_type}取引をスキップ: {row[1]} ({row[0]})")
+                continue
 
             # 決済損益の解析（注文一覧形式では約定代金と入金額が別列）
             realized_profit = None
@@ -145,6 +152,17 @@ class SBICSVParser:
                         # 入金額から決済損益を計算する方法もあるが、
                         # この形式では正確な決済損益は取得できない
                         realized_profit = None
+
+            # 信用取引かどうかを判定してremarksに設定
+            remarks = ""
+            if "信用" in trade_type:
+                remarks = "信用"
+            # 新規売りは信用取引（空売り）
+            elif detailed_type == "新規売り":
+                remarks = "信用"
+            # 決済買いも信用取引（空売りの決済）
+            elif detailed_type == "決済買い":
+                remarks = "信用"
 
             transaction = {
                 "code": code,
@@ -158,7 +176,7 @@ class SBICSVParser:
                 "tax": SBICSVParser._parse_number(row[11], default=0),
                 "total_amount": None,  # この形式では計算が必要
                 "realized_profit": realized_profit,
-                "remarks": "",
+                "remarks": remarks,
             }
 
             # 受渡金額を計算
@@ -223,10 +241,17 @@ class SBICSVParser:
 
             code = SBICSVParser._normalize_code(row[2])
             if not code:
+                # 銘柄コードが空の場合（投資信託など）はスキップ
+                logger.debug(f"銘柄コードが空のためスキップ: {row[1]}")
                 continue
 
             trade_type = row[4].strip()
             transaction_type, detailed_type = SBICSVParser._parse_trade_type(trade_type)
+
+            # 現引きや投資信託取引はスキップ
+            if transaction_type == "skip":
+                logger.info(f"{detailed_type}取引をスキップ: {row[1]} ({row[2]})")
+                continue
 
             # 決済損益の解析
             realized_profit = None
@@ -234,6 +259,17 @@ class SBICSVParser:
                 # 信用新規買/売の場合は決済損益なし
                 if detailed_type not in ["新規買い", "新規売り"]:
                     realized_profit = SBICSVParser._parse_number(row[13])
+
+            # 信用取引かどうかを判定してremarksに設定
+            remarks = ""
+            if "信用" in trade_type:
+                remarks = "信用"
+            # 新規売りは信用取引（空売り）
+            elif detailed_type == "新規売り":
+                remarks = "信用"
+            # 決済買いも信用取引（空売りの決済）
+            elif detailed_type == "決済買い":
+                remarks = "信用"
 
             transaction = {
                 "code": code,
@@ -247,7 +283,7 @@ class SBICSVParser:
                 "tax": SBICSVParser._parse_number(row[11], default=0),
                 "total_amount": None,  # この形式では計算が必要
                 "realized_profit": realized_profit,
-                "remarks": "",
+                "remarks": remarks,
             }
 
             # 受渡金額を計算
@@ -309,6 +345,17 @@ class SBICSVParser:
                     transaction_type = "buy"
                     detailed_type = "新規買い"
 
+                # 信用取引かどうかを判定
+                remarks = row.get("備考", "")
+                # 売買区分から信用取引を判定（標準形式では備考欄に情報がない場合があるため）
+                if not remarks and trade_type:
+                    # 新規売りは信用取引（空売り）
+                    if detailed_type == "新規売り":
+                        remarks = "信用"
+                    # 決済買いも信用取引（空売りの決済）
+                    elif detailed_type == "決済買い":
+                        remarks = "信用"
+
                 transaction = {
                     "code": code,
                     "name": row.get("銘柄名", "").strip(),
@@ -329,7 +376,7 @@ class SBICSVParser:
                     ),
                     "total_amount": SBICSVParser._parse_number(row.get("受渡金額")),
                     "realized_profit": None,
-                    "remarks": row.get("備考", ""),
+                    "remarks": remarks,
                 }
 
                 # 必須フィールドのチェック
@@ -378,16 +425,26 @@ class SBICSVParser:
 
             code = SBICSVParser._normalize_code(row[0])
             if not code:
+                # 銘柄コードが空の場合（投資信託など）はスキップ
+                logger.debug(f"銘柄コードが空のためスキップ: {row[1]}")
                 continue
 
             trade_type = row[3].strip()
             transaction_type, detailed_type = SBICSVParser._parse_trade_type(trade_type)
+
+            # 現引きや投資信託取引はスキップ
+            if transaction_type == "skip":
+                logger.info(f"{detailed_type}取引をスキップ: {row[1]} ({row[0]})")
+                continue
 
             # 決済損益の解析
             realized_profit = None
             if len(row) > 12 and row[12] and row[12] != "--":
                 if detailed_type in ["決済売り", "決済買い"]:
                     realized_profit = SBICSVParser._parse_number(row[12])
+
+            # 信用取引かどうかを判定してremarksに設定
+            remarks = "信用" if "信用" in trade_type else ""
 
             transaction = {
                 "code": code,
@@ -401,7 +458,7 @@ class SBICSVParser:
                 "tax": SBICSVParser._parse_number(row[11], default=0),
                 "total_amount": None,  # この形式では計算が必要
                 "realized_profit": realized_profit,
-                "remarks": "信用" if "信用" in trade_type else "",
+                "remarks": remarks,
             }
 
             # 受渡金額を計算
@@ -436,19 +493,27 @@ class SBICSVParser:
         if not trade_type:
             return "buy", "新規買い"
 
+        # 現引き取引はスキップ（特別な値を返す）
+        if "現引" in trade_type:
+            return "skip", "現引き"
+
+        # 投資信託取引はスキップ
+        if "投信" in trade_type or "投資信託" in trade_type:
+            return "skip", "投資信託"
+
         # 信用取引の判定
         if "信用新規買" in trade_type:
             return "buy", "新規買い"
         elif "信用新規売" in trade_type:
             return "sell", "新規売り"
-        elif "信用返済買" in trade_type:
+        elif "信用返済買" in trade_type or "信用決済買" in trade_type:
             return "buy", "決済買い"
-        elif "信用返済売" in trade_type:
+        elif "信用返済売" in trade_type or "信用決済売" in trade_type:
             return "sell", "決済売り"
-        # 現物取引の判定
-        elif "現物買" in trade_type:
+        # 現物取引の判定（「株式現物買」「株式現物売」にも対応）
+        elif "現物買" in trade_type or "株式現物買" in trade_type:
             return "buy", "新規買い"
-        elif "現物売" in trade_type:
+        elif "現物売" in trade_type or "株式現物売" in trade_type:
             return "sell", "決済売り"
         # その他
         elif "買" in trade_type:
@@ -705,14 +770,22 @@ class SBICSVParser:
 
             # 現在のセクション（口座タイプ）を追跡
             current_account_type = "特定"  # デフォルト
+            current_section_name = ""  # 現在のセクション名
 
             # セクション見出しと口座タイプのマッピング
             section_mapping = {
                 "株式（特定預り）": "特定",
                 "株式（NISA預り（成長投資枠））": "NISA",
                 "株式（旧NISA預り）": "旧NISA",
-                # TODO: 投資信託セクションは現在スキップ対象
+                # 投資信託セクション
                 "投資信託（金額/NISA預り（つみたて投資枠））": "つみたてNISA",
+                "投資信託（金額/特定預り）": "特定",
+                "投資信託（金額/NISA預り（成長投資枠））": "NISA",
+                "投資信託（金額/旧NISA預り）": "旧NISA",
+                "投資信託（口数/特定預り）": "特定",
+                "投資信託（口数/NISA預り（成長投資枠））": "NISA",
+                "投資信託（口数/NISA預り（つみたて投資枠））": "つみたてNISA",
+                "投資信託（口数/旧NISA預り）": "旧NISA",
             }
 
             # 各行を処理
@@ -723,6 +796,7 @@ class SBICSVParser:
                 # セクション見出しをチェック
                 if line in section_mapping:
                     current_account_type = section_mapping[line]
+                    current_section_name = line  # セクション名を記憶
                     logger.debug(
                         f"セクション検出: {line} -> 口座タイプ: {current_account_type}"
                     )
@@ -735,31 +809,72 @@ class SBICSVParser:
                     reader = csv.reader(io.StringIO(line))
                     row = next(reader, None)
                     if row and len(row) >= 8:
+                        # 投資信託の場合は9列必要
+                        if "投資信託" in current_section_name and len(row) < 9:
+                            logger.debug(f"投資信託データの列数が不足: {len(row)}列")
+                            continue
                         # 投資信託セクションかどうか判定
-                        is_fund = (
-                            "つみたてNISA" in current_account_type and len(row) >= 9
-                        )
+                        is_fund = "投資信託" in current_section_name
 
                         if is_fund:
                             # 投資信託の場合
                             fund_name = row[0].strip() if row[0] else ""
                             if fund_name:
-                                # TODO: 投資信託の取り込み機能を実装する
-                                # 現在の課題:
-                                # 1. 投資信託には標準的な4桁銘柄コードが存在しない
-                                # 2. ファンド名のみでの識別となるため、名称変更時の追跡が困難
-                                # 3. 複数の販売会社で同一ファンドが異なるコードで管理される
-                                #
-                                # 実装案:
-                                # - ISINコードやファンドコードなど一意識別子の利用を検討
-                                # - ファンド名のマスターテーブルを作成し、名称変更に対応
-                                # - 投資信託専用のテーブル（fund_holdings）を作成
-                                # - 銘柄コードの代わりにファンドIDを使用
-                                # - ファンド名とハッシュ値のマッピングテーブルを管理
-                                #
-                                # 一時的に投資信託のインポートをスキップ
-                                logger.warning(
-                                    f"投資信託のインポートはスキップされました: {fund_name} "
+                                # デバッグ用にrow内容を出力
+                                logger.debug(f"投資信託行データ: {row}")
+                                logger.debug(f"行データ長: {len(row)}")
+
+                                # 口数を取得（列1 - 「口」を除去）
+                                quantity = None
+                                if len(row) > 1:
+                                    # 「口」を除去してから数値解析
+                                    quantity_str = row[1].replace("口", "").strip()
+                                    quantity = SBICSVParser._parse_number(quantity_str)
+                                    logger.debug(
+                                        f"口数解析: row[1]='{row[1]}' -> '{quantity_str}' -> {quantity}"
+                                    )
+
+                                # quantityがNoneまたは0の場合はスキップ
+                                if quantity is None or quantity == 0:
+                                    logger.warning(
+                                        f"投資信託の口数が無効です: {fund_name} "
+                                        f"(口数: {quantity}, 口座: {current_account_type})"
+                                    )
+                                    continue
+
+                                # 投資信託データを保持（ファンド名で識別）
+                                holding = {
+                                    "fund_name": fund_name,
+                                    "account_type": current_account_type,
+                                    "quantity": quantity,  # 口数
+                                    "average_price": (
+                                        SBICSVParser._parse_number(row[3])
+                                        if len(row) > 3
+                                        else 0
+                                    ),  # 取得単価
+                                    "current_price": (
+                                        SBICSVParser._parse_number(row[4])
+                                        if len(row) > 4
+                                        else None
+                                    ),  # 基準価額
+                                    "market_value": (
+                                        SBICSVParser._parse_number(row[6])
+                                        if len(row) > 6
+                                        else None
+                                    ),  # 評価額
+                                    "profit_loss": (
+                                        SBICSVParser._parse_number(row[7])
+                                        if len(row) > 7
+                                        else None
+                                    ),  # 評価損益
+                                    "profit_loss_ratio": None,
+                                    "is_fund": True,  # 投資信託フラグ
+                                    "code": None,  # 投資信託にはコードがない
+                                }
+                                holdings.append(holding)
+                                logger.info(
+                                    f"投資信託データを取得: {fund_name} "
+                                    f"口数: {quantity}, 平均取得価額: {holding['average_price']} "
                                     f"(口座: {current_account_type})"
                                 )
                         else:

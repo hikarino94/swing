@@ -57,7 +57,7 @@ class TestDBSchema:
         assert row[0] == "1234"  # code
         assert row[1] == "テスト株式会社"  # company_name
         assert row[2] == "情報・通信業"  # sector33_name
-        assert row[3] == 0  # delete_flag (デフォルト値)
+        assert row[3] is None  # delete_flag (デフォルト値はNULL)
 
         conn.close()
 

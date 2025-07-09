@@ -39,7 +39,7 @@ class TestCommandExecution:
         scheduler._run("python test_command.py")
 
         # 実行確認
-        mock_subprocess.assert_called_once_with("python test_command.py", shell=True)
+        mock_subprocess.assert_called_once_with(["python", "test_command.py"])
         mock_logger.info.assert_called_once_with("Run: %s", "python test_command.py")
         mock_logger.error.assert_not_called()
 
@@ -56,7 +56,7 @@ class TestCommandExecution:
         scheduler._run("python invalid_command.py")
 
         # 実行確認
-        mock_subprocess.assert_called_once_with("python invalid_command.py", shell=True)
+        mock_subprocess.assert_called_once_with(["python", "invalid_command.py"])
         mock_logger.info.assert_called_once()
         mock_logger.error.assert_called_once_with(
             "Command failed: %s", "python invalid_command.py"
@@ -225,9 +225,9 @@ class TestIntegration:
 
         # 実行確認
         expected_calls = [
-            mock.call("python -m fetch.daily_quotes", shell=True),
-            mock.call("python -m fetch.statements 2", shell=True),
-            mock.call("python -m fetch.listed_info", shell=True),
+            mock.call(["python", "-m", "fetch.daily_quotes"]),
+            mock.call(["python", "-m", "fetch.statements", "2"]),
+            mock.call(["python", "-m", "fetch.listed_info"]),
         ]
         mock_subprocess.assert_has_calls(expected_calls)
 

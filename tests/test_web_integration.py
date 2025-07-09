@@ -27,108 +27,15 @@ def test_environment(tmp_path):
 
     # テスト用データベースを作成
     db_path = tmp_path / "db" / "stock.db"
+
+    # 正しいスキーマでデータベースを初期化
+    from db.db_schema import init_schema
+
+    init_schema(db_path)
+
     conn = sqlite3.connect(db_path)
     conn.executescript(
         """
-        CREATE TABLE IF NOT EXISTS prices (
-            code TEXT NOT NULL,
-            date TEXT NOT NULL,
-            open REAL,
-            high REAL,
-            low REAL,
-            close REAL,
-            upper_limit REAL,
-            lower_limit REAL,
-            volume INTEGER,
-            turnover_value REAL,
-            adj_factor REAL,
-            adj_open REAL,
-            adj_high REAL,
-            adj_low REAL,
-            adj_close REAL,
-            adj_volume INTEGER,
-            PRIMARY KEY (code, date)
-        );
-
-        CREATE TABLE IF NOT EXISTS listed_info (
-            code TEXT PRIMARY KEY,
-            company_name TEXT,
-            company_name_english TEXT,
-            sector17_code TEXT,
-            sector17_name TEXT,
-            sector33_code TEXT,
-            sector33_name TEXT,
-            scale_category TEXT,
-            market_code TEXT,
-            market_name TEXT,
-            delete_flag INTEGER DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS statements (
-            LocalCode TEXT NOT NULL,
-            DisclosureNumber TEXT PRIMARY KEY,
-            DisclosedDate TEXT,
-            TypeOfDocument TEXT,
-            TypeOfCurrentPeriod TEXT,
-            CurrentPeriodStartDate TEXT,
-            CurrentPeriodEndDate TEXT,
-            CurrentFiscalYearStartDate TEXT,
-            CurrentFiscalYearEndDate TEXT,
-            NextFiscalYearStartDate TEXT,
-            NextFiscalYearEndDate TEXT,
-            NetSales REAL,
-            OperatingProfit REAL,
-            OrdinaryProfit REAL,
-            Profit REAL,
-            EarningsPerShare REAL,
-            TotalAssets REAL,
-            Equity REAL,
-            EquityToAssetRatio REAL,
-            BookValuePerShare REAL,
-            ForecastNetSales REAL,
-            ForecastOperatingProfit REAL,
-            ForecastOrdinaryProfit REAL,
-            ForecastProfit REAL,
-            ForecastEarningsPerShare REAL,
-            NextYearForecastNetSales REAL,
-            NextYearForecastOperatingProfit REAL,
-            NextYearForecastOrdinaryProfit REAL,
-            NextYearForecastProfit REAL,
-            NextYearForecastEarningsPerShare REAL
-        );
-
-        CREATE TABLE IF NOT EXISTS fundamental_signals (
-            code TEXT NOT NULL,
-            as_of TEXT NOT NULL,
-            disclosure_date TEXT,
-            market_cap REAL,
-            per REAL,
-            pbr REAL,
-            roe REAL,
-            equity_ratio REAL,
-            sales_growth REAL,
-            profit_growth REAL,
-            PRIMARY KEY (code, as_of)
-        );
-
-        CREATE TABLE IF NOT EXISTS technical_indicators (
-            code TEXT NOT NULL,
-            date TEXT NOT NULL,
-            rsi_14 REAL,
-            macd REAL,
-            macd_signal REAL,
-            bb_upper REAL,
-            bb_middle REAL,
-            bb_lower REAL,
-            volume_ratio REAL,
-            golden_cross INTEGER,
-            dead_cross INTEGER,
-            rsi_oversold INTEGER,
-            rsi_overbought INTEGER,
-            bb_squeeze INTEGER,
-            volume_spike INTEGER,
-            PRIMARY KEY (code, date)
-        );
 
         -- テストデータを挿入
         INSERT INTO listed_info (code, company_name, sector33_name, delete_flag)

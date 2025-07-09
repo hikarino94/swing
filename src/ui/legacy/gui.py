@@ -623,7 +623,7 @@ def build_results_tab(nb):
             if sys.platform.startswith("darwin"):
                 subprocess.Popen(["open", path])
             elif os.name == "nt":
-                os.startfile(path)  # type: ignore[misc,attr-defined]
+                os.startfile(path)
             else:
                 subprocess.Popen(["xdg-open", path])
         except Exception as exc:  # pylint: disable=broad-except

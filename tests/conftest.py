@@ -20,59 +20,10 @@ def temp_db() -> Generator[Path, None, None]:
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = Path(f.name)
 
-    # テーブルを作成
-    conn = sqlite3.connect(db_path)
-    conn.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS prices (
-            code TEXT NOT NULL,
-            date TEXT NOT NULL,
-            open REAL,
-            high REAL,
-            low REAL,
-            close REAL,
-            upper_limit REAL,
-            lower_limit REAL,
-            volume INTEGER,
-            turnover_value REAL,
-            adj_factor REAL,
-            adj_open REAL,
-            adj_high REAL,
-            adj_low REAL,
-            adj_close REAL,
-            adj_volume INTEGER,
-            PRIMARY KEY (code, date)
-        );
+    # テーブルを作成 - init_schemaを使用してすべてのテーブルを作成
+    from db.db_schema import init_schema
 
-        CREATE TABLE IF NOT EXISTS listed_info (
-            code TEXT PRIMARY KEY,
-            date TEXT,
-            company_name TEXT,
-            company_name_en TEXT,
-            sector17_code TEXT,
-            sector17_name TEXT,
-            sector33_code TEXT,
-            sector33_name TEXT,
-            scale_category TEXT,
-            market_code TEXT,
-            market_name TEXT,
-            margin_code TEXT,
-            margin_name TEXT,
-            delete_flag INTEGER DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS statements (
-            Code TEXT,
-            DisclosureNumber TEXT PRIMARY KEY,
-            DisclosedDate TEXT,
-            NetSales REAL,
-            OperatingProfit REAL,
-            OrdinaryProfit REAL,
-            Profit REAL
-        );
-    """
-    )
-    conn.close()
+    init_schema(db_path)
 
     yield db_path
 
@@ -301,33 +252,10 @@ def test_db() -> Generator[str, None, None]:
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
 
-    # pricesテーブルを作成
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS prices (
-            code TEXT NOT NULL,
-            date TEXT NOT NULL,
-            open REAL,
-            high REAL,
-            low REAL,
-            close REAL,
-            upper_limit REAL,
-            lower_limit REAL,
-            volume INTEGER,
-            turnover_value REAL,
-            adj_factor REAL,
-            adj_open REAL,
-            adj_high REAL,
-            adj_low REAL,
-            adj_close REAL,
-            adj_volume INTEGER,
-            PRIMARY KEY (code, date)
-        )
-    """
-    )
-    conn.commit()
-    conn.close()
+    # テーブルを作成 - init_schemaを使用してすべてのテーブルを作成
+    from db.db_schema import init_schema
+
+    init_schema(db_path)
 
     yield db_path
 

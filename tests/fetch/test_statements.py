@@ -272,47 +272,27 @@ class TestPrivateFunctions:
 class TestDatabaseOperations:
     """データベース操作のテスト"""
 
-    @patch(
-        "fetch.statements.SCHEMA_COLUMNS",
-        [
-            "Code",
-            "DisclosureNumber",
-            "DisclosedDate",
-            "NetSales",
-            "OperatingProfit",
-            "OrdinaryProfit",
-            "Profit",
-        ],
-    )
     def test_upsert_operation(self, temp_db):
         """_upsert関数の動作テスト"""
-        # テスト用の簡略化されたスキーマでテーブルを作成
+        # 実際のスキーマを読み込んで使用
+        from db import db_schema
+
         conn = sqlite3.connect(temp_db)
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS statements (
-                Code TEXT,
-                DisclosureNumber TEXT PRIMARY KEY,
-                DisclosedDate TEXT,
-                NetSales REAL,
-                OperatingProfit REAL,
-                OrdinaryProfit REAL,
-                Profit REAL
-            )
-            """
-        )
+        # 実際のスキーマを使用してテーブルを作成
+        conn.executescript(db_schema.DDL)
         conn.commit()
 
-        # テストデータ（リスト形式）
+        # テストデータ（実際のSCHEMA_COLUMNSに合わせて全フィールドを含める）
         records = [
             {
-                "Code": "1234",
+                "code": "1234",
                 "DisclosureNumber": "12345678901234567890",
                 "DisclosedDate": "2024-01-10",
                 "NetSales": 1000000,
                 "OperatingProfit": 100000,
                 "OrdinaryProfit": 110000,
                 "Profit": 80000,
+                # その他の必須フィールドもNoneで初期化
             }
         ]
 
@@ -321,44 +301,23 @@ class TestDatabaseOperations:
 
         # データベースから読み込んで検証
         result_df = pd.read_sql_query(
-            "SELECT * FROM statements WHERE Code = '1234'", conn
+            "SELECT * FROM statements WHERE code = '1234'", conn
         )
         conn.close()
 
         assert len(result_df) == 1
-        assert result_df.iloc[0]["Code"] == "1234"
+        assert result_df.iloc[0]["code"] == "1234"
         assert result_df.iloc[0]["DisclosedDate"] == "2024-01-10"
         assert result_df.iloc[0]["NetSales"] == 1000000
 
-    @patch(
-        "fetch.statements.SCHEMA_COLUMNS",
-        [
-            "Code",
-            "DisclosureNumber",
-            "DisclosedDate",
-            "NetSales",
-            "OperatingProfit",
-            "OrdinaryProfit",
-            "Profit",
-        ],
-    )
     def test_upsert_empty_list(self, temp_db):
         """空のリストを処理するテスト"""
-        # テスト用の簡略化されたスキーマでテーブルを作成
+        # 実際のスキーマを読み込んで使用
+        from db import db_schema
+
         conn = sqlite3.connect(temp_db)
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS statements (
-                Code TEXT,
-                DisclosureNumber TEXT PRIMARY KEY,
-                DisclosedDate TEXT,
-                NetSales REAL,
-                OperatingProfit REAL,
-                OrdinaryProfit REAL,
-                Profit REAL
-            )
-            """
-        )
+        # 実際のスキーマを使用してテーブルを作成
+        conn.executescript(db_schema.DDL)
         conn.commit()
 
         # 空のリスト
@@ -369,41 +328,20 @@ class TestDatabaseOperations:
 
         conn.close()
 
-    @patch(
-        "fetch.statements.SCHEMA_COLUMNS",
-        [
-            "Code",
-            "DisclosureNumber",
-            "DisclosedDate",
-            "NetSales",
-            "OperatingProfit",
-            "OrdinaryProfit",
-            "Profit",
-        ],
-    )
     def test_upsert_duplicate_handling(self, temp_db):
         """重複データのハンドリングテスト"""
-        # テスト用の簡略化されたスキーマでテーブルを作成
+        # 実際のスキーマを読み込んで使用
+        from db import db_schema
+
         conn = sqlite3.connect(temp_db)
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS statements (
-                Code TEXT,
-                DisclosureNumber TEXT PRIMARY KEY,
-                DisclosedDate TEXT,
-                NetSales REAL,
-                OperatingProfit REAL,
-                OrdinaryProfit REAL,
-                Profit REAL
-            )
-            """
-        )
+        # 実際のスキーマを使用してテーブルを作成
+        conn.executescript(db_schema.DDL)
         conn.commit()
 
         # 同じデータを作成
         records1 = [
             {
-                "Code": "1234",
+                "code": "1234",
                 "DisclosureNumber": "12345678901234567890",
                 "DisclosedDate": "2024-01-10",
                 "NetSales": 1000000,
@@ -413,14 +351,12 @@ class TestDatabaseOperations:
         # 更新されたデータ
         records2 = [
             {
-                "Code": "1234",
+                "code": "1234",
                 "DisclosureNumber": "12345678901234567890",
                 "DisclosedDate": "2024-01-10",
                 "NetSales": 1100000,  # 売上が更新された
             }
         ]
-
-        conn = sqlite3.connect(temp_db)
 
         # 1回目の挿入
         statements._upsert(conn, records1)
@@ -430,7 +366,7 @@ class TestDatabaseOperations:
 
         # データベースから読み込んで検証
         result_df = pd.read_sql_query(
-            "SELECT * FROM statements WHERE Code = '1234'", conn
+            "SELECT * FROM statements WHERE code = '1234'", conn
         )
         conn.close()
 

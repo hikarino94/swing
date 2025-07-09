@@ -1,4 +1,4 @@
-"""取引タイプの詳細判定のテスト"""
+"""取引タイプの詳細判定のテスト - 主要なケースに焦点を当てた簡潔なテスト"""
 
 import pytest
 
@@ -94,6 +94,23 @@ def test_parse_transactions_order_list_format_detailed_types():
     assert transactions[4]["code"] == "7201"
     assert transactions[4]["transaction_type"] == "sell"
     assert transactions[4]["detailed_type"] == "決済売り"
+
+
+def test_skip_special_transactions():
+    """特殊な取引（現引き・投資信託）がスキップされることを確認"""
+    csv_content = """
+"銘柄（コード）","銘柄（名前）","銘柄（市場）","取引区分","期限","預り区分","約定日","注文株数","約定株数","約定単価","手数料","消費税","約定代金","入金額"
+"7203","トヨタ自動車","東証プライム","現物買","2024/01/15","特定預り","2024/01/15 09:00:00","100","100","2500.00","250","25","250275",""
+"1911","住友林業","--","現引","無期限","特定","2025/06/18","100","100","4362","25","0","-436225",""
+"7201","日産自動車","東証プライム","信用新規買","2024/01/16","信用","2024/01/16 10:00:00","200","200","1000.00","100","10","200110",""
+"""
+
+    transactions = SBICSVParser.parse_transactions_csv(csv_content)
+
+    # 現引き取引はスキップされるので、2件のみ
+    assert len(transactions) == 2
+    assert transactions[0]["code"] == "7203"
+    assert transactions[1]["code"] == "7201"
 
 
 if __name__ == "__main__":
