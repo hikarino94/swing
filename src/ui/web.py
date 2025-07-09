@@ -22,17 +22,28 @@ from flask import (
     make_response,
     redirect,
     render_template,
-    request,
     send_file,
     session,
     url_for,
 )
+from flask import request as flask_request
 from werkzeug.serving import WSGIRequestHandler
 
+from src.types.flask_types import (
+    RequestWithUser,
+    get_args_value,
+    get_file,
+    get_form_value,
+    get_json_value,
+    has_json_key,
+)
 from src.utils.cache import cache_result, clear_cache_by_prefix
 
 # プロジェクトルートをPYTHONPATHに追加
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+
+# 型付きrequest
+request: RequestWithUser = flask_request
 
 # データベース初期化のインポート
 from db.db_schema import init_schema
@@ -137,7 +148,7 @@ def compress_response(f):
         response = make_response(f(*args, **kwargs))
 
         # テキストベースのコンテンツのみ圧縮
-        if response.mimetype.startswith(
+        if response.mimetype and response.mimetype.startswith(
             ("text/", "application/json", "application/javascript")
         ):
             response.data = gzip.compress(response.data)
@@ -192,11 +203,12 @@ def run_command(command, description="コマンド実行中"):
 
         output_lines = []
         # リアルタイムで出力を表示
-        for line in iter(process.stdout.readline, ""):
-            if line:
-                # ターミナルに表示（改行なし、flushで即座に表示）
-                print(f"[{description}] {line}", end="", flush=True)
-                output_lines.append(line)
+        if process.stdout is not None:
+            for line in iter(process.stdout.readline, ""):
+                if line:
+                    # ターミナルに表示（改行なし、flushで即座に表示）
+                    print(f"[{description}] {line}", end="", flush=True)
+                    output_lines.append(line)
 
         # プロセスの終了を待つ
         process.wait()
@@ -231,7 +243,7 @@ def index():
     logger.info("メインページへのアクセス")
 
     # URLパラメータからタブを取得
-    selected_tab = request.args.get("tab", "screening")
+    selected_tab = get_args_value(request, "tab", "screening")
 
     # テスト環境では認証をスキップ
     if app.config.get("TESTING"):
@@ -305,9 +317,9 @@ def login():
         return render_template("login.html", error=None)
 
     # POST: ログイン処理
-    username_or_email = request.form.get("username", "").strip()
-    password = request.form.get("password", "")
-    remember_me = request.form.get("remember_me") == "on"
+    username_or_email = get_form_value(request, "username", "").strip()
+    password = get_form_value(request, "password", "")
+    remember_me = get_form_value(request, "remember_me") == "on"
 
     user, session_id, error = AuthManager.login(
         username_or_email, password, remember_me
@@ -332,10 +344,10 @@ def register():
         return render_template("register.html", error=None)
 
     # POST: 登録処理
-    username = request.form.get("username", "").strip()
-    email = request.form.get("email", "").strip()
-    password = request.form.get("password", "")
-    password_confirm = request.form.get("password_confirm", "")
+    username = get_form_value(request, "username", "").strip()
+    email = get_form_value(request, "email", "").strip()
+    password = get_form_value(request, "password", "")
+    password_confirm = get_form_value(request, "password_confirm", "")
 
     # パスワード確認
     if password != password_confirm:
@@ -377,15 +389,17 @@ def fetch_quotes():
     )
 
     try:
-        data = request.json
         cmd = [sys.executable, "fetch/daily_quotes.py"]
 
-        if data.get("start_date"):
-            cmd.extend(["--start", data["start_date"]])
-            print(f"[API] 開始日: {data['start_date']}")
-        if data.get("end_date"):
-            cmd.extend(["--end", data["end_date"]])
-            print(f"[API] 終了日: {data['end_date']}")
+        start_date = get_json_value(request, "start_date")
+        if start_date:
+            cmd.extend(["--start", start_date])
+            print(f"[API] 開始日: {start_date}")
+
+        end_date = get_json_value(request, "end_date")
+        if end_date:
+            cmd.extend(["--end", end_date])
+            print(f"[API] 終了日: {end_date}")
 
         logger.info(f"実行コマンド: {' '.join(cmd)}")
         result = run_command(" ".join(cmd), "株価データ取得")
@@ -444,19 +458,21 @@ def fetch_statements():
     )
 
     try:
-        data = request.json
         cmd = [sys.executable, "fetch/statements.py"]
 
-        mode = data.get("mode", "2")  # デフォルトは日次取得モード
+        mode = get_json_value(request, "mode", "2")  # デフォルトは日次取得モード
         cmd.append(mode)
         print(f"[API] モード: {mode}")
 
-        if data.get("start_date"):
-            cmd.extend(["--start", data["start_date"]])
-            print(f"[API] 開始日: {data['start_date']}")
-        if data.get("end_date"):
-            cmd.extend(["--end", data["end_date"]])
-            print(f"[API] 終了日: {data['end_date']}")
+        start_date = get_json_value(request, "start_date")
+        if start_date:
+            cmd.extend(["--start", start_date])
+            print(f"[API] 開始日: {start_date}")
+
+        end_date = get_json_value(request, "end_date")
+        if end_date:
+            cmd.extend(["--end", end_date])
+            print(f"[API] 終了日: {end_date}")
 
         logger.info(f"実行コマンド: {' '.join(cmd)}")
         result = run_command(" ".join(cmd), f"財務諸表{mode}")
@@ -480,15 +496,19 @@ def fetch_statements():
 @admin_required
 def screen_fundamental():
     """ファンダメンタルスクリーニング"""
-    data = request.json
     cmd = [sys.executable, "screening/screen_statements.py"]
 
-    if data.get("lookback"):
-        cmd.extend(["--lookback", str(data["lookback"])])
-    if data.get("recent"):
-        cmd.extend(["--recent", str(data["recent"])])
-    if data.get("as_of"):
-        cmd.extend(["--as-of", data["as_of"]])
+    lookback = get_json_value(request, "lookback")
+    if lookback:
+        cmd.extend(["--lookback", str(lookback)])
+
+    recent = get_json_value(request, "recent")
+    if recent:
+        cmd.extend(["--recent", str(recent)])
+
+    as_of = get_json_value(request, "as_of")
+    if as_of:
+        cmd.extend(["--as-of", as_of])
 
     result = run_command(" ".join(cmd), "ファンダメンタルスクリーニング")
 
@@ -549,18 +569,20 @@ def screen_technical():
     """テクニカルスクリーニング"""
     logger.info("テクニカルスクリーニングAPIが呼び出されました")
     try:
-        data = request.json
         # 高速版を使用
         cmd = [sys.executable, "screening/screen_technical_fast.py"]
 
-        action = data.get("action", "screen")
+        action = get_json_value(request, "action", "screen")
         cmd.append(action)
 
         # indicatorsとscreenの両方でas_ofとlookbackパラメータを渡す
-        if data.get("as_of"):
-            cmd.extend(["--as-of", data["as_of"]])
-        if data.get("lookback"):
-            cmd.extend(["--lookback", str(data["lookback"])])
+        as_of = get_json_value(request, "as_of")
+        if as_of:
+            cmd.extend(["--as-of", as_of])
+
+        lookback = get_json_value(request, "lookback")
+        if lookback:
+            cmd.extend(["--lookback", str(lookback)])
 
         logger.info(f"実行コマンド: {' '.join(cmd)}")
         result = run_command(" ".join(cmd), f"テクニカル{action}")
@@ -572,7 +594,7 @@ def screen_technical():
                 conn = sqlite3.connect(get_db_path())
 
                 # 最新のシグナルを取得
-                as_of_date = data.get("as_of")
+                as_of_date = get_json_value(request, "as_of")
                 if as_of_date:
                     query = """
                     SELECT ti.*, li.company_name
@@ -639,22 +661,26 @@ def screen_technical():
 @admin_required
 def screen_ml():
     """MLスクリーニング"""
-    data = request.json
     cmd = [sys.executable, "screening/screen_ml.py"]
 
-    action = data.get("action", "screen")
+    action = get_json_value(request, "action", "screen")
     cmd.append(action)
 
     if action == "train":
-        if data.get("force"):
+        if get_json_value(request, "force"):
             cmd.append("--force")
     elif action == "screen":
-        if data.get("top"):
-            cmd.extend(["--top", str(data["top"])])
-        if data.get("lookback"):
-            cmd.extend(["--lookback", str(data["lookback"])])
-        if data.get("as_of"):
-            cmd.extend(["--as-of", data["as_of"]])
+        top = get_json_value(request, "top")
+        if top:
+            cmd.extend(["--top", str(top)])
+
+        lookback = get_json_value(request, "lookback")
+        if lookback:
+            cmd.extend(["--lookback", str(lookback)])
+
+        as_of = get_json_value(request, "as_of")
+        if as_of:
+            cmd.extend(["--as-of", as_of])
         # MLスクリーニングはExcel出力をサポートしていないため、結果をテキストで取得
 
     result = run_command(" ".join(cmd), f"ML{action}")
@@ -668,20 +694,28 @@ def screen_ml():
 @admin_required
 def backtest_fundamental():
     """ファンダメンタルバックテスト"""
-    data = request.json
     output_file = timestamped_path("backtest", "fundamental", ".json")
     cmd = [sys.executable, "backtest/backtest_statements.py"]
 
-    if data.get("hold_days"):
-        cmd.extend(["--hold", str(data["hold_days"])])
-    if data.get("entry_offset"):
-        cmd.extend(["--entry-offset", str(data["entry_offset"])])
-    if data.get("capital"):
-        cmd.extend(["--capital", str(data["capital"])])
-    if data.get("start_date"):
-        cmd.extend(["--start", data["start_date"]])
-    if data.get("end_date"):
-        cmd.extend(["--end", data["end_date"]])
+    hold_days = get_json_value(request, "hold_days")
+    if hold_days:
+        cmd.extend(["--hold", str(hold_days)])
+
+    entry_offset = get_json_value(request, "entry_offset")
+    if entry_offset:
+        cmd.extend(["--entry-offset", str(entry_offset)])
+
+    capital = get_json_value(request, "capital")
+    if capital:
+        cmd.extend(["--capital", str(capital)])
+
+    start_date = get_json_value(request, "start_date")
+    if start_date:
+        cmd.extend(["--start", start_date])
+
+    end_date = get_json_value(request, "end_date")
+    if end_date:
+        cmd.extend(["--end", end_date])
 
     cmd.extend(["--json", output_file])
 
@@ -695,20 +729,28 @@ def backtest_fundamental():
 @admin_required
 def backtest_technical():
     """テクニカルバックテスト"""
-    data = request.json
     output_file = timestamped_path("backtest", "technical", ".json")
     cmd = [sys.executable, "backtest/backtest_technical.py"]
 
-    if data.get("hold_days"):
-        cmd.extend(["--hold-days", str(data["hold_days"])])
-    if data.get("stop_loss"):
-        cmd.extend(["--stop-loss", str(data["stop_loss"])])
-    if data.get("capital"):
-        cmd.extend(["--capital", str(data["capital"])])
-    if data.get("start_date"):
-        cmd.extend(["--start", data["start_date"]])
-    if data.get("end_date"):
-        cmd.extend(["--end", data["end_date"]])
+    hold_days = get_json_value(request, "hold_days")
+    if hold_days:
+        cmd.extend(["--hold-days", str(hold_days)])
+
+    stop_loss = get_json_value(request, "stop_loss")
+    if stop_loss:
+        cmd.extend(["--stop-loss", str(stop_loss)])
+
+    capital = get_json_value(request, "capital")
+    if capital:
+        cmd.extend(["--capital", str(capital)])
+
+    start_date = get_json_value(request, "start_date")
+    if start_date:
+        cmd.extend(["--start", start_date])
+
+    end_date = get_json_value(request, "end_date")
+    if end_date:
+        cmd.extend(["--end", end_date])
 
     cmd.extend(["--json", output_file])
 
@@ -722,18 +764,24 @@ def backtest_technical():
 @admin_required
 def backtest_ml():
     """MLバックテスト"""
-    data = request.json
     output_file = timestamped_path("backtest", "ml", ".json")
     cmd = [sys.executable, "backtest/backtest_ml.py"]
 
-    if data.get("top"):
-        cmd.extend(["--top", str(data["top"])])
-    if data.get("capital"):
-        cmd.extend(["--capital", str(data["capital"])])
-    if data.get("start_date"):
-        cmd.extend(["--start", data["start_date"]])
-    if data.get("end_date"):
-        cmd.extend(["--end", data["end_date"]])
+    top = get_json_value(request, "top")
+    if top:
+        cmd.extend(["--top", str(top)])
+
+    capital = get_json_value(request, "capital")
+    if capital:
+        cmd.extend(["--capital", str(capital)])
+
+    start_date = get_json_value(request, "start_date")
+    if start_date:
+        cmd.extend(["--start", start_date])
+
+    end_date = get_json_value(request, "end_date")
+    if end_date:
+        cmd.extend(["--end", end_date])
 
     cmd.extend(["--json", output_file])
 
@@ -749,9 +797,8 @@ def update_token():
     """IDトークン更新"""
     logger.info("IDトークン更新APIが呼び出されました")
     try:
-        data = request.json
-        email = data.get("email", "").strip()
-        password = data.get("password", "").strip()
+        email = get_json_value(request, "email", "").strip()
+        password = get_json_value(request, "password", "").strip()
 
         # メールアドレスまたはパスワードが空の場合、account.jsonから読み込む
         if not email or not password:
@@ -835,18 +882,22 @@ def list_signals():
     """シグナル一覧取得"""
     logger.info("シグナル一覧取得APIが呼び出されました")
     try:
-        data = request.json
         cmd = [sys.executable, "db/list_signals.py"]
 
-        signal_type = data.get("type", "fund")
+        signal_type = get_json_value(request, "type", "fund")
         cmd.append(signal_type)
 
-        if data.get("start_date"):
-            cmd.extend(["--start", data["start_date"]])
-        if data.get("end_date"):
-            cmd.extend(["--end", data["end_date"]])
-        if data.get("limit"):
-            cmd.extend(["--limit", str(data["limit"])])
+        start_date = get_json_value(request, "start_date")
+        if start_date:
+            cmd.extend(["--start", start_date])
+
+        end_date = get_json_value(request, "end_date")
+        if end_date:
+            cmd.extend(["--end", end_date])
+
+        limit = get_json_value(request, "limit")
+        if limit:
+            cmd.extend(["--limit", str(limit)])
 
         logger.info(f"実行コマンド: {' '.join(cmd)}")
         result = run_command(" ".join(cmd), f"{signal_type}シグナル一覧")
@@ -871,9 +922,10 @@ def analyze_json():
     """JSON分析"""
     logger.info("JSON分析APIが呼び出されました")
     try:
-        data = request.json
-        files = data.get("files", [])
-        analysis_type = data.get("analysis_type", "basic")  # basic or advanced
+        files = get_json_value(request, "files", [])
+        analysis_type = get_json_value(
+            request, "analysis_type", "basic"
+        )  # basic or advanced
 
         if not files:
             logger.warning("JSON分析でファイルが選択されていません")
@@ -884,11 +936,11 @@ def analyze_json():
             cmd = [sys.executable, "backtest/analyze_json_advanced.py"] + files
 
             # 高度な分析のオプション
-            if data.get("export_excel"):
+            if get_json_value(request, "export_excel"):
                 cmd.append("--export-excel")
-            if data.get("export_pdf"):
+            if get_json_value(request, "export_pdf"):
                 cmd.append("--export-pdf")
-            if data.get("compare"):
+            if get_json_value(request, "compare"):
                 cmd.append("--compare")
 
             output_dir = Path("data/output/analysis")
@@ -899,10 +951,12 @@ def analyze_json():
             cmd = [sys.executable, "backtest/analyze_backtest_json.py"] + files
 
         # 共通オプション
-        if data.get("show_trades"):
+        if get_json_value(request, "show_trades"):
             cmd.append("--show-trades")
-        if data.get("side"):
-            cmd.extend(["--side", data["side"]])
+
+        side = get_json_value(request, "side")
+        if side:
+            cmd.extend(["--side", side])
 
         logger.info(f"実行コマンド: {' '.join(cmd)}")
         result = run_command(" ".join(cmd), "JSON分析")
@@ -947,9 +1001,12 @@ def thresholds():
 
     else:  # POST
         try:
-            data = request.json
-            with open(threshold_file, "w") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            data = (
+                request.json
+            )  # このケースでは全体のJSONを保存するのでget_json_valueは使わない
+            if data:
+                with open(threshold_file, "w") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
             return jsonify({"success": True, "message": "閾値設定を保存しました"})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)})
@@ -959,8 +1016,8 @@ def thresholds():
 @login_required
 def list_results():
     """結果ファイル一覧取得"""
-    result_types = request.args.get("types", "xlsx,json").split(",")
-    category = request.args.get("category", "")
+    result_types = get_args_value(request, "types", "xlsx,json").split(",")
+    category = get_args_value(request, "category", "")
     files = []
 
     # data/output/以下のファイルを検索
@@ -1138,7 +1195,7 @@ def get_holdings():
         from src.portfolio.models.holding import Holding
 
         # 集約フラグを取得
-        aggregate = request.args.get("aggregate", "false").lower() == "true"
+        aggregate = get_args_value(request, "aggregate", "false").lower() == "true"
 
         holdings_data = []
 
@@ -1369,15 +1426,12 @@ def get_holdings():
 def upload_holdings():
     """保有銘柄CSVアップロード"""
     try:
-        if "file" not in request.files:
-            return jsonify({"success": False, "error": "ファイルが選択されていません"})
-
-        file = request.files["file"]
-        if file.filename == "":
+        file = get_file(request, "file")
+        if not file or file.filename == "":
             return jsonify({"success": False, "error": "ファイルが選択されていません"})
 
         # 口座名を取得（デフォルトは "default"）
-        account_name = request.form.get("account_name", "default").strip()
+        account_name = get_form_value(request, "account_name", "default").strip()
         if not account_name:
             account_name = "default"
 
@@ -1425,11 +1479,11 @@ def get_transactions():
     try:
 
         # パラメータ取得
-        code = request.args.get("code")
-        start_date = request.args.get("start_date")
-        end_date = request.args.get("end_date")
-        page = int(request.args.get("page", 1))
-        per_page = int(request.args.get("per_page", 50))  # デフォルト50件
+        code = get_args_value(request, "code")
+        start_date = get_args_value(request, "start_date")
+        end_date = get_args_value(request, "end_date")
+        page = int(get_args_value(request, "page", "1"))
+        per_page = int(get_args_value(request, "per_page", "50"))  # デフォルト50件
 
         # オフセットを計算
         offset = (page - 1) * per_page
@@ -1578,11 +1632,8 @@ def get_transactions():
 def upload_transactions():
     """取引履歴CSVアップロード"""
     try:
-        if "file" not in request.files:
-            return jsonify({"success": False, "error": "ファイルが選択されていません"})
-
-        file = request.files["file"]
-        if file.filename == "":
+        file = get_file(request, "file")
+        if not file or file.filename == "":
             return jsonify({"success": False, "error": "ファイルが選択されていません"})
 
         # CSVを読み込み（バイト列として渡してエンコーディングを自動検出）
@@ -1684,9 +1735,8 @@ def get_portfolio_summary():
 def delete_holdings():
     """保有銘柄を削除"""
     try:
-        data = request.json
-        delete_type = data.get("type", "all")  # all or account
-        account_name = data.get("account_name")
+        delete_type = get_json_value(request, "type", "all")  # all or account
+        account_name = get_json_value(request, "account_name")
 
         if delete_type == "account" and not account_name:
             return jsonify({"success": False, "error": "口座名が指定されていません"})
@@ -1779,7 +1829,7 @@ def update_stock_indicators():
 def search_stocks():
     """銘柄検索API（listed_infoテーブルから部分一致検索）"""
     try:
-        query = request.args.get("q", "").strip()
+        query = get_args_value(request, "q", "").strip()
         if not query:
             return jsonify(
                 {"success": False, "error": "検索キーワードを入力してください"}
@@ -1854,11 +1904,10 @@ def search_stocks():
 def add_holding():
     """保有銘柄を手動で追加"""
     try:
-        data = request.json
-        code = data.get("code", "").strip()
-        account_name = data.get("account_name", "default").strip()
-        quantity = data.get("quantity")
-        average_price = data.get("average_price")
+        code = get_json_value(request, "code", "").strip()
+        account_name = get_json_value(request, "account_name", "default").strip()
+        quantity = get_json_value(request, "quantity")
+        average_price = get_json_value(request, "average_price")
 
         # バリデーション
         if not code:
@@ -1916,11 +1965,10 @@ def add_holding():
 def update_holding():
     """保有銘柄を編集"""
     try:
-        data = request.json
-        code = data.get("code", "").strip()
-        account_name = data.get("account_name", "").strip()
-        quantity = data.get("quantity")
-        average_price = data.get("average_price")
+        code = get_json_value(request, "code", "").strip()
+        account_name = get_json_value(request, "account_name", "").strip()
+        quantity = get_json_value(request, "quantity")
+        average_price = get_json_value(request, "average_price")
 
         # バリデーション
         if not code or not account_name:
@@ -2003,15 +2051,14 @@ def delete_single_holding(code, account_name):
 def add_transaction():
     """取引履歴を手動で追加"""
     try:
-        data = request.json
-        code = data.get("code", "").strip()
-        transaction_date = data.get("transaction_date", "").strip()
-        transaction_type = data.get("transaction_type", "").strip()
-        quantity = data.get("quantity")
-        price = data.get("price")
-        commission = data.get("commission", 0)
-        tax = data.get("tax", 0)
-        remarks = data.get("remarks", "").strip()
+        code = get_json_value(request, "code", "").strip()
+        transaction_date = get_json_value(request, "transaction_date", "").strip()
+        transaction_type = get_json_value(request, "transaction_type", "").strip()
+        quantity = get_json_value(request, "quantity")
+        price = get_json_value(request, "price")
+        commission = get_json_value(request, "commission", 0)
+        tax = get_json_value(request, "tax", 0)
+        remarks = get_json_value(request, "remarks", "").strip()
 
         # バリデーション
         if not code:
@@ -2078,10 +2125,8 @@ def add_transaction():
 def update_transaction(transaction_id):
     """取引履歴を編集"""
     try:
-        data = request.json
-
         # バリデーション
-        transaction_type = data.get("transaction_type")
+        transaction_type = get_json_value(request, "transaction_type")
         if transaction_type and transaction_type not in ["buy", "sell"]:
             return jsonify(
                 {
@@ -2090,13 +2135,13 @@ def update_transaction(transaction_id):
                 }
             )
 
-        quantity = data.get("quantity")
+        quantity = get_json_value(request, "quantity")
         if quantity is not None and quantity <= 0:
             return jsonify(
                 {"success": False, "error": "数量は正の数を入力してください"}
             )
 
-        price = data.get("price")
+        price = get_json_value(request, "price")
         if price is not None and price <= 0:
             return jsonify(
                 {"success": False, "error": "価格は正の数を入力してください"}
@@ -2131,9 +2176,10 @@ def update_transaction(transaction_id):
         update_fields = []
         update_values = []
 
-        if data.get("transaction_date"):
+        transaction_date = get_json_value(request, "transaction_date")
+        if transaction_date:
             update_fields.append("transaction_date = ?")
-            update_values.append(data["transaction_date"])
+            update_values.append(transaction_date)
 
         if transaction_type:
             update_fields.append("transaction_type = ?")
@@ -2152,17 +2198,17 @@ def update_transaction(transaction_id):
             update_fields.append("price = ?")
             update_values.append(price)
 
-        if "commission" in data:
+        if has_json_key(request, "commission"):
             update_fields.append("commission = ?")
-            update_values.append(data["commission"])
+            update_values.append(get_json_value(request, "commission"))
 
-        if "tax" in data:
+        if has_json_key(request, "tax"):
             update_fields.append("tax = ?")
-            update_values.append(data["tax"])
+            update_values.append(get_json_value(request, "tax"))
 
-        if "remarks" in data:
+        if has_json_key(request, "remarks"):
             update_fields.append("remarks = ?")
-            update_values.append(data["remarks"])
+            update_values.append(get_json_value(request, "remarks"))
 
         # total_amountを再計算
         if quantity is not None or price is not None:

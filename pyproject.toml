@@ -82,6 +82,7 @@ ignore = [
 "__init__.py" = ["F401"]
 "tests/*.py" = ["E402"]  # Allow module imports after sys.path.append in tests
 "backtest/*.py" = ["E402"]  # Allow module imports after sys.path.append in backtest scripts
+"src/ui/web.py" = ["E402"]  # Allow module imports after sys.path.append and request type assignment
 
 [tool.isort]
 profile = "black"
@@ -140,3 +141,24 @@ exclude_lines = [
     "raise AssertionError",
     "raise NotImplementedError",
 ]
+
+[tool.pyright]
+# Pyrightの設定（VSCodeやbasedpyrightで使用）
+include = ["src", "fetch", "db", "screening", "backtest", "scripts"]
+exclude = ["**/node_modules", "**/__pycache__", "tests", "dev_tools"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportGeneralTypeIssues = "warning"
+reportOptionalMemberAccess = "warning"
+reportOptionalCall = "warning"
+reportOptionalIterable = "warning"
+reportOptionalContextManager = "warning"
+reportOptionalOperand = "warning"
+reportPrivateImportUsage = "none"
+reportUnusedImport = "warning"
+reportUnusedVariable = "warning"
+reportDuplicateImport = "warning"
+reportUntypedFunctionDecorator = "none"
+reportUntypedClassDecorator = "none"
+reportUntypedBaseClass = "none"
+reportMissingTypeStubs = "none"
