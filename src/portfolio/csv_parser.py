@@ -588,8 +588,9 @@ class SBICSVParser:
 
             return float(value_str)
         except (ValueError, AttributeError):
-            # 矢印記号はエラーログを出さない
-            if str(value).strip() not in ["↑", "↓", "→", "←"]:
+            # 矢印記号やダッシュ記号はエラーログを出さない
+            value_str = str(value).strip()
+            if value_str not in ["↑", "↓", "→", "←", "--%", "--", "-", "－", "―"]:
                 logger.warning(f"数値解析エラー: {value}")
             return default
 

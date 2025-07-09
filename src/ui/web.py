@@ -230,6 +230,9 @@ def index():
     """メインページ"""
     logger.info("メインページへのアクセス")
 
+    # URLパラメータからタブを取得
+    selected_tab = request.args.get("tab", "screening")
+
     # テスト環境では認証をスキップ
     if app.config.get("TESTING"):
         from src.auth.models import User
@@ -241,7 +244,12 @@ def index():
             password_hash="",  # nosec B106 - テスト用の空パスワード
             role="admin",
         )
-        return render_template("index.html", user=test_user, portfolio_only=False)
+        return render_template(
+            "index.html",
+            user=test_user,
+            portfolio_only=False,
+            selected_tab=selected_tab,
+        )
 
     # 未ログインの場合はログインページへリダイレクト
     if "session_id" not in session:
@@ -255,9 +263,34 @@ def index():
     # ポートフォリオ専用ユーザーの場合は権限をチェック
     if user.role == "portfolio_only":
         # ポートフォリオタブのみ表示するようにユーザー情報を渡す
-        return render_template("index.html", user=user, portfolio_only=True)
+        return render_template(
+            "index.html", user=user, portfolio_only=True, selected_tab="portfolio"
+        )
 
-    return render_template("index.html", user=user, portfolio_only=False)
+    return render_template(
+        "index.html", user=user, portfolio_only=False, selected_tab=selected_tab
+    )
+
+
+@app.route("/screening")
+@login_required
+def screening():
+    """スクリーニングページ（メインページへリダイレクト）"""
+    return redirect(url_for("index", tab="screening"))
+
+
+@app.route("/backtest")
+@login_required
+def backtest():
+    """バックテストページ（メインページへリダイレクト）"""
+    return redirect(url_for("index", tab="backtest"))
+
+
+@app.route("/import")
+@login_required
+def import_page():
+    """CSV取り込みページ（メインページへリダイレクト）"""
+    return redirect(url_for("index", tab="import"))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -1102,7 +1135,7 @@ def get_funds():
 def get_holdings():
     """保有銘柄一覧を取得（株式と投資信託を統合）"""
     try:
-        from src.portfolio.models import Holding
+        from src.portfolio.models.holding import Holding
 
         # 集約フラグを取得
         aggregate = request.args.get("aggregate", "false").lower() == "true"
@@ -1840,7 +1873,7 @@ def add_holding():
             )
 
         # 既存の保有銘柄をチェック
-        from src.portfolio.models import Holding
+        from src.portfolio.models.holding import Holding
 
         existing = Holding.find_by_user_code_and_account(
             request.current_user.id, code, account_name
@@ -1899,7 +1932,7 @@ def update_holding():
                 {"success": False, "error": "平均取得価格は正の数を入力してください"}
             )
 
-        from src.portfolio.models import Holding
+        from src.portfolio.models.holding import Holding
 
         holding = Holding.find_by_user_code_and_account(
             request.current_user.id, code, account_name
@@ -2002,7 +2035,7 @@ def add_transaction():
             )
 
         # 取引を作成
-        from src.portfolio.models import Transaction
+        from src.portfolio.models.transaction import Transaction
 
         transaction = Transaction(
             user_id=request.current_user.id,
