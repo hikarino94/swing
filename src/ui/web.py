@@ -39,7 +39,7 @@ from db.db_schema import init_schema
 from src.auth import AuthManager, admin_required, login_required
 from src.auth.admin_setup import create_admin_from_env
 from src.auth.models import Session
-from src.config import get_db_path
+from src.config import get_account_credentials, get_db_path
 from src.portfolio import PortfolioManager, SBICSVParser
 from src.utils.file_utils import get_timestamped_output_path
 from src.utils.logging_config import get_logger
@@ -723,12 +723,11 @@ def update_token():
         # メールアドレスまたはパスワードが空の場合、account.jsonから読み込む
         if not email or not password:
             try:
-                with open("config/account.json") as f:
-                    account_data = json.load(f)
-                    if not email:
-                        email = account_data.get("mailaddress", "")
-                    if not password:
-                        password = account_data.get("password", "")
+                account_data = get_account_credentials()
+                if not email:
+                    email = account_data.get("email", "")
+                if not password:
+                    password = account_data.get("password", "")
             except FileNotFoundError:
                 return jsonify(
                     {

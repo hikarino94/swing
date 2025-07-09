@@ -12,6 +12,7 @@ from tkinter import messagebox, scrolledtext, ttk
 # プロジェクトルートをPYTHONPATHに追加
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 from screening import thresholds
+from src.config import get_account_credentials
 
 
 def timestamped_path(path: str, ext: str = ".xlsx") -> str:
@@ -390,15 +391,14 @@ def build_update_token_tab(nb, output):
     arg = ttk.Frame(frame)
     arg.pack(anchor="w", padx=5)
     cred = {}
-    path = (
-        Path(__file__).resolve().parent.parent.parent.parent / "config" / "account.json"
-    )
-    if path.is_file():
-        try:
-            with path.open("r", encoding="utf-8") as f:
-                cred = json.load(f)
-        except Exception:
-            cred = {}
+    try:
+        account_data = get_account_credentials()
+        cred = {
+            "mail": account_data.get("email", ""),
+            "password": account_data.get("password", ""),
+        }
+    except (FileNotFoundError, json.JSONDecodeError):
+        cred = {}
     mail = tk.StringVar(value=cred.get("mail", ""))
     pwd = tk.StringVar(value=cred.get("password", ""))
     ttk.Label(arg, text="メールアドレス:").grid(row=0, column=0, sticky="e")

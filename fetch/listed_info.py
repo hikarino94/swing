@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
 import logging
 import sqlite3
 import sys
@@ -34,7 +33,7 @@ import requests
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from src.config import config, get_db_path  # noqa: E402
+from src.config import config, get_db_path, get_idtoken  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Config & logging
@@ -49,13 +48,7 @@ logger = logging.getLogger("listed_info")
 
 
 def _load_token() -> str:
-    path = config.get_file_path("idtoken")
-    with path.open("r", encoding="utf-8") as f:
-        data: dict[str, str] = json.load(f)
-        tok = data.get("idToken")
-    if not tok:
-        raise RuntimeError("idToken not found in idtoken.json")
-    return tok
+    return get_idtoken()
 
 
 def _fetch_listed_info(idtoken: str) -> pd.DataFrame:
