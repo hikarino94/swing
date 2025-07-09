@@ -59,8 +59,8 @@ class Config:
                 }
             },
             "files": {
-                "account": "account.json",
-                "idtoken": "idtoken.json",
+                "account": "config/account.json",
+                "idtoken": "config/idtoken.json",
                 "thresholds": "screening/thresholds.json",
             },
             "logging": {

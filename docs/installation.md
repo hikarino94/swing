@@ -50,14 +50,14 @@ pip install -r requirements-dev.txt
 
 ```bash
 # 設定ファイルをコピー
-cp config.json.example config.json
-cp account.json.example account.json
+cp config.json.example config/config.json
+cp account.json.example config/account.json
 cp screening/thresholds.json.example screening/thresholds.json
 ```
 
 ### 4. J-Quants認証情報の設定
 
-`account.json`を編集して、J-Quantsの認証情報を入力：
+`config/account.json`を編集して、J-Quantsの認証情報を入力：
 
 ```json
 {

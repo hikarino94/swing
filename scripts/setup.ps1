@@ -127,7 +127,7 @@ if (-not (Test-Path "account.json") -and (Test-Path "account.json.example")) {
     if ($mailaddress -ne "") {
         $password = Read-Host "パスワード" -AsSecureString
         $passwordPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
-        
+
         $accountData = @{
             mailaddress = $mailaddress
             password = $passwordPlain

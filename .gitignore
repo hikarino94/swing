@@ -1,8 +1,8 @@
 # 認証・設定ファイル
-account.json
-idtoken.json
-config.json
-login.json
+config/account.json
+config/idtoken.json
+config/config.json
+config/login.json
 .secret_key
 
 # データベースファイル

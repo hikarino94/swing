@@ -67,8 +67,8 @@ custom_value = config.get("custom.key", default="default_value")
 
 ### 設定ファイル
 
-- `config.json`: アプリケーション全体の設定
-- `account.json`: J-Quants認証情報（.gitignoreに含まれる）
+- `config/config.json`: アプリケーション全体の設定
+- `config/account.json`: J-Quants認証情報（.gitignoreに含まれる）
 - `screening/thresholds.json`: スクリーニング閾値
 
 ## コーディング規約
@@ -172,7 +172,7 @@ conn = sqlite3.connect(DB_PATH)
 
 - 認証情報は絶対にコミットしない
 - `.gitignore`で除外設定済み
-- `account.json`はローカルにのみ存在
+- `config/account.json`はローカルにのみ存在
 
 ### セキュリティスキャン
 

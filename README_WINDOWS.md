@@ -49,7 +49,7 @@
    ```
 4. スクリプトを実行：
    ```powershell
-   .\\setup.ps1
+   .\\scripts\\setup.ps1
    ```
 
 ## 手動環境構築
@@ -86,14 +86,14 @@ pip install -r requirements-dev.txt
 
 ```cmd
 # 設定ファイルをコピー
-copy config.json.example config.json
-copy account.json.example account.json
+copy config.json.example config\\config.json
+copy account.json.example config\\account.json
 copy screening\\thresholds.json.example screening\\thresholds.json
 ```
 
 ### 4. 認証情報の設定
 
-`account.json`を編集して、J-Quants APIの認証情報を設定：
+`config/account.json`を編集して、J-Quants APIの認証情報を設定：
 ```json
 {
     \"mailaddress\": \"your-email@example.com\",
@@ -238,7 +238,7 @@ python scripts\\log_viewer.py list
 #### 5. J-Quants APIの認証に失敗
 
 **解決策**:
-- `account.json`の認証情報を確認
+- `config/account.json`の認証情報を確認
 - J-Quants APIの利用規約を確認
 - 以下のコマンドで手動でトークンを取得：
   ```cmd
@@ -277,8 +277,8 @@ pytest --cov=. --cov-report=html
 
 ### 設定ファイルの説明
 
-- `config.json`: アプリケーション全般の設定
-- `account.json`: J-Quants API認証情報
+- `config/config.json`: アプリケーション全般の設定
+- `config/account.json`: J-Quants API認証情報
 - `screening/thresholds.json`: スクリーニング閾値設定
 - `config/login.json`: Webアプリケーション認証設定（オプション）
 
