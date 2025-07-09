@@ -14,31 +14,34 @@ from src.ui.web import app
 @pytest.fixture
 def test_db():
     """テスト用の一時データベース"""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = Path(f.name)
+    # テンポラリディレクトリを使用して、より安全なファイル管理を行う
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
 
-    init_schema(db_path)
+        # データベースファイルが確実に作成されるようにする
+        db_path.touch()
 
-    # テストユーザーを追加
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        "INSERT INTO users (username, email, password_hash) VALUES ('test_user', 'test@example.com', 'dummy_hash')"
-    )
-    # テスト用の銘柄情報を追加
-    conn.execute(
-        """INSERT INTO listed_info (code, company_name, company_name_en, sector17_code,
-           sector17_name, sector33_code, sector33_name, scale_category,
-           market_code, market_name, delete_flag)
-           VALUES ('12340', 'テスト株式会社', 'Test Corp', '0001', 'プライム市場',
-                   '01', '食品', '0100', '水産・農林業', 'PRIME', 0)"""
-    )
-    conn.commit()
-    conn.close()
+        init_schema(db_path)
 
-    yield db_path
+        # テストユーザーを追加
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            "INSERT INTO users (username, email, password_hash) VALUES ('test_user', 'test@example.com', 'dummy_hash')"
+        )
+        # テスト用の銘柄情報を追加
+        conn.execute(
+            """INSERT INTO listed_info (code, company_name, company_name_en, sector17_code,
+               sector17_name, sector33_code, sector33_name, scale_category,
+               market_code, market_name, delete_flag)
+               VALUES ('12340', 'テスト株式会社', 'Test Corp', '0001', 'プライム市場',
+                       '01', '食品', '0100', '水産・農林業', 'PRIME', 0)"""
+        )
+        conn.commit()
+        conn.close()
 
-    # クリーンアップ
-    db_path.unlink()
+        yield db_path
+
+        # TemporaryDirectoryが自動的にクリーンアップされる
 
 
 @pytest.fixture
@@ -55,6 +58,7 @@ def client(test_db, monkeypatch):
     # モジュールごとにも設定
     monkeypatch.setattr("src.portfolio.models.get_db_path", lambda: str(test_db))
     monkeypatch.setattr("src.auth.models.get_db_path", lambda: str(test_db))
+    monkeypatch.setattr("src.portfolio.manager.get_db_path", lambda: str(test_db))
 
     # アプリケーションインスタンスを設定
     app.config["TESTING"] = True
@@ -72,7 +76,7 @@ class TestPortfolioAPI:
     def test_search_stocks(self, client, test_db):
         """銘柄検索APIのテスト - 実際のデータベースを使用"""
         # デバッグ: データベースの内容を確認
-        conn = sqlite3.connect(test_db)
+        conn = sqlite3.connect(str(test_db))
         cursor = conn.cursor()
         cursor.execute("SELECT code, company_name, delete_flag FROM listed_info")
         debug_results = cursor.fetchall()
@@ -121,7 +125,7 @@ class TestPortfolioAPI:
         assert data["message"] == "保有銘柄を追加しました"
 
         # データベースで実際に保存されたか確認
-        conn = sqlite3.connect(test_db)
+        conn = sqlite3.connect(str(test_db))
         cursor = conn.cursor()
         cursor.execute(
             "SELECT quantity, average_price FROM holdings WHERE user_id = 1 AND code = '1234' AND account_name = 'test_account'"
@@ -136,7 +140,7 @@ class TestPortfolioAPI:
     def test_update_holding(self, client, test_db):
         """保有銘柄更新APIのテスト - 実際のデータベースを使用"""
         # まず保有銘柄を追加
-        conn = sqlite3.connect(test_db)
+        conn = sqlite3.connect(str(test_db))
         conn.execute(
             """INSERT INTO holdings (user_id, code, account_name, account_type, quantity, average_price)
                VALUES (1, '1234', 'test_account', '特定', 100, 1500.0)"""
@@ -166,7 +170,7 @@ class TestPortfolioAPI:
         assert data["message"] == "保有銘柄を更新しました"
 
         # データベースで実際に更新されたか確認
-        conn = sqlite3.connect(test_db)
+        conn = sqlite3.connect(str(test_db))
         cursor = conn.cursor()
         cursor.execute(
             "SELECT quantity, average_price FROM holdings WHERE user_id = 1 AND code = '1234'"
@@ -180,7 +184,7 @@ class TestPortfolioAPI:
     def test_delete_single_holding(self, client, test_db):
         """保有銘柄削除APIのテスト - 実際のデータベースを使用"""
         # まず保有銘柄を追加
-        conn = sqlite3.connect(test_db)
+        conn = sqlite3.connect(str(test_db))
         conn.execute(
             """INSERT INTO holdings (user_id, code, account_name, account_type, quantity, average_price)
                VALUES (1, '1234', 'test_account', '特定', 100, 1500.0)"""
@@ -198,7 +202,7 @@ class TestPortfolioAPI:
         assert data["message"] == "保有銘柄を削除しました"
 
         # データベースで実際に削除されたか確認
-        conn = sqlite3.connect(test_db)
+        conn = sqlite3.connect(str(test_db))
         cursor = conn.cursor()
         cursor.execute(
             "SELECT COUNT(*) FROM holdings WHERE user_id = 1 AND code = '1234' AND deleted_at IS NULL"
@@ -236,7 +240,7 @@ class TestPortfolioAPI:
         assert data["message"] == "取引を追加しました"
 
         # データベースで実際に保存されたか確認
-        conn = sqlite3.connect(test_db)
+        conn = sqlite3.connect(str(test_db))
         cursor = conn.cursor()
         cursor.execute(
             """SELECT transaction_type, quantity, price, commission, tax, remarks
@@ -256,7 +260,7 @@ class TestPortfolioAPI:
     def test_update_transaction(self, client, test_db):
         """取引履歴更新APIのテスト - 実際のデータベースを使用"""
         # まず取引履歴を追加
-        conn = sqlite3.connect(test_db)
+        conn = sqlite3.connect(str(test_db))
         cursor = conn.cursor()
         cursor.execute(
             """INSERT INTO transactions (user_id, code, transaction_date, transaction_type,
@@ -284,7 +288,7 @@ class TestPortfolioAPI:
         assert data["message"] == "取引を更新しました"
 
         # データベースで実際に更新されたか確認
-        conn = sqlite3.connect(test_db)
+        conn = sqlite3.connect(str(test_db))
         cursor = conn.cursor()
         cursor.execute(
             f"SELECT quantity, price FROM transactions WHERE id = {transaction_id}"
@@ -298,7 +302,7 @@ class TestPortfolioAPI:
     def test_delete_transaction(self, client, test_db):
         """取引履歴削除APIのテスト - 実際のデータベースを使用"""
         # まず取引履歴を追加
-        conn = sqlite3.connect(test_db)
+        conn = sqlite3.connect(str(test_db))
         cursor = conn.cursor()
         cursor.execute(
             """INSERT INTO transactions (user_id, code, transaction_date, transaction_type,
@@ -319,7 +323,7 @@ class TestPortfolioAPI:
         assert data["message"] == "取引を削除しました"
 
         # データベースで実際に削除されたか確認
-        conn = sqlite3.connect(test_db)
+        conn = sqlite3.connect(str(test_db))
         cursor = conn.cursor()
         cursor.execute(f"SELECT COUNT(*) FROM transactions WHERE id = {transaction_id}")
         result = cursor.fetchone()
