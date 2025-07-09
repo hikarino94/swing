@@ -2250,10 +2250,10 @@ def delete_transaction(transaction_id):
 def get_portfolio_composition():
     """ポートフォリオ構成円グラフを取得"""
     try:
-        from src.portfolio.visualization import PortfolioVisualizer
+        from src.portfolio.visualizers import CompositionVisualizer
 
-        visualizer = PortfolioVisualizer(request.current_user.id)
-        result = visualizer.create_composition_pie_charts()
+        visualizer = CompositionVisualizer(request.current_user.id)
+        result = visualizer.create_chart()
 
         if "error" in result:
             return jsonify({"success": False, "error": result["error"]})
@@ -2269,11 +2269,10 @@ def get_portfolio_composition():
 def get_portfolio_performance():
     """ポートフォリオパフォーマンス推移を取得"""
     try:
-        from src.portfolio.visualization import PortfolioVisualizer
+        from src.portfolio.visualizers import PerformanceVisualizer
 
-        days = request.args.get("days", 180, type=int)
-        visualizer = PortfolioVisualizer(request.current_user.id)
-        result = visualizer.create_performance_charts(days)
+        visualizer = PerformanceVisualizer(request.current_user.id)
+        result = visualizer.create_chart()
 
         if "error" in result:
             return jsonify({"success": False, "error": result["error"]})
@@ -2289,10 +2288,10 @@ def get_portfolio_performance():
 def get_portfolio_heatmap():
     """ポートフォリオヒートマップを取得"""
     try:
-        from src.portfolio.visualization import PortfolioVisualizer
+        from src.portfolio.visualizers import HeatmapVisualizer
 
-        visualizer = PortfolioVisualizer(request.current_user.id)
-        result = visualizer.create_heatmap()
+        visualizer = HeatmapVisualizer(request.current_user.id)
+        result = visualizer.create_chart()
 
         if "error" in result:
             return jsonify({"success": False, "error": result["error"]})
