@@ -253,6 +253,10 @@ class TestPathValidation:
         ]
 
         for script_path, description in test_commands:
+            # analyze_backtest_json.pyは統合されたため、analyze_backtest.pyをチェック
+            if script_path == "backtest/analyze_backtest_json.py":
+                script_path = "backtest/analyze_backtest.py"
+
             full_path = project_root / script_path
             assert (
                 full_path.exists()
