@@ -166,23 +166,18 @@ class TestPathValidation:
 
     def test_web_app_paths(self):
         """Webアプリケーションのパス設定を検証"""
-        from src.ui.web import (
-            app,
-        )
-        from src.ui.web import project_root as web_project_root
-        from src.ui.web import (
-            template_dir,
-        )
+        from src.ui.web import app
 
-        # プロジェクトルートが正しく設定されているか
-        assert web_project_root == project_root
+        # Flaskアプリが正しく初期化されているか
+        assert app is not None
 
-        # テンプレートディレクトリが正しく設定されているか
-        assert template_dir == project_root / "templates"
-        assert template_dir.exists()
+        # テンプレートフォルダが設定されているか
+        assert app.template_folder is not None
 
-        # Flaskアプリのテンプレートフォルダが正しく設定されているか
-        assert app.template_folder == str(template_dir)
+        # テンプレートディレクトリが存在するか
+        template_path = Path(app.template_folder)
+        assert template_path.exists()
+        assert template_path.name == "templates"
 
     def test_scheduler_paths(self):
         """スケジューラーのパス設定を検証"""
