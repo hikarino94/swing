@@ -225,7 +225,6 @@ Write-Host "   > python fetch\statements.py" -ForegroundColor Gray
 Write-Host ""
 Write-Host "5. アプリケーションを起動してください:" -ForegroundColor White
 Write-Host "   > python -m src.ui.web        (Webインターフェース)" -ForegroundColor Gray
-Write-Host "   > python -m src.ui.legacy.gui (デスクトップGUI)" -ForegroundColor Gray
 Write-Host ""
 Write-Host "詳細は README.md を参照してください。" -ForegroundColor Yellow
 Write-Host ""

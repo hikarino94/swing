@@ -18,7 +18,6 @@ A Python-based Japanese stock market analysis toolkit using J-Quants API data. T
 - Stock screening (fundamental, technical, ML-based)
 - Backtesting capabilities
 - Modern web interface (Flask) with tabbed UI
-- Legacy GUI interface (Tkinter) - maintained for compatibility
 - Automated data fetching and scheduling
 - Excel export functionality for screening and backtest results
 
@@ -84,12 +83,9 @@ python backtest/backtest_ml.py [--top N] [--capital AMOUNT] [--start YYYY-MM-DD]
 # Analyze backtest results
 python -m backtest.analyze_backtest_json result.json [--show-trades] [--side long|short]
 
-# Start web interface (Recommended)
+# Start web interface
 python -m src.ui.web
 # Access at http://localhost:5005
-
-# Start GUI (Legacy - for compatibility)
-python -m src.ui.legacy.gui
 
 # Start scheduler for automated data updates
 python -m src.cli.scheduler
@@ -111,8 +107,7 @@ swing/
 │   ├── cli/          # Command-line interfaces (scheduler, update_idtoken)
 │   ├── config/       # Configuration management
 │   ├── ui/           # User interfaces
-│   │   ├── web.py    # Modern Flask web UI
-│   │   └── legacy/   # Legacy Tkinter GUI
+│   │   └── web.py    # Flask web UI
 │   └── utils/        # Utility functions (file handling, logging)
 ├── fetch/            # Data acquisition from J-Quants API
 ├── db/               # SQLite database management and schema
@@ -166,7 +161,6 @@ swing/
 - schedule: Automated tasks
 - XlsxWriter: Excel output generation
 - scikit-learn: Machine learning models
-- tkinter: Desktop GUI interface
 - pytest: Testing framework
 - coverage: Test coverage analysis
 

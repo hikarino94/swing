@@ -143,16 +143,11 @@ python fetch\\statements.py
 
 ### 4. アプリケーションの起動
 
-#### Webインターフェース（推奨）
+#### Webインターフェース
 ```cmd
 python -m src.ui.web
 ```
 ブラウザで `http://localhost:5005` にアクセス
-
-#### デスクトップGUI（レガシー）
-```cmd
-python -m src.ui.legacy.gui
-```
 
 ## 主要なコマンド
 

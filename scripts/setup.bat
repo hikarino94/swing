@@ -195,7 +195,6 @@ echo    ^> python fetch\statements.py
 echo.
 echo 5. アプリケーションを起動してください:
 echo    ^> python -m src.ui.web        (Webインターフェース)
-echo    ^> python -m src.ui.legacy.gui (デスクトップGUI)
 echo.
 echo 詳細は README.md を参照してください。
 echo.

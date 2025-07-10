@@ -2527,6 +2527,15 @@ function swingApp() {
             if (!detailedType) {
                 // 旧データの場合はtransaction_typeから推測
                 detailedType = transaction.transaction_type === 'buy' ? 'new_buy' : 'new_sell';
+            } else {
+                // 日本語から英語に変換
+                const typeMap = {
+                    '新規買い': 'new_buy',
+                    '新規売り': 'new_sell',
+                    '決済買い': 'close_buy',
+                    '決済売り': 'close_sell'
+                };
+                detailedType = typeMap[detailedType] || detailedType;
             }
             this.portfolio.transactionForm = {
                 id: transaction.id,
@@ -2535,7 +2544,7 @@ function swingApp() {
                 transaction_date: transaction.transaction_date,
                 transaction_type: transaction.transaction_type,
                 detailed_type: detailedType,
-                is_margin: transaction.is_margin || false,
+                is_margin: transaction.is_margin || (transaction.remarks && transaction.remarks.includes('信用')) || false,
                 quantity: transaction.quantity,
                 price: transaction.price,
                 commission: transaction.commission || 0,
