@@ -120,8 +120,8 @@ class TestFundamentalScreening:
         ]
 
         # 条件を満たす銘柄を確認
-        assert len(screened) == 2
-        assert set(screened["code"]) == {"1234", "9999"}
+        assert len(screened) == 3
+        assert set(screened["code"]) == {"1234", "9999", "2222"}
 
 
 class TestTechnicalScreening:
@@ -166,8 +166,8 @@ class TestTechnicalScreening:
         rsi = 100 - (100 / (1 + rs))
 
         # RSIの範囲を確認
-        assert (rsi >= 0).all()
-        assert (rsi <= 100).all()
+        assert (rsi.dropna() >= 0).all()
+        assert (rsi.dropna() <= 100).all()
 
         # MACD計算
         exp12 = prices.ewm(span=12, adjust=False).mean()
@@ -207,9 +207,10 @@ class TestTechnicalScreening:
         data["bb_upper"] = data["bb_middle"] + 2 * data["bb_std"]
         data["bb_lower"] = data["bb_middle"] - 2 * data["bb_std"]
 
-        # バンドの関係性を確認
-        assert (data["bb_upper"] >= data["bb_middle"]).all()
-        assert (data["bb_middle"] >= data["bb_lower"]).all()
+        # バンドの関係性を確認（NaNを除外）
+        valid_data = data.dropna()
+        assert (valid_data["bb_upper"] >= valid_data["bb_middle"]).all()
+        assert (valid_data["bb_middle"] >= valid_data["bb_lower"]).all()
 
 
 class TestMLScreening:

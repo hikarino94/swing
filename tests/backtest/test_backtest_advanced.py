@@ -374,7 +374,7 @@ class TestBacktestOutput:
         avg_return = sell_trades["return"].mean()
 
         assert len(df_trades) == 4
-        assert avg_return == 0.03  # (0.1 - 0.04) / 2
+        assert avg_return == pytest.approx(0.03, abs=1e-10)  # (0.1 - 0.04) / 2
 
     def test_performance_summary_generation(self):
         """パフォーマンスサマリー生成のテスト"""

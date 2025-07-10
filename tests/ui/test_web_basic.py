@@ -75,7 +75,7 @@ class TestWebInterface:
         # 静的ファイルURLパスが設定されていることを確認
         assert app.static_url_path == "/static"
 
-    @patch("src.ui.web.get_db_connection")
+    @patch("src.utils.db_utils.get_db_connection")
     def test_database_connection_in_route(self, mock_get_db):
         """ルート内でのデータベース接続をテスト"""
         app = Flask(__name__)

@@ -517,7 +517,7 @@ def init_schema(db_path: str | Path) -> None:
                 else:  # 新しい形式（account_typeあり）
                     cursor.execute(
                         """
-                        INSERT INTO holdings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO holdings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                         row,
                     )
