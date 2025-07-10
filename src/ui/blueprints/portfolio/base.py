@@ -3,6 +3,7 @@
 """
 
 import sqlite3
+import time
 from typing import cast
 
 from flask import Blueprint, jsonify
@@ -22,6 +23,29 @@ portfolio_base_bp = Blueprint("portfolio_base", __name__)
 
 # 型付きrequest
 request: RequestWithUser = cast(RequestWithUser, flask_request)
+
+# 検索結果のキャッシュ（10秒間有効）
+_search_cache: dict[str, tuple[float, list]] = {}
+_cache_expiry = 10  # seconds
+
+
+def get_cached_search(query):
+    """キャッシュから検索結果を取得"""
+    if query in _search_cache:
+        cache_time, result = _search_cache[query]
+        if time.time() - cache_time < _cache_expiry:
+            return result
+    return None
+
+
+def set_cached_search(query, result):
+    """検索結果をキャッシュに保存"""
+    _search_cache[query] = (time.time(), result)
+    # 古いキャッシュを削除（100件を超えたら）
+    if len(_search_cache) > 100:
+        # 最も古いキャッシュを削除
+        oldest_key = min(_search_cache.keys(), key=lambda k: _search_cache[k][0])
+        del _search_cache[oldest_key]
 
 
 @portfolio_base_bp.route("/funds", methods=["GET"])
@@ -191,10 +215,15 @@ def search_stocks():
         if not query:
             return jsonify({"success": True, "stocks": []})
 
+        # キャッシュをチェック
+        cached_result = get_cached_search(query)
+        if cached_result:
+            return jsonify({"success": True, "stocks": cached_result})
+
         conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
 
-        # コードまたは会社名で部分一致検索（コードの前方一致を優先）
+        # コードの前方一致または会社名の部分一致で検索
         cursor.execute(
             """
             SELECT DISTINCT code, company_name, market_code
@@ -204,13 +233,12 @@ def search_stocks():
             ORDER BY
                 CASE
                     WHEN code LIKE ? THEN 0  -- コードの前方一致を最優先
-                    WHEN code LIKE ? THEN 1  -- コードの部分一致
-                    ELSE 2                   -- 会社名の一致
+                    ELSE 1                   -- 会社名の一致
                 END,
                 code
-            LIMIT 50
+            LIMIT 20
             """,
-            (f"%{query}%", f"%{query}%", f"{query}%", f"%{query}%"),
+            (f"{query}%", f"%{query}%", f"{query}%"),
         )
 
         stocks = []
@@ -225,37 +253,11 @@ def search_stocks():
 
         conn.close()
 
-        # 現在の価格情報も取得
-        if stocks:
-            conn = sqlite3.connect(get_db_path())
-            cursor = conn.cursor()
+        # 価格情報の取得をスキップ（検索高速化のため）
+        # 必要な場合のみ別途APIで取得
 
-            codes = [s["code"] for s in stocks]
-            placeholders = ",".join("?" * len(codes))
-
-            cursor.execute(
-                f"""
-                SELECT code, close, date
-                FROM prices
-                WHERE code IN ({placeholders})
-                AND date = (SELECT MAX(date) FROM prices WHERE code = prices.code)
-                """,
-                codes,
-            )
-
-            price_data = {
-                row[0]: {"close": row[1], "date": row[2]} for row in cursor.fetchall()
-            }
-            conn.close()
-
-            # 価格情報を追加
-            for stock in stocks:
-                if stock["code"] in price_data:
-                    stock["current_price"] = price_data[stock["code"]]["close"]
-                    stock["price_date"] = price_data[stock["code"]]["date"]
-                else:
-                    stock["current_price"] = None
-                    stock["price_date"] = None
+        # 結果をキャッシュに保存
+        set_cached_search(query, stocks)
 
         return jsonify({"success": True, "stocks": stocks})
 

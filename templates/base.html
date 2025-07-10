@@ -27,6 +27,11 @@
     <style>
         [x-cloak] { display: none !important; }
 
+        /* Alpine.jsのトランジション最適化 */
+        [x-transition] {
+            will-change: opacity, transform;
+        }
+
         /* スクロールバーのスタイリング */
         .custom-scrollbar::-webkit-scrollbar {
             width: 6px;
@@ -97,6 +102,21 @@
             display: flex;
             align-items: center;
             justify-content: center;
+        }
+
+        /* モーダル最適化 */
+        .modal-transition {
+            transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .modal-content {
+            transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 検索結果のパフォーマンス最適化 */
+        .search-results {
+            contain: layout style;
+            will-change: contents;
         }
 
         .processing-message {
