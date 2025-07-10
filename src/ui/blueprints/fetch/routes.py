@@ -61,7 +61,9 @@ def fetch_quotes():
     except Exception as e:
         logger.error(f"株価データ取得APIでエラーが発生しました: {str(e)}")
         print(f"[API] 例外エラー: {str(e)}")
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify(
+            {"success": False, "error": str(e), "description": "株価データ取得"}
+        )
 
 
 @fetch_bp.route("/listed", methods=["POST"])
@@ -90,7 +92,9 @@ def fetch_listed():
     except Exception as e:
         logger.error(f"上場情報取得APIでエラーが発生しました: {str(e)}")
         print(f"[API] 例外エラー: {str(e)}")
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify(
+            {"success": False, "error": str(e), "description": "上場情報取得"}
+        )
 
 
 @fetch_bp.route("/statements", methods=["POST"])
@@ -134,4 +138,6 @@ def fetch_statements():
     except Exception as e:
         logger.error(f"財務諸表取得APIでエラーが発生しました: {str(e)}")
         print(f"[API] 例外エラー: {str(e)}")
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify(
+            {"success": False, "error": str(e), "description": "財務諸表取得"}
+        )

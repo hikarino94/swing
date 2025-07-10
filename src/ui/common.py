@@ -111,23 +111,24 @@ def run_command(command, description="コマンド実行中"):
         if process.returncode != 0:
             error_msg = output.strip() if output.strip() else "エラーが発生しました"
             logger.error(f"コマンド実行エラー: {error_msg}")
-            return {"success": False, "error": error_msg}
+            return {"success": False, "error": error_msg, "description": description}
 
         # 特定のコマンドの出力を解析
         if "list_signals.py" in command:
             # list_signals.pyの出力をそのまま返す
-            return {"success": True, "output": output}
+            return {"success": True, "output": output, "description": description}
         elif "db_summary.py" in command:
             # db_summary.pyの出力をそのまま返す
-            return {"success": True, "output": output}
+            return {"success": True, "output": output, "description": description}
 
         return {
             "success": True,
             "output": output if output else "コマンドが正常に実行されました",
+            "description": description,
         }
 
     except Exception as e:
         error_msg = f"コマンド実行中にエラーが発生しました: {str(e)}"
         logger.error(error_msg)
         print(f"\n[エラー] {error_msg}\n")
-        return {"success": False, "error": error_msg}
+        return {"success": False, "error": error_msg, "description": description}
