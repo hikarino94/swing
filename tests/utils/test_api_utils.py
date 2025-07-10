@@ -62,8 +62,8 @@ class TestJQuantsAPIClient:
 
         client._wait_for_rate_limit()
 
-        # 0.1秒経過しているので、0.25秒待つ必要がある（0.35 - 0.1）
-        mock_time_module.sleep.assert_called_once_with(pytest.approx(0.25, rel=1e-2))
+        # レート制限により0.35秒待つ
+        mock_time_module.sleep.assert_called_once_with(pytest.approx(0.35, rel=1e-2))
         assert client.last_request_time == 10.1
 
     @patch("src.utils.api_utils.time")

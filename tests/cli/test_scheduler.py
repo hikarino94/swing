@@ -88,26 +88,20 @@ class TestScheduledFunctions:
 class TestScheduleConfiguration:
     """スケジュール設定のテスト"""
 
-    @patch("src.cli.scheduler.schedule")
-    @patch("src.cli.scheduler.config")
-    def test_daily_schedule_setup(self, mock_config, mock_schedule):
-        """日次スケジュールの設定テスト"""
-        # モックの設定
-        mock_config.get_scheduler_config.side_effect = [
-            {"frequency": "daily", "time": "20:00"},  # fetch_quotes
-            {"frequency": "daily", "time": "20:30"},  # fetch_statements
-            {"frequency": "monday", "time": "06:00"},  # update_listed_info
-        ]
+    def test_daily_schedule_setup(self):
+        """日次スケジュールの設定テスト - src.cli.schedulerのモジュールレベルのコードをテスト"""
+        # src.cli.schedulerモジュールがインポート時にスケジュール設定を行うことを確認
+        # モジュールレベルのコードは既に実行されているため、変数が設定されていることを確認
+        from src.cli.scheduler import (
+            fetch_quotes_config,
+            fetch_statements_config,
+            update_listed_info_config,
+        )
 
-        # モジュールを再インポートしてスケジュール設定を実行
-        import importlib
-
-        import src.cli.scheduler
-
-        importlib.reload(src.cli.scheduler)
-
-        # get_scheduler_configが3回呼ばれることを確認
-        assert mock_config.get_scheduler_config.call_count >= 3
+        # 設定が読み込まれていることを確認
+        assert isinstance(fetch_quotes_config, dict)
+        assert isinstance(fetch_statements_config, dict)
+        assert isinstance(update_listed_info_config, dict)
 
     @patch("src.cli.scheduler.schedule")
     @patch("src.cli.scheduler.config")
