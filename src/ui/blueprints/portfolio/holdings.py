@@ -401,10 +401,28 @@ def add_holding():
         if existing.save():
             # 時価評価を更新
             PortfolioManager.update_market_values(request.current_user.id)
+
+            # 株価指標を自動計算
+            PortfolioManager.update_stock_indicators(request.current_user.id, [code])
+
             logger.info(
                 f"保有銘柄追加成功: {code} {quantity}株 @{average_price}円 (口座: {account_name})"
             )
-            return jsonify({"success": True, "message": "保有銘柄を追加しました"})
+            # 追加した銘柄の情報を返す
+            holding_data = {
+                "code": code,
+                "company_name": company_name or "",
+                "account_name": account_name,
+                "quantity": existing.quantity,
+                "average_price": existing.average_price,
+            }
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "保有銘柄を追加しました",
+                    "holding": holding_data,
+                }
+            )
         else:
             logger.error(f"保有銘柄の保存に失敗: {code} (口座: {account_name})")
             return jsonify({"success": False, "error": "保有銘柄の保存に失敗しました"})
@@ -458,7 +476,20 @@ def update_holding():
             logger.info(
                 f"保有銘柄更新成功: {code} {holding.quantity}株 @{holding.average_price}円 (口座: {account_name})"
             )
-            return jsonify({"success": True, "message": "保有銘柄を更新しました"})
+            # 更新した銘柄の情報を返す
+            holding_data = {
+                "code": code,
+                "account_name": account_name,
+                "quantity": holding.quantity,
+                "average_price": holding.average_price,
+            }
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "保有銘柄を更新しました",
+                    "holding": holding_data,
+                }
+            )
         else:
             return jsonify({"success": False, "error": "保有銘柄の更新に失敗しました"})
 
@@ -520,6 +551,7 @@ def indicators_update():
                     "success": True,
                     "message": f"{updated_count}件の株価指標を更新しました",
                     "updated": updated_count,
+                    "refresh": True,  # 画面更新フラグを追加
                 }
             )
         else:
@@ -528,6 +560,7 @@ def indicators_update():
                     "success": True,
                     "message": "更新対象の銘柄がありませんでした",
                     "updated": 0,
+                    "refresh": False,
                 }
             )
 
