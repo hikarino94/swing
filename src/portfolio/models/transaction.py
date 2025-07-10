@@ -102,39 +102,115 @@ class Transaction:
         finally:
             conn.close()
 
-    def save(self) -> bool:
-        """取引情報を保存"""
+    @classmethod
+    def find_by_id(cls, user_id: int, transaction_id: int) -> "Transaction | None":
+        """IDで取引を取得"""
         conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
             cursor.execute(
                 """
-                INSERT INTO transactions
-                (user_id, code, transaction_date, transaction_type, quantity,
-                 price, commission, tax, total_amount, remarks, detailed_type, realized_profit)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    self.user_id,
-                    self.code,
-                    self.transaction_date,
-                    self.transaction_type,
-                    self.quantity,
-                    self.price,
-                    self.commission,
-                    self.tax,
-                    self.total_amount,
-                    self.remarks,
-                    self.detailed_type,
-                    self.realized_profit,
-                ),
+                SELECT t.id, t.user_id, t.code, t.transaction_date,
+                       t.transaction_type, t.quantity, t.price, t.commission,
+                       t.tax, t.total_amount, t.remarks, t.created_at,
+                       li.company_name, t.detailed_type, t.realized_profit
+                FROM transactions t
+                LEFT JOIN listed_info li ON (t.code || '0') = li.code
+                WHERE t.id = ? AND t.user_id = ?
+                """,
+                (transaction_id, user_id),
             )
-            self.id = cursor.lastrowid  # type: ignore[assignment]
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            transaction = cls(
+                user_id=row[1],
+                code=row[2],
+                transaction_date=row[3],
+                transaction_type=row[4],
+                quantity=row[5],
+                price=row[6],
+            )
+            transaction.id = row[0]
+            transaction.commission = row[7]
+            transaction.tax = row[8]
+            transaction.total_amount = row[9]
+            transaction.remarks = row[10] or ""
+            transaction.created_at = row[11]
+            transaction.company_name = row[12]
+            transaction.detailed_type = row[13] or ""
+            transaction.realized_profit = row[14]
+            return transaction
+        finally:
+            conn.close()
+
+    def save(self) -> bool:
+        """取引情報を保存（新規作成または更新）"""
+        conn = sqlite3.connect(get_db_path())
+        cursor = conn.cursor()
+        try:
+            if self.id is None:
+                # 新規作成
+                cursor.execute(
+                    """
+                    INSERT INTO transactions
+                    (user_id, code, transaction_date, transaction_type, quantity,
+                     price, commission, tax, total_amount, remarks, detailed_type, realized_profit)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        self.user_id,
+                        self.code,
+                        self.transaction_date,
+                        self.transaction_type,
+                        self.quantity,
+                        self.price,
+                        self.commission,
+                        self.tax,
+                        self.total_amount,
+                        self.remarks,
+                        self.detailed_type,
+                        self.realized_profit,
+                    ),
+                )
+                self.id = cursor.lastrowid  # type: ignore[assignment]
+                logger.info(
+                    f"取引保存成功: {self.transaction_date} {self.code} "
+                    f"{self.transaction_type} {self.quantity}株"
+                )
+            else:
+                # 更新
+                cursor.execute(
+                    """
+                    UPDATE transactions
+                    SET code = ?, transaction_date = ?, transaction_type = ?,
+                        quantity = ?, price = ?, commission = ?, tax = ?,
+                        total_amount = ?, remarks = ?, detailed_type = ?,
+                        realized_profit = ?
+                    WHERE id = ? AND user_id = ?
+                """,
+                    (
+                        self.code,
+                        self.transaction_date,
+                        self.transaction_type,
+                        self.quantity,
+                        self.price,
+                        self.commission,
+                        self.tax,
+                        self.total_amount,
+                        self.remarks,
+                        self.detailed_type,
+                        self.realized_profit,
+                        self.id,
+                        self.user_id,
+                    ),
+                )
+                logger.info(
+                    f"取引更新成功: ID {self.id} - {self.transaction_date} {self.code} "
+                    f"{self.transaction_type} {self.quantity}株"
+                )
             conn.commit()
-            logger.info(
-                f"取引保存成功: {self.transaction_date} {self.code} "
-                f"{self.transaction_type} {self.quantity}株"
-            )
             return True
         except sqlite3.Error as e:
             logger.error(f"取引保存エラー: {e}")
