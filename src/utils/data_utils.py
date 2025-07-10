@@ -242,6 +242,59 @@ class DataProcessor:
         return start_date, end_date
 
     @staticmethod
+    def calculate_basic_metrics(returns: pd.Series) -> dict[str, float]:
+        """基本的なメトリクスを計算
+
+        Args:
+            returns: リターンの時系列データ
+
+        Returns:
+            各種メトリクスの辞書
+        """
+        if returns.empty:
+            return {
+                "total_return": 0.0,
+                "mean_return": 0.0,
+                "std_return": 0.0,
+                "sharpe_ratio": 0.0,
+                "max_drawdown": 0.0,
+                "win_rate": 0.0,
+            }
+
+        # 累積リターン
+        cumulative_returns: pd.Series = (1 + returns).cumprod()
+        total_return = (
+            cumulative_returns.iloc[-1] - 1 if len(cumulative_returns) > 0 else 0.0
+        )
+
+        # 平均リターンと標準偏差
+        mean_return = returns.mean()
+        std_return = returns.std()
+
+        # シャープレシオ（年率換算）
+        if std_return > 0:
+            sharpe_ratio = mean_return / std_return * np.sqrt(252)
+        else:
+            sharpe_ratio = 0.0
+
+        # 最大ドローダウン
+        running_max = cumulative_returns.expanding().max()
+        drawdown = (cumulative_returns - running_max) / running_max
+        max_drawdown = drawdown.min()
+
+        # 勝率
+        win_rate = (returns > 0).mean() if len(returns) > 0 else 0.0
+
+        return {
+            "total_return": float(total_return),
+            "mean_return": float(mean_return),
+            "std_return": float(std_return),
+            "sharpe_ratio": float(sharpe_ratio),
+            "max_drawdown": float(max_drawdown),
+            "win_rate": float(win_rate),
+        }
+
+    @staticmethod
     def safe_divide(
         numerator: pd.Series | np.ndarray | float,
         denominator: pd.Series | np.ndarray | float,
