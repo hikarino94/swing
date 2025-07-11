@@ -51,7 +51,7 @@ class TestReadPrices:
         mock_df = pd.DataFrame(
             {
                 "code": ["1234", "1234", "5678", "5678"],
-                "date": ["2024-01-15", "2024-01-16", "2024-01-15", "2024-01-16"],
+                "trade_date": ["2024-01-15", "2024-01-16", "2024-01-15", "2024-01-16"],
                 "adj_close": [1000, 1010, 2000, 2020],
             }
         )
@@ -181,7 +181,7 @@ class TestRunBacktest:
         # シグナルデータ
         signals = pd.DataFrame(
             {
-                "date": pd.to_datetime(["2024-01-15", "2024-01-16"]),
+                "DisclosedAt": pd.to_datetime(["2024-01-15", "2024-01-16"]),
                 "code": ["1234", "5678"],
                 "signal": [1, 1],
             }
@@ -196,17 +196,15 @@ class TestRunBacktest:
                 + [2000 + i for i in range(30)],
             }
         )
-
-        # 営業日カレンダー
-        calendar = pd.date_range("2024-01-01", "2024-02-29", freq="B")
+        # 価格データをマルチインデックスに変換
+        prices_indexed = prices.set_index(["code", "date"]).sort_index()
 
         trades = run_backtest(
+            prices_indexed,
             signals,
-            prices,
-            calendar,
-            hold_days=5,
-            entry_offset=1,
-            capital_per_trade=1_000_000,
+            hold=5,
+            offset=1,
+            capital=1_000_000,
             min_price=300,
         )
 
@@ -214,17 +212,17 @@ class TestRunBacktest:
         assert "code" in trades.columns
         assert "entry_date" in trades.columns
         assert "exit_date" in trades.columns
-        assert "entry_price" in trades.columns
-        assert "exit_price" in trades.columns
-        assert "num_shares" in trades.columns
-        assert "pl" in trades.columns
-        assert "pl_pct" in trades.columns
+        assert "entry_px" in trades.columns
+        assert "exit_px" in trades.columns
+        assert "shares" in trades.columns
+        assert "profit_jpy" in trades.columns
+        assert "ret_pct" in trades.columns
 
     def test_run_backtest_min_price_filter(self):
         """最低価格フィルターのテスト"""
         signals = pd.DataFrame(
             {
-                "date": pd.to_datetime(["2024-01-15"]),
+                "DisclosedAt": pd.to_datetime(["2024-01-15"]),
                 "code": ["1234"],
                 "signal": [1],
             }
@@ -238,16 +236,15 @@ class TestRunBacktest:
                 "adj_close": [100] * 10,  # min_price=300以下
             }
         )
-
-        calendar = pd.date_range("2024-01-01", "2024-01-31", freq="B")
+        # 価格データをマルチインデックスに変換
+        prices_indexed = prices.set_index(["code", "date"]).sort_index()
 
         trades = run_backtest(
+            prices_indexed,
             signals,
-            prices,
-            calendar,
-            hold_days=5,
-            entry_offset=1,
-            capital_per_trade=1_000_000,
+            hold=5,
+            offset=1,
+            capital=1_000_000,
             min_price=300,
         )
 
@@ -258,7 +255,7 @@ class TestRunBacktest:
         """出口価格がない場合"""
         signals = pd.DataFrame(
             {
-                "date": pd.to_datetime(["2024-01-15"]),
+                "DisclosedAt": pd.to_datetime(["2024-01-15"]),
                 "code": ["1234"],
                 "signal": [1],
             }
@@ -272,24 +269,20 @@ class TestRunBacktest:
                 "adj_close": [1000, 1010, 1020, 1030, 1040],
             }
         )
-
-        calendar = pd.date_range("2024-01-01", "2024-02-29", freq="B")
+        # 価格データをマルチインデックスに変換
+        prices_indexed = prices.set_index(["code", "date"]).sort_index()
 
         trades = run_backtest(
+            prices_indexed,
             signals,
-            prices,
-            calendar,
-            hold_days=20,  # 長い保有期間
-            entry_offset=1,
-            capital_per_trade=1_000_000,
+            hold=20,  # 長い保有期間
+            offset=1,
+            capital=1_000_000,
         )
 
         # 出口価格がないので損益は計算できない
         if len(trades) > 0:
-            assert (
-                pd.isna(trades["exit_price"].iloc[0])
-                or trades["exit_price"].iloc[0] == 0
-            )
+            assert pd.isna(trades["exit_px"].iloc[0]) or trades["exit_px"].iloc[0] == 0
 
 
 class TestSummarize:
@@ -299,8 +292,8 @@ class TestSummarize:
         """基本的なサマリー生成"""
         trades = pd.DataFrame(
             {
-                "pl": [10000, -5000, 20000, -3000, 15000],
-                "pl_pct": [0.10, -0.05, 0.20, -0.03, 0.15],
+                "profit_jpy": [10000, -5000, 20000, -3000, 15000],
+                "ret_pct": [0.10, -0.05, 0.20, -0.03, 0.15],
             }
         )
 
@@ -308,37 +301,39 @@ class TestSummarize:
 
         assert isinstance(summary, pd.DataFrame)
         assert "value" in summary.columns
-        assert "Total P&L" in summary.index
-        assert "Win Rate" in summary.index
-        assert "Avg Profit (winners)" in summary.index
-        assert "Avg Loss (losers)" in summary.index
-        assert "Best Trade" in summary.index
-        assert "Worst Trade" in summary.index
+        assert "metric" in summary.columns
+        metrics = summary["metric"].tolist()
+        assert "trades" in metrics
+        assert "total_profit" in metrics
+        assert "win_rate" in metrics
+        assert "avg_ret_pct" in metrics
+        assert "sharpe" in metrics
 
     def test_summarize_empty_trades(self):
         """空のトレードデータ"""
-        trades = pd.DataFrame(columns=["pl", "pl_pct"])
+        trades = pd.DataFrame(columns=["profit_jpy", "ret_pct"])
 
         summary = summarize(trades)
 
         assert isinstance(summary, pd.DataFrame)
-        assert summary.loc["Total P&L", "value"] == 0
-        assert summary.loc["Num Trades", "value"] == 0
+        summary_dict = dict(zip(summary["metric"], summary["value"], strict=False))
+        assert summary_dict["total_profit"] == 0
+        assert summary_dict["trades"] == 0
 
     def test_summarize_all_winners(self):
         """全て勝ちトレードの場合"""
         trades = pd.DataFrame(
             {
-                "pl": [10000, 5000, 20000],
-                "pl_pct": [0.10, 0.05, 0.20],
+                "profit_jpy": [10000, 5000, 20000],
+                "ret_pct": [0.10, 0.05, 0.20],
             }
         )
 
         summary = summarize(trades)
 
-        assert summary.loc["Win Rate", "value"] == "100.0%"
-        assert summary.loc["Num Winners", "value"] == 3
-        assert summary.loc["Num Losers", "value"] == 0
+        summary_dict = dict(zip(summary["metric"], summary["value"], strict=False))
+        assert summary_dict["win_rate"] == 1.0
+        assert summary_dict["trades"] == 3
 
 
 class TestAsciiBarChart:
@@ -379,13 +374,13 @@ class TestShowResults:
                 "code": ["1234", "5678"],
                 "entry_date": ["2024-01-15", "2024-01-16"],
                 "exit_date": ["2024-01-22", "2024-01-23"],
-                "pl": [10000, -5000],
-                "pl_pct": [0.10, -0.05],
+                "profit_jpy": [10000, -5000],
+                "ret_pct": [0.10, -0.05],
             }
         )
 
         summary = pd.DataFrame(
-            {"value": [5000, 2, "50.0%"]}, index=["Total P&L", "Num Trades", "Win Rate"]
+            {"metric": ["trades", "total_profit", "win_rate"], "value": [2, 5000, 0.5]}
         )
 
         show_results(trades, summary)
@@ -406,11 +401,11 @@ class TestToExcel:
         trades = pd.DataFrame(
             {
                 "code": ["1234"],
-                "pl": [10000],
+                "profit_jpy": [10000],
             }
         )
 
-        summary = pd.DataFrame({"value": [10000]}, index=["Total P&L"])
+        summary = pd.DataFrame({"metric": ["total_profit"], "value": [10000]})
 
         to_excel(trades, summary, Path("/tmp/test.xlsx"))
 
