@@ -100,10 +100,19 @@ def add_n_trading_days(s: pd.Series, n: int, calendar: pd.DatetimeIndex) -> pd.S
     処理内容: searchsorted を使い範囲外は最終日に丸めて返す。
     """
 
-    idx = calendar.searchsorted(s) + n
-    idx[idx >= len(calendar)] = len(calendar) - 1
-    result = pd.Series(calendar[idx].to_numpy(), index=s.index)
-    return result  # type: ignore[no-any-return]
+    # NaTを含む場合の処理
+    result = pd.Series(index=s.index, dtype="datetime64[ns]")
+    mask = s.notna()
+
+    if mask.any():
+        idx = calendar.searchsorted(s[mask]) + n
+        idx[idx >= len(calendar)] = len(calendar) - 1
+        result.loc[mask] = calendar[idx].to_numpy()
+
+    # NaTはそのまま保持
+    result.loc[~mask] = pd.NaT
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +149,7 @@ def run_backtest(
     entry_px = prices.reindex(entry_idx)["adj_close"].to_numpy()
     exit_px = prices.reindex(exit_idx)["adj_close"].to_numpy()
 
-    mask = entry_px >= min_price
+    mask = (entry_px >= min_price) & ~pd.isna(exit_px)
     entry_px_filtered = entry_px[mask]
     exit_px_filtered = exit_px[mask]
     signals_filtered = signals.loc[mask].reset_index(drop=True)

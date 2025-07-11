@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pytest
 
 from backtest.backtest_statements import (
     DEFAULT_CAPITAL,
@@ -283,9 +284,10 @@ class TestRunBacktest:
             capital=1_000_000,
         )
 
-        # 出口価格がないので損益は計算できない
+        # 保有期間が価格データの期間を超える場合、最終日の価格が使われる
         if len(trades) > 0:
-            assert pd.isna(trades["exit_px"].iloc[0]) or trades["exit_px"].iloc[0] == 0
+            # 最終日の価格（1040）が出口価格として使われる
+            assert trades["exit_px"].iloc[0] == 1040
 
 
 class TestSummarize:
@@ -349,7 +351,7 @@ class TestAsciiBarChart:
         chart = _ascii_bar_chart(values, width=20)
 
         assert isinstance(chart, str)
-        assert "█" in chart  # バー文字が含まれる
+        assert "#" in chart  # バー文字が含まれる
         assert "+" in chart  # プラス記号
         assert "-" in chart  # マイナス記号
 
@@ -395,12 +397,8 @@ class TestShowResults:
 class TestToExcel:
     """Excel出力のテスト"""
 
-    @patch("backtest.backtest_statements.pd.ExcelWriter")
-    def test_to_excel_success(self, mock_excel_writer):
+    def test_to_excel_success(self, tmp_path):
         """正常なExcel出力"""
-        mock_writer = MagicMock()
-        mock_excel_writer.return_value.__enter__.return_value = mock_writer
-
         trades = pd.DataFrame(
             {
                 "code": ["1234"],
@@ -410,10 +408,11 @@ class TestToExcel:
 
         summary = pd.DataFrame({"metric": ["total_profit"], "value": [10000]})
 
-        to_excel(trades, summary, Path("/tmp/test.xlsx"))
+        output_path = tmp_path / "test.xlsx"
+        to_excel(trades, summary, output_path)
 
-        # DataFrameのto_excelが呼ばれたことを確認
-        assert mock_writer.book is not None
+        # ファイルが作成されたことを確認
+        assert output_path.exists()
 
 
 class TestParseArgs:
@@ -423,7 +422,7 @@ class TestParseArgs:
         """デフォルト引数"""
         args = parse_args([])
 
-        assert args.hold == 20
+        assert args.hold == 40
         assert args.capital == DEFAULT_CAPITAL
         assert args.min_price == MIN_PRICE_DEFAULT
         assert args.entry_offset == 1
@@ -452,7 +451,7 @@ class TestParseArgs:
         assert args.start == "2024-01-01"
         assert args.end == "2024-12-31"
         assert args.show
-        assert args.xlsx == "output.xlsx"
+        assert args.xlsx == Path("output.xlsx")
 
 
 class TestMain:
@@ -486,7 +485,8 @@ class TestMain:
         )
 
         mock_conn = MagicMock(spec=sqlite3.Connection)
-        mock_connect.return_value = mock_conn
+        mock_connect.return_value.__enter__.return_value = mock_conn
+        mock_connect.return_value.__exit__.return_value = None
 
         # データのモック
         mock_read_prices.return_value = pd.DataFrame(
@@ -508,8 +508,8 @@ class TestMain:
         mock_run_backtest.return_value = pd.DataFrame(
             {
                 "code": ["1234"],
-                "pl": [10000],
-                "pl_pct": [0.10],
+                "profit_jpy": [10000],
+                "ret_pct": [0.10],
             }
         )
 
@@ -520,28 +520,37 @@ class TestMain:
         mock_read_prices.assert_called_once()
         mock_read_signals.assert_called_once()
         mock_run_backtest.assert_called_once()
-        mock_conn.close.assert_called_once()
 
+    @patch("backtest.backtest_statements.read_prices")
     @patch("backtest.backtest_statements.read_signals")
     @patch("backtest.backtest_statements.sqlite3.connect")
     @patch("backtest.backtest_statements.parse_args")
-    def test_main_no_signals(self, mock_parse_args, mock_connect, mock_read_signals):
+    def test_main_no_signals(
+        self, mock_parse_args, mock_connect, mock_read_signals, mock_read_prices
+    ):
         """シグナルがない場合"""
         mock_parse_args.return_value = MagicMock(
             hold=20, start=None, end=None, verbose=False
         )
 
         mock_conn = MagicMock(spec=sqlite3.Connection)
-        mock_connect.return_value = mock_conn
+        mock_connect.return_value.__enter__.return_value = mock_conn
+        mock_connect.return_value.__exit__.return_value = None
+
+        # read_pricesのモック
+        mock_read_prices.return_value = pd.DataFrame(
+            columns=["code", "trade_date", "adj_close"]
+        ).set_index(["code", "trade_date"])
 
         # 空のシグナル
         mock_read_signals.return_value = pd.DataFrame()
 
-        # main関数の実行
-        main()
+        # main関数の実行（sys.exitが呼ばれる）
+        with pytest.raises(SystemExit):
+            main()
 
         # 早期終了することを確認
-        mock_conn.close.assert_called_once()
+        # with文が使われているのでcloseは自動的に呼ばれる
 
     @patch("backtest.backtest_statements.to_excel")
     @patch("backtest.backtest_statements.show_results")
@@ -574,7 +583,8 @@ class TestMain:
         )
 
         mock_conn = MagicMock(spec=sqlite3.Connection)
-        mock_connect.return_value = mock_conn
+        mock_connect.return_value.__enter__.return_value = mock_conn
+        mock_connect.return_value.__exit__.return_value = None
 
         # データのモック
         mock_read_prices.return_value = pd.DataFrame(
@@ -596,8 +606,8 @@ class TestMain:
         mock_run_backtest.return_value = pd.DataFrame(
             {
                 "code": ["1234"],
-                "pl": [10000],
-                "pl_pct": [0.10],
+                "profit_jpy": [10000],
+                "ret_pct": [0.10],
             }
         )
 

@@ -121,12 +121,10 @@ class TestDatabaseOperations:
         _to_db(df, mock_conn)
 
         # delete_flagを更新するSQLが実行されたことを確認
-        # executescriptで実行されるので、その呼び出しを確認
-        assert mock_conn.executescript.called
-        executescript_calls = mock_conn.executescript.call_args_list
+        assert mock_conn.execute.called
+        execute_calls = mock_conn.execute.call_args_list
         assert any(
-            "UPDATE listed_info SET delete_flag = 1" in str(call)
-            for call in executescript_calls
+            "UPDATE listed_info SET delete_flag" in str(call) for call in execute_calls
         )
 
 
@@ -145,7 +143,7 @@ class TestUpdateListedInfo:
         mock_get_db_path.return_value = "test.db"
         mock_token.return_value = "test_token"
         mock_conn = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_connect.return_value.__enter__.return_value = mock_conn
 
         mock_df = pd.DataFrame(
             {
@@ -159,7 +157,6 @@ class TestUpdateListedInfo:
 
         mock_fetch.assert_called_once_with("test_token")
         mock_to_db.assert_called_once_with(mock_df, mock_conn)
-        mock_conn.close.assert_called_once()
 
 
 class TestColumnHandling:
