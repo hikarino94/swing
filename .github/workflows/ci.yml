@@ -103,12 +103,31 @@ jobs:
         echo "Installed packages:"
         pip list | grep -E "(pytest|pandas|numpy|flask)"
 
-        # テストを実行（カバレッジなしで最初に試す）
-        pytest -v --tb=short -W ignore::FutureWarning -W ignore::UserWarning || {
+        # ディレクトリ構造の確認
+        echo "Test directory structure:"
+        ls -la tests/
+        echo "Check for __init__.py files:"
+        find . -name "__init__.py" -path "*/tests/*" -o -path "*/src/*" -o -path "*/backtest/*" -o -path "*/db/*" -o -path "*/fetch/*" -o -path "*/screening/*" | head -20
+
+        # テストコレクションのドライラン
+        echo "Collecting tests..."
+        pytest --collect-only -q || {
+          echo "::error::Test collection failed"
+          pytest --collect-only -vvv
+          exit 1
+        }
+
+        # テストを実行
+        pytest -v --tb=short || {
           EXIT_CODE=$?
           echo "::error::Test failed with exit code: $EXIT_CODE"
-          # 失敗したテストの詳細を表示
-          pytest --lf -vvv --tb=long -W ignore::FutureWarning -W ignore::UserWarning || true
+          if [ $EXIT_CODE -eq 4 ]; then
+            echo "::error::No tests were collected. Checking test discovery..."
+            pytest --collect-only -vvv
+          else
+            # 失敗したテストの詳細を表示
+            pytest --lf -vvv --tb=long || true
+          fi
           exit $EXIT_CODE
         }
 

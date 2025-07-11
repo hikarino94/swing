@@ -113,6 +113,8 @@ exclude = [
 pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*", "*Tests"]
+python_functions = ["test_*"]
 addopts = [
     "-v",
     "--tb=short",
@@ -122,6 +124,8 @@ addopts = [
     "--ignore=htmlcov",
     "--ignore=dist",
     "--ignore=build",
+    "--ignore=scripts/venv",
+    "-p", "no:warnings",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning:numpy",
