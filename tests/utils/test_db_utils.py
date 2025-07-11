@@ -22,11 +22,12 @@ class TestDbConfig:
         assert "db" in db_path
 
     def test_db_path_contains_stock_db(self):
-        """パスにstock.dbが含まれることを確認"""
+        """パスにstock.dbまたはtest_stock.dbが含まれることを確認"""
         db_path = get_db_path()
         # 文字列をPathに変換して確認
         db_path_obj = Path(db_path)
-        assert db_path_obj.name == "stock.db"
+        # テスト環境ではtest_stock.dbになることがある
+        assert db_path_obj.name in ["stock.db", "test_stock.db"]
         assert "db" in str(db_path)
 
 

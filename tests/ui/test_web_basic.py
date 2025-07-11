@@ -208,6 +208,9 @@ class TestFileHandling:
 
     def test_excel_file_generation(self):
         """Excelファイル生成のテスト"""
+        import pytest
+
+        pytest.importorskip("openpyxl")
         import pandas as pd
 
         # テストデータ
