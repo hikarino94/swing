@@ -113,7 +113,16 @@ exclude = [
 pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
-addopts = "-v --cov=. --cov-report=html --cov-report=term-missing"
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--ignore=venv",
+    "--ignore=.venv",
+    "--ignore=htmlcov",
+    "--ignore=dist",
+    "--ignore=build",
+]
 filterwarnings = [
     "ignore::DeprecationWarning:numpy",
     "ignore::RuntimeWarning:numpy",
@@ -121,7 +130,16 @@ filterwarnings = [
     "ignore::UserWarning:pandas",
     "ignore::UserWarning",
     "ignore::FutureWarning",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
 ]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+norecursedirs = [".git", ".tox", "dist", "build", "*.egg", "venv", ".venv", "htmlcov"]
+timeout = 300
 
 [tool.coverage.run]
 branch = true

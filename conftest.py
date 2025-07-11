@@ -6,10 +6,9 @@ from pathlib import Path
 
 import pytest
 
-# Add project root to Python path
+# Add project root to Python path FIRST
 project_root = Path(__file__).resolve().parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root))
 
 # Also ensure PYTHONPATH is set for subprocess calls
 os.environ["PYTHONPATH"] = str(project_root)
@@ -33,3 +32,6 @@ def _setup_test_env(monkeypatch):
     if "DATABASE_PATH" not in os.environ:
         test_db_path = project_root / "test_stock.db"
         monkeypatch.setenv("DATABASE_PATH", str(test_db_path))
+
+    # Ensure PYTHONPATH is set correctly
+    monkeypatch.setenv("PYTHONPATH", str(project_root))

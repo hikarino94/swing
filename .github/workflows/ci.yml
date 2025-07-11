@@ -96,11 +96,19 @@ jobs:
         FLASK_ENV: "testing"
         DATABASE_PATH: "${{ github.workspace }}/test_stock.db"
       run: |
-        # テストを実行
-        pytest -v --tb=short --cov=. --cov-report=xml --cov-report=term -W ignore::FutureWarning -W ignore::UserWarning || {
+        # デバッグ情報を表示
+        echo "Python path: $PYTHONPATH"
+        echo "Current directory: $(pwd)"
+        echo "Python version: $(python --version)"
+        echo "Installed packages:"
+        pip list | grep -E "(pytest|pandas|numpy|flask)"
+
+        # テストを実行（カバレッジなしで最初に試す）
+        pytest -v --tb=short -W ignore::FutureWarning -W ignore::UserWarning || {
           EXIT_CODE=$?
           echo "::error::Test failed with exit code: $EXIT_CODE"
-          pytest --lf -v --tb=long -W ignore::FutureWarning -W ignore::UserWarning || true
+          # 失敗したテストの詳細を表示
+          pytest --lf -vvv --tb=long -W ignore::FutureWarning -W ignore::UserWarning || true
           exit $EXIT_CODE
         }
 
@@ -146,7 +154,7 @@ jobs:
 
     - name: Check Python imports
       run: |
-        python -c "import sys; sys.path.append('.'); from src.config import Config" || echo "::error::Failed to import Config"
+        python -c "import sys; sys.path.append('.'); from src.config import THRESHOLDS_FILE" || echo "::error::Failed to import from src.config"
 
   build:
     name: Build Package
