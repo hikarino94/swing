@@ -108,6 +108,7 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 addopts = "-v --cov=. --cov-report=html --cov-report=term-missing"
@@ -119,7 +120,6 @@ filterwarnings = [
     "ignore::UserWarning",
     "ignore::FutureWarning",
 ]
-pythonpath = "."
 
 [tool.coverage.run]
 branch = true

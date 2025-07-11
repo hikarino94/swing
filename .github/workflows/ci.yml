@@ -50,6 +50,8 @@ jobs:
         python -m pip install --upgrade pip wheel setuptools
         # CI環境では最小限の依存関係のみインストール
         pip install -r requirements.txt -r requirements-test.txt
+        # パッケージを開発モードでインストール（モジュール解決のため）
+        pip install -e .
 
     - name: Run linters
       run: |

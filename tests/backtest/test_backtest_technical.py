@@ -8,10 +8,10 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 
 from backtest.backtest_technical import (
-    DEFAULT_CAPITAL,
-    DEFAULT_HOLD_DAYS,
-    DEFAULT_STOP_LOSS,
+    CAPITAL_DEFAULT,
+    HOLD_DAYS_DEFAULT,
     MIN_PRICE_DEFAULT,
+    STOP_LOSS_PCT_DEFAULT,
     _ascii_bar_chart,
     _result_paths,
     main,
@@ -432,14 +432,14 @@ class TestParseArgs:
 
     def test_parse_args_default(self):
         """デフォルト引数"""
-        args = parse_args([])
+        args = parse_args(["--start", "2024-01-01"])
 
-        assert args.capital == DEFAULT_CAPITAL
-        assert args.hold_days == DEFAULT_HOLD_DAYS
-        assert args.stop_loss == DEFAULT_STOP_LOSS
+        assert args.capital == CAPITAL_DEFAULT
+        assert args.hold_days == HOLD_DAYS_DEFAULT
+        assert args.stop_loss == STOP_LOSS_PCT_DEFAULT
         assert args.min_price == MIN_PRICE_DEFAULT
         assert not args.show
-        assert args.start is None
+        assert args.start == "2024-01-01"
         assert args.end is None
 
     def test_parse_args_custom(self):

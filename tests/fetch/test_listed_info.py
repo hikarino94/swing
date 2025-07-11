@@ -73,7 +73,8 @@ class TestFetchListedInfo:
 class TestDatabaseOperations:
     """データベース操作のテスト"""
 
-    def test_to_db_success(self):
+    @patch("fetch.listed_info.pd.DataFrame.to_sql")
+    def test_to_db_success(self, mock_to_sql):
         """正常なデータベース保存"""
         mock_conn = MagicMock()
 
@@ -88,8 +89,9 @@ class TestDatabaseOperations:
 
         _to_db(df, mock_conn)
 
-        # executemanyとcommitが呼ばれたことを確認
-        assert mock_conn.executemany.called
+        # to_sqlとexecutescriptが呼ばれたことを確認
+        assert mock_to_sql.called
+        assert mock_conn.executescript.called
         assert mock_conn.commit.called
 
     def test_to_db_empty_dataframe(self):
@@ -101,9 +103,10 @@ class TestDatabaseOperations:
         _to_db(df, mock_conn)
 
         # 何も呼ばれないことを確認
-        assert not mock_conn.executemany.called
+        assert not mock_conn.executescript.called
 
-    def test_to_db_with_delete_flag_handling(self):
+    @patch("fetch.listed_info.pd.DataFrame.to_sql")
+    def test_to_db_with_delete_flag_handling(self, mock_to_sql):
         """上場廃止フラグ処理のテスト"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -118,10 +121,12 @@ class TestDatabaseOperations:
         _to_db(df, mock_conn)
 
         # delete_flagを更新するSQLが実行されたことを確認
-        execute_calls = mock_cursor.execute.call_args_list
+        # executescriptで実行されるので、その呼び出しを確認
+        assert mock_conn.executescript.called
+        executescript_calls = mock_conn.executescript.call_args_list
         assert any(
             "UPDATE listed_info SET delete_flag = 1" in str(call)
-            for call in execute_calls
+            for call in executescript_calls
         )
 
 
@@ -131,11 +136,13 @@ class TestUpdateListedInfo:
     @patch("fetch.listed_info._to_db")
     @patch("fetch.listed_info._fetch_listed_info")
     @patch("fetch.listed_info._load_token")
+    @patch("fetch.listed_info.get_db_path")
     @patch("fetch.listed_info.sqlite3.connect")
     def test_update_listed_info_success(
-        self, mock_connect, mock_token, mock_fetch, mock_to_db
+        self, mock_connect, mock_get_db_path, mock_token, mock_fetch, mock_to_db
     ):
         """正常な更新処理"""
+        mock_get_db_path.return_value = "test.db"
         mock_token.return_value = "test_token"
         mock_conn = MagicMock()
         mock_connect.return_value = mock_conn
