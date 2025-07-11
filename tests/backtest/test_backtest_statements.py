@@ -70,7 +70,10 @@ class TestReadPrices:
         mock_conn = MagicMock(spec=sqlite3.Connection)
 
         with patch("backtest.backtest_statements.pd.read_sql") as mock_read_sql:
-            mock_read_sql.return_value = pd.DataFrame()
+            # 空でも必要なカラムは存在する
+            mock_read_sql.return_value = pd.DataFrame(
+                columns=["code", "trade_date", "adj_close"]
+            )
             result = read_prices(mock_conn)
 
             assert isinstance(result, pd.DataFrame)
@@ -117,7 +120,7 @@ class TestReadSignals:
         mock_read_sql.return_value = mock_df
         mock_conn = MagicMock(spec=sqlite3.Connection)
 
-        result = read_signals(mock_conn)
+        result = read_signals(mock_conn, None, None)
 
         assert isinstance(result, pd.DataFrame)
         # SQLクエリに日付条件が含まれないことを確認
