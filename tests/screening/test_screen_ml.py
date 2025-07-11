@@ -1,12 +1,8 @@
 """Tests for screening/screen_ml.py"""
 
-import argparse
-import datetime as dt
-import pickle
 import sqlite3
-import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import numpy as np
 import pandas as pd
@@ -15,327 +11,506 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from screening.screen_ml import (
+    _add_label,
+    _build_dataset,
+    _connect,
+    _fetch_price,
+    _fetch_stmt,
+    _make_price_features,
+    _merge_features,
+    _train_model,
+    cli,
+)
 
-class TestMLFeatureEngineering:
-    """機械学習の特徴量エンジニアリングのテスト"""
 
-    def test_feature_calculation(self):
-        """特徴量の計算をテスト"""
-        # テスト用データの作成
-        dates = pd.date_range("2022-01-01", periods=100, freq="D")
-        df = pd.DataFrame(
+class TestConnect:
+    """データベース接続のテスト"""
+
+    @patch("screening.screen_ml.sqlite3.connect")
+    def test_connect_success(self, mock_connect):
+        """正常な接続"""
+        mock_conn = MagicMock(spec=sqlite3.Connection)
+        mock_connect.return_value = mock_conn
+
+        conn = _connect("test.db")
+
+        assert conn == mock_conn
+        mock_connect.assert_called_once_with("test.db")
+
+    @patch("screening.screen_ml.sqlite3.connect")
+    def test_connect_with_path(self, mock_connect):
+        """Pathオブジェクトでの接続"""
+        mock_conn = MagicMock(spec=sqlite3.Connection)
+        mock_connect.return_value = mock_conn
+
+        conn = _connect(Path("test.db"))
+
+        assert conn == mock_conn
+        mock_connect.assert_called_once_with("test.db")
+
+
+class TestFetchPrice:
+    """価格データ取得のテスト"""
+
+    @patch("screening.screen_ml.pd.read_sql")
+    def test_fetch_price_basic(self, mock_read_sql):
+        """基本的な価格データ取得"""
+        mock_conn = MagicMock(spec=sqlite3.Connection)
+
+        mock_df = pd.DataFrame(
             {
-                "date": dates,
-                "code": "1234",
-                "close": 1000 + np.random.randn(100).cumsum() * 10,
-                "volume": np.random.randint(100000, 1000000, 100),
+                "code": ["1234", "1234", "5678", "5678"],
+                "date": ["2024-01-15", "2024-01-16", "2024-01-15", "2024-01-16"],
+                "adj_close": [1000, 1010, 2000, 2020],
+                "adj_volume": [100000, 110000, 200000, 210000],
+            }
+        )
+        mock_read_sql.return_value = mock_df
+
+        result = _fetch_price(mock_conn, lookback=30, as_of="2024-01-16")
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 4
+        # SQLクエリに日付が含まれることを確認
+        call_args = mock_read_sql.call_args[0][0]
+        assert "2024-01-16" in call_args
+        assert "-30 day" in call_args
+
+    def test_fetch_price_no_as_of(self):
+        """as_of指定なしの場合"""
+        mock_conn = MagicMock(spec=sqlite3.Connection)
+
+        with patch("screening.screen_ml.pd.read_sql") as mock_read_sql:
+            mock_read_sql.return_value = pd.DataFrame()
+            _fetch_price(mock_conn, lookback=30)
+
+            call_args = mock_read_sql.call_args[0][0]
+            assert "date('now'" in call_args
+
+
+class TestFetchStmt:
+    """財務データ取得のテスト"""
+
+    @patch("screening.screen_ml.pd.read_sql")
+    def test_fetch_stmt_success(self, mock_read_sql):
+        """正常な財務データ取得"""
+        mock_conn = MagicMock(spec=sqlite3.Connection)
+
+        mock_df = pd.DataFrame(
+            {
+                "code": ["1234", "5678"],
+                "DisclosedDate": ["2024-01-15", "2024-01-16"],
+                "NetSales": [1000000, 2000000],
+                "OperatingProfit": [100000, 200000],
+                "OrdinaryProfit": [110000, 210000],
+                "Profit": [80000, 160000],
+            }
+        )
+        mock_read_sql.return_value = mock_df
+
+        result = _fetch_stmt(mock_conn)
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 2
+        assert "code" in result.columns
+
+    def test_fetch_stmt_empty(self):
+        """空のデータの場合"""
+        mock_conn = MagicMock(spec=sqlite3.Connection)
+
+        with patch("screening.screen_ml.pd.read_sql") as mock_read_sql:
+            mock_read_sql.return_value = pd.DataFrame()
+            result = _fetch_stmt(mock_conn)
+
+            assert isinstance(result, pd.DataFrame)
+            assert len(result) == 0
+
+
+class TestMakePriceFeatures:
+    """価格特徴量生成のテスト"""
+
+    def test_make_price_features_basic(self):
+        """基本的な特徴量生成"""
+        # 各銘柄30日分のデータ
+        dates = pd.date_range("2024-01-01", periods=30, freq="D")
+        df_price = pd.DataFrame(
+            {
+                "code": ["1234"] * 30 + ["5678"] * 30,
+                "date": list(dates) + list(dates),
+                "adj_close": list(range(1000, 1030)) + list(range(2000, 2030)),
+                "adj_volume": [100000 + i * 1000 for i in range(30)] * 2,
             }
         )
 
-        # 価格関連の特徴量
-        df["returns"] = df["close"].pct_change()
-        df["log_returns"] = np.log(df["close"] / df["close"].shift(1))
-        df["volatility"] = df["returns"].rolling(window=20).std()
-        df["rsi"] = self.calculate_rsi(df["close"], window=14)
+        result = _make_price_features(df_price)
 
-        # 基本的な検証
-        assert "returns" in df.columns
-        assert "volatility" in df.columns
-        assert "rsi" in df.columns
-        assert df["volatility"].iloc[20:].notna().all()  # 20日目以降は値がある
+        assert isinstance(result, pd.DataFrame)
+        assert "code" in result.columns
+        assert "ret_5" in result.columns
+        assert "ret_10" in result.columns
+        assert "ret_20" in result.columns
+        assert "volatility_20" in result.columns
+        assert "turnover_norm" in result.columns
 
-    def calculate_rsi(self, prices, window=14):
-        """RSI計算のヘルパー関数"""
-        delta = prices.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
+        # 各銘柄の行数は元と同じ
+        assert len(result[result["code"] == "1234"]) == 30
 
-    def test_label_generation(self):
-        """予測ラベルの生成をテスト"""
-        # テスト用の価格データ
-        prices = pd.Series([100, 102, 105, 103, 107, 110, 108, 112, 115, 118])
+    def test_make_price_features_insufficient_data(self):
+        """データ不足の場合"""
+        # 5日分しかないデータ
+        df_price = pd.DataFrame(
+            {
+                "code": ["1234"] * 5,
+                "date": pd.date_range("2024-01-01", periods=5),
+                "adj_close": [1000, 1001, 1002, 1003, 1004],
+                "adj_volume": [100000] * 5,
+            }
+        )
 
-        # 将来のリターンを計算（簡易版）
-        future_window = 3
-        future_returns = prices.shift(-future_window) / prices - 1
+        result = _make_price_features(df_price)
 
-        # 5%以上上昇したらラベル1
-        threshold = 0.05
-        labels = (future_returns >= threshold).astype(int)
-
-        # 検証
-        assert len(labels) == len(prices)
-        # 最後のfuture_window個はNaN（将来データがないため）
-        # NaNの場合は0になるので、future_returnsで直接確認
-        assert future_returns.iloc[-future_window:].isna().all()
-
-        # 手動で確認: prices[0]=100, prices[3]=103, return=(103-100)/100=0.03 < 0.05
-        assert future_returns.iloc[0] == pytest.approx(0.03, rel=1e-3)
-        assert labels.iloc[0] == 0
-
-        # prices[4]=107, prices[7]=112, return=(112-107)/107=0.0467 < 0.05
-        assert labels.iloc[4] == 0
-
-        # 5%以上のリターンがある位置を探す
-        # prices[5]=110, prices[8]=115, return=(115-110)/110=0.0454 < 0.05
-        # prices[6]=108, prices[9]=118, return=(118-108)/108=0.0926 > 0.05
-        assert future_returns.iloc[6] > threshold
-        assert labels.iloc[6] == 1
+        # 20日リターンが計算できないため、NaNになる
+        assert pd.isna(result["ret_20"].iloc[-1])
 
 
-class TestModelTraining:
+class TestMergeFeatures:
+    """特徴量マージのテスト"""
+
+    def test_merge_features_basic(self):
+        """基本的なマージ"""
+        price_feat = pd.DataFrame(
+            {
+                "code": ["1234", "5678"],
+                "date": pd.to_datetime(["2024-01-15", "2024-01-16"]),
+                "adj_close": [1000, 2000],
+                "ret_5": [0.05, 0.03],
+            }
+        )
+
+        stmt = pd.DataFrame(
+            {
+                "code": ["1234", "1234", "5678"],
+                "DisclosedDate": pd.to_datetime(
+                    ["2024-01-10", "2024-01-14", "2024-01-10"]
+                ),
+                "NetSales": [1000000, 1100000, 2000000],
+                "OperatingProfit": [100000, 110000, 200000],
+            }
+        )
+
+        result = _merge_features(price_feat, stmt)
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 2
+        assert "adj_close" in result.columns
+        assert "NetSales" in result.columns
+        # 直近の財務データが使われる
+        assert result[result["code"] == "1234"]["NetSales"].iloc[0] == 1100000
+
+    def test_merge_features_no_stmt(self):
+        """財務データがない銘柄の場合"""
+        price_feat = pd.DataFrame(
+            {
+                "code": ["1234", "5678"],
+                "date": pd.to_datetime(["2024-01-15", "2024-01-16"]),
+                "adj_close": [1000, 2000],
+            }
+        )
+
+        stmt = pd.DataFrame(
+            {
+                "code": ["1234"],
+                "DisclosedDate": pd.to_datetime(["2024-01-10"]),
+                "NetSales": [1000000],
+            }
+        )
+
+        result = _merge_features(price_feat, stmt)
+
+        # 財務データがない銘柄も含まれるが、値は0で埋められる
+        assert len(result) == 2
+        assert result[result["code"] == "5678"]["NetSales"].iloc[0] == 0
+
+
+class TestAddLabel:
+    """ラベル付与のテスト"""
+
+    def test_add_label_basic(self):
+        """基本的なラベル付与"""
+        df = pd.DataFrame(
+            {
+                "code": ["1234", "5678"],
+                "date": pd.to_datetime(["2024-01-15", "2024-01-16"]),
+                "adj_close": [1000, 2000],
+            }
+        )
+
+        # 将来の価格データを追加
+        future_dates = pd.date_range("2024-01-15", periods=40, freq="D")
+        df_all = pd.DataFrame(
+            {
+                "code": ["1234"] * 40 + ["5678"] * 40,
+                "date": list(future_dates)
+                + list(pd.date_range("2024-01-16", periods=40, freq="D")),
+                "adj_close": [1000 * (1 + 0.002 * i) for i in range(40)]  # 上昇
+                + [2000 * (1 - 0.002 * i) for i in range(40)],  # 下落
+            }
+        )
+
+        # dfとdf_allを結合
+        df_combined = (
+            pd.concat([df, df_all])
+            .drop_duplicates(["code", "date"])
+            .sort_values(["code", "date"])
+        )
+
+        result = _add_label(df_combined, future_window=30, thresh_pct=0.05)
+
+        assert isinstance(result, pd.DataFrame)
+        assert "label" in result.columns
+        assert "future_ret" in result.columns
+
+        # 最初の日付のラベルを確認
+        first_1234 = result[
+            (result["code"] == "1234")
+            & (result["date"] == pd.to_datetime("2024-01-15"))
+        ].iloc[0]
+        first_5678 = result[
+            (result["code"] == "5678")
+            & (result["date"] == pd.to_datetime("2024-01-16"))
+        ].iloc[0]
+
+        # 1234は6%上昇、5678は6%下落
+        assert first_1234["label"] == 1
+        assert first_5678["label"] == 0
+
+    def test_add_label_insufficient_future(self):
+        """将来データが不足している場合"""
+        df = pd.DataFrame(
+            {
+                "code": ["1234"] * 10,
+                "date": pd.date_range("2024-01-15", periods=10),
+                "adj_close": [1000] * 10,
+            }
+        )
+
+        result = _add_label(df, future_window=30)
+
+        # 最後の30日分はラベルが付与できない
+        assert pd.isna(result["label"].iloc[-1])
+
+
+class TestBuildDataset:
+    """データセット構築のテスト"""
+
+    @patch("screening.screen_ml._add_label")
+    @patch("screening.screen_ml._merge_features")
+    @patch("screening.screen_ml._make_price_features")
+    @patch("screening.screen_ml._fetch_stmt")
+    @patch("screening.screen_ml._fetch_price")
+    def test_build_dataset_success(
+        self,
+        mock_fetch_price,
+        mock_fetch_stmt,
+        mock_make_features,
+        mock_merge,
+        mock_add_label,
+    ):
+        """正常なデータセット構築"""
+        mock_conn = MagicMock(spec=sqlite3.Connection)
+
+        # モックデータ
+        price_data = pd.DataFrame(
+            {
+                "code": ["1234"] * 10,
+                "date": pd.date_range("2024-01-01", periods=10),
+                "adj_close": range(1000, 1010),
+                "adj_volume": [100000] * 10,
+            }
+        )
+        mock_fetch_price.return_value = price_data
+
+        stmt_data = pd.DataFrame(
+            {
+                "code": ["1234"],
+                "DisclosedDate": pd.to_datetime(["2024-01-01"]),
+                "NetSales": [1000000],
+            }
+        )
+        mock_fetch_stmt.return_value = stmt_data
+
+        features = pd.DataFrame(
+            {
+                "code": ["1234"],
+                "date": pd.to_datetime(["2024-01-10"]),
+                "adj_close": [1005],
+            }
+        )
+        mock_make_features.return_value = features
+
+        merged = pd.DataFrame(
+            {
+                "code": ["1234"],
+                "date": pd.to_datetime(["2024-01-10"]),
+                "adj_close": [1005],
+                "NetSales": [1000000],
+            }
+        )
+        mock_merge.return_value = merged
+
+        labeled = pd.DataFrame(
+            {
+                "code": ["1234"],
+                "date": pd.to_datetime(["2024-01-10"]),
+                "adj_close": [1005],
+                "NetSales": [1000000],
+                "label": [1],
+                "future_ret": [0.06],
+            }
+        )
+        mock_add_label.return_value = labeled
+
+        result = _build_dataset(mock_conn, lookback=30, as_of="2024-01-10")
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 1
+        assert "label" in result.columns
+
+
+class TestTrainModel:
     """モデル学習のテスト"""
 
-    def test_model_pipeline_creation(self):
-        """モデルパイプラインの作成をテスト"""
-        # パイプラインの構築
-        pipeline = Pipeline(
-            [
-                ("scaler", StandardScaler()),
-                (
-                    "classifier",
-                    GradientBoostingClassifier(
-                        n_estimators=100, max_depth=3, random_state=42
-                    ),
-                ),
-            ]
-        )
-
-        # パイプラインの構成を確認
-        assert len(pipeline.steps) == 2
-        assert isinstance(pipeline.named_steps["scaler"], StandardScaler)
-        assert isinstance(
-            pipeline.named_steps["classifier"], GradientBoostingClassifier
-        )
-
-    def test_model_training_flow(self):
-        """モデル学習フローをテスト"""
-        # ダミーの特徴量とラベルを作成
-        n_samples = 1000
+    def test_train_model_success(self):
+        """正常なモデル学習"""
+        # ダミーデータ生成
+        np.random.seed(42)
+        n_samples = 100
         n_features = 10
+
         X = np.random.randn(n_samples, n_features)
-        y = np.random.randint(0, 2, n_samples)
+        y = (X[:, 0] + X[:, 1] > 0).astype(int)  # 簡単な線形分離
 
-        # モデルの作成と学習
-        model = GradientBoostingClassifier(
-            n_estimators=10, max_depth=3, random_state=42  # テスト用に小さく
-        )
-        model.fit(X, y)
+        feature_cols = [f"feature_{i}" for i in range(n_features)]
+        df = pd.DataFrame(X, columns=feature_cols)
+        df["label"] = y
+        df["future_ret"] = np.random.randn(n_samples) * 0.1
 
-        # 予測
-        predictions = model.predict(X)
-        probabilities = model.predict_proba(X)
+        pipeline, metrics = _train_model(df)
 
-        # 検証
-        assert len(predictions) == n_samples
-        assert probabilities.shape == (n_samples, 2)
-        assert (probabilities.sum(axis=1) - 1).max() < 1e-6  # 確率の合計は1
+        assert isinstance(pipeline, Pipeline)
+        assert isinstance(metrics, dict)
+        assert "train_score" in metrics
+        assert "test_score" in metrics
+        assert "train_auc" in metrics
+        assert "test_auc" in metrics
+        assert 0 <= metrics["test_auc"] <= 1
 
-    def test_model_serialization(self):
-        """モデルのシリアライズをテスト"""
-        # 簡単なモデルを作成
-        model = GradientBoostingClassifier(n_estimators=5, random_state=42)
-        X = np.random.randn(100, 5)
-        y = np.random.randint(0, 2, 100)
-        model.fit(X, y)
-
-        # モデルをバイト列にシリアライズ
-        model_bytes = pickle.dumps(model)
-
-        # デシリアライズ
-        loaded_model = pickle.loads(model_bytes)
-
-        # 同じ予測を返すことを確認
-        X_test = np.random.randn(10, 5)
-        np.testing.assert_array_equal(
-            model.predict(X_test), loaded_model.predict(X_test)
-        )
-
-
-class TestDataPreparation:
-    """データ準備のテスト"""
-
-    def setup_method(self):
-        """テスト用の一時データベースを作成"""
-        self.temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        self.db_path = self.temp_db.name
-
-        with sqlite3.connect(self.db_path) as conn:
-            # pricesテーブル
-            conn.execute(
-                """
-                CREATE TABLE prices (
-                    date TEXT,
-                    code TEXT,
-                    close REAL,
-                    volume INTEGER,
-                    adjustment_close REAL,
-                    PRIMARY KEY (date, code)
-                )
-            """
-            )
-
-            # statementsテーブル
-            conn.execute(
-                """
-                CREATE TABLE statements (
-                    code TEXT,
-                    disclosure_date TEXT,
-                    period_end TEXT,
-                    eps REAL,
-                    roe REAL,
-                    equity_to_asset_ratio REAL
-                )
-            """
-            )
-
-            # テストデータの挿入
-            base_date = dt.date(2023, 1, 1)
-            for i in range(200):
-                date = base_date + dt.timedelta(days=i)
-                for code in ["1234", "5678"]:
-                    price = 1000 + np.sin(i / 20) * 100 + (10 if code == "5678" else 0)
-                    volume = 1000000 + np.random.randint(-100000, 100000)
-                    conn.execute(
-                        "INSERT INTO prices VALUES (?, ?, ?, ?, ?)",
-                        (date.strftime("%Y-%m-%d"), code, price, volume, price),
-                    )
-
-            # 財務データの挿入
-            for code in ["1234", "5678"]:
-                conn.execute(
-                    "INSERT INTO statements VALUES (?, ?, ?, ?, ?, ?)",
-                    (code, "2023-03-31", "2023-03-31", 50.0, 0.15, 0.45),
-                )
-            conn.commit()
-
-    def teardown_method(self):
-        """一時ファイルの削除"""
-        Path(self.db_path).unlink(missing_ok=True)
-
-    def test_load_price_data(self):
-        """価格データの読み込みをテスト"""
-        with sqlite3.connect(self.db_path) as conn:
-            query = """
-                SELECT date, code, close, volume
-                FROM prices
-                WHERE date >= '2023-01-01'
-                ORDER BY code, date
-            """
-            df = pd.read_sql_query(query, conn)
-
-        assert len(df) == 400  # 200日 × 2銘柄
-        assert set(df["code"].unique()) == {"1234", "5678"}
-        assert df["close"].notna().all()
-
-    def test_merge_financial_data(self):
-        """財務データのマージをテスト"""
-        with sqlite3.connect(self.db_path) as conn:
-            # 価格データ
-            price_df = pd.read_sql_query(
-                "SELECT date, code, close FROM prices WHERE date >= '2023-03-01'", conn
-            )
-
-            # 財務データ
-            stmt_df = pd.read_sql_query(
-                "SELECT code, eps, roe, equity_to_asset_ratio FROM statements", conn
-            )
-
-        # マージ
-        merged_df = price_df.merge(stmt_df, on="code", how="left")
-
-        assert len(merged_df) == len(price_df)
-        assert "eps" in merged_df.columns
-        assert merged_df["eps"].notna().all()
-
-
-class TestScreeningLogic:
-    """スクリーニングロジックのテスト"""
-
-    def test_prediction_output(self):
-        """予測結果の出力形式をテスト"""
-        # ダミーの予測結果
-        predictions = pd.DataFrame(
-            {
-                "code": ["1234", "5678", "9999", "1111", "2222"],
-                "probability": [0.85, 0.72, 0.68, 0.55, 0.45],
-                "predicted_return": [0.12, 0.08, 0.07, 0.05, 0.03],
-            }
-        )
-
-        # 上位N銘柄の抽出
-        top_n = 3
-        top_stocks = predictions.nlargest(top_n, "probability")
-
-        # 検証
-        assert len(top_stocks) == top_n
-        assert top_stocks.iloc[0]["code"] == "1234"
-        assert top_stocks["probability"].is_monotonic_decreasing
-
-    def test_screening_filters(self):
-        """スクリーニングフィルターのテスト"""
-        # テストデータ
+    def test_train_model_insufficient_data(self):
+        """データ不足の場合"""
         df = pd.DataFrame(
             {
-                "code": ["1234", "5678", "9999", "1111"],
-                "probability": [0.85, 0.72, 0.30, 0.65],
-                "volume": [1000000, 50000, 2000000, 500000],
-                "market_cap": [100e8, 10e8, 200e8, 50e8],  # 億円
+                "feature_1": [1, 2],
+                "feature_2": [3, 4],
+                "label": [0, 1],
+                "future_ret": [0.01, 0.02],
             }
         )
 
-        # フィルター条件
-        # 1. 確率が0.5以上
-        # 2. 出来高が100,000以上
-        # 3. 時価総額が20億円以上
-        filtered = df[
-            (df["probability"] >= 0.5)
-            & (df["volume"] >= 100000)
-            & (df["market_cap"] >= 20e8)
-        ]
-
-        # 検証
-        assert len(filtered) == 2
-        assert set(filtered["code"]) == {"1234", "1111"}
+        # データが少なすぎてエラーになる可能性
+        with pytest.raises(ValueError):
+            _train_model(df)
 
 
-class TestCLIInterface:
-    """CLIインターフェースのテスト"""
+class TestCLI:
+    """CLIのテスト"""
 
+    @patch("screening.screen_ml.pickle.dump")
+    @patch("screening.screen_ml.open", new_callable=mock_open)
+    @patch("screening.screen_ml._train_model")
+    @patch("screening.screen_ml._build_dataset")
+    @patch("screening.screen_ml._connect")
     @patch("sys.argv", ["screen_ml.py", "train", "--lookback", "365"])
-    def test_train_command_parsing(self):
-        """trainコマンドの引数解析をテスト"""
-        parser = argparse.ArgumentParser()
-        subparsers = parser.add_subparsers(dest="command")
+    def test_cli_train(
+        self, mock_connect, mock_build, mock_train, mock_file, mock_pickle
+    ):
+        """学習モードのテスト"""
+        mock_conn = MagicMock(spec=sqlite3.Connection)
+        mock_connect.return_value = mock_conn
 
-        # trainサブコマンド
-        train_parser = subparsers.add_parser("train")
-        train_parser.add_argument("--lookback", type=int, default=1095)
-        train_parser.add_argument("--db", type=str, default="stock.db")
+        # データセットのモック
+        dataset = pd.DataFrame(
+            {
+                "feature_1": range(100),
+                "feature_2": range(100),
+                "label": [0, 1] * 50,
+                "future_ret": np.random.randn(100) * 0.1,
+            }
+        )
+        mock_build.return_value = dataset
 
-        # 引数解析
-        args = parser.parse_args(["train", "--lookback", "365"])
+        # モデルのモック
+        pipeline = Pipeline(
+            [("scaler", StandardScaler()), ("clf", GradientBoostingClassifier())]
+        )
+        metrics = {"test_auc": 0.75}
+        mock_train.return_value = (pipeline, metrics)
 
-        assert args.command == "train"
-        assert args.lookback == 365
+        # CLI実行
+        cli()
 
-    @patch("sys.argv", ["screen_ml.py", "screen", "--top", "20"])
-    def test_screen_command_parsing(self):
-        """screenコマンドの引数解析をテスト"""
-        parser = argparse.ArgumentParser()
-        subparsers = parser.add_subparsers(dest="command")
+        # モデルが保存されたことを確認
+        mock_pickle.assert_called_once()
+        mock_conn.close.assert_called_once()
 
-        # screenサブコマンド
-        screen_parser = subparsers.add_parser("screen")
-        screen_parser.add_argument("--top", type=int, default=30)
-        screen_parser.add_argument("--retrain", action="store_true")
+    @patch("screening.screen_ml.pickle.load")
+    @patch("screening.screen_ml.open", new_callable=mock_open)
+    @patch("screening.screen_ml._build_dataset")
+    @patch("screening.screen_ml._connect")
+    @patch("sys.argv", ["screen_ml.py", "screen", "--top", "10"])
+    def test_cli_screen(self, mock_connect, mock_build, mock_file, mock_pickle):
+        """スクリーニングモードのテスト"""
+        mock_conn = MagicMock(spec=sqlite3.Connection)
+        mock_connect.return_value = mock_conn
 
-        # 引数解析
-        args = parser.parse_args(["screen", "--top", "20"])
+        # モデルのモック
+        mock_model = MagicMock()
+        mock_model.predict_proba.return_value = np.array(
+            [
+                [0.3, 0.7],
+                [0.8, 0.2],
+                [0.4, 0.6],
+            ]
+        )
+        mock_pickle.return_value = mock_model
 
-        assert args.command == "screen"
-        assert args.top == 20
-        assert not args.retrain
+        # データセットのモック
+        dataset = pd.DataFrame(
+            {
+                "code": ["1234", "5678", "9999"],
+                "feature_1": [1, 2, 3],
+                "feature_2": [4, 5, 6],
+            }
+        )
+        mock_build.return_value = dataset
+
+        # CLI実行（エラーが出ないことを確認）
+        try:
+            cli()
+        except SystemExit:
+            pass  # 正常終了
+
+        mock_model.predict_proba.assert_called_once()
+        mock_conn.close.assert_called_once()
+
+    @patch("sys.argv", ["screen_ml.py", "screen", "--top", "10"])
+    def test_cli_screen_no_model(self):
+        """モデルファイルがない場合"""
+        with patch("screening.screen_ml.Path") as mock_path:
+            mock_model_path = MagicMock()
+            mock_model_path.exists.return_value = False
+            mock_path.return_value = mock_model_path
+
+            # エラーメッセージが出力される
+            with pytest.raises(SystemExit):
+                cli()
