@@ -47,10 +47,12 @@ dev = [
 swing-setup = "setup_environment:main"
 swing-update-token = "update_idtoken:_cli"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["*"]
-exclude = ["tests*", "docs*"]
+[tool.setuptools]
+packages = ["src", "backtest", "db", "fetch", "screening", "scripts"]
+
+[tool.setuptools.package-data]
+screening = ["*.json", "*.json.example"]
+db = ["*.sql"]
 
 [tool.black]
 line-length = 88
