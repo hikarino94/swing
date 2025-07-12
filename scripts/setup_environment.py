@@ -134,10 +134,12 @@ class EnvironmentSetup:
         print("\n⚙️  設定ファイルを初期化しています...")
 
         # config.json
-        self._setup_single_config("config.json", "config.json.example")
+        config_dir = self.base_dir / "config"
+        config_dir.mkdir(exist_ok=True)
+        self._setup_single_config("config/config.json", "config.json.example")
 
         # account.json
-        self._setup_single_config("account.json", "account.json.example")
+        self._setup_single_config("config/account.json", "account.json.example")
 
         # thresholds.json
         thresholds_dir = self.base_dir / "screening"
@@ -158,7 +160,7 @@ class EnvironmentSetup:
             print(f"  → {target} を作成しました")
 
             # account.jsonの場合は認証情報の入力を促す
-            if target == "account.json":
+            if target == "config/account.json":
                 self._prompt_for_credentials(target_path)
 
     def _prompt_for_credentials(self, account_path: Path) -> None:

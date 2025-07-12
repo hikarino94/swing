@@ -59,8 +59,8 @@ class Config:
                 }
             },
             "files": {
-                "account": "account.json",
-                "idtoken": "idtoken.json",
+                "account": "config/account.json",
+                "idtoken": "config/idtoken.json",
                 "thresholds": "screening/thresholds.json",
             },
             "logging": {
@@ -199,3 +199,54 @@ API_RATE_LIMIT_SLEEP = config.api_rate_limit_sleep
 OUTPUT_BASE_DIR = config.output_base_dir
 LOG_DIR = config.log_dir
 MODEL_DIR = config.model_dir
+
+# スクリーニング用の閾値ファイル
+THRESHOLDS_FILE = str(config.get_file_path("thresholds"))
+
+
+def get_idtoken() -> str:
+    """IDトークンを取得
+
+    Returns:
+        IDトークン文字列
+
+    Raises:
+        FileNotFoundError: idtoken.jsonが存在しない場合
+        RuntimeError: idTokenが見つからない場合
+    """
+    path = config.get_file_path("idtoken")
+    if not path.exists():
+        raise FileNotFoundError(f"IDトークンファイルが見つかりません: {path}")
+
+    with path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    token = data.get("idToken")
+    if not token:
+        raise RuntimeError("idToken not found in idtoken.json")
+
+    return str(token)
+
+
+def get_account_credentials() -> dict[str, str]:
+    """アカウント認証情報を取得
+
+    Returns:
+        メールアドレスとパスワードを含む辞書
+
+    Raises:
+        FileNotFoundError: account.jsonが存在しない場合
+        json.JSONDecodeError: JSONのパースに失敗した場合
+    """
+    path = config.get_file_path("account")
+    if not path.exists():
+        raise FileNotFoundError(f"アカウント設定ファイルが見つかりません: {path}")
+
+    with path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # キー名の互換性対応（mailaddress/mail, password）
+    email = data.get("mailaddress") or data.get("mail", "")
+    password = data.get("password", "")
+
+    return {"email": email, "password": password}

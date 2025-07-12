@@ -3,8 +3,8 @@
 {% block content %}
 <div x-data="swingApp()" x-cloak>
     <!-- 処理中オーバーレイ -->
-    <div x-show="isProcessing" class="processing-overlay" x-transition>
-        <div class="processing-message">
+    <div x-show="isProcessing" class="processing-overlay modal-transition">
+        <div class="processing-message modal-content">
             <div class="spinner mx-auto mb-4"></div>
             <p class="text-lg font-semibold text-gray-900" x-text="processingMessage"></p>
             <p class="text-sm text-gray-600 mt-2">処理が完了するまでお待ちください...</p>
@@ -851,7 +851,7 @@
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <template x-for="holding in sortedHoldings()" :key="(holding.code || holding.fund_name || '') + '_' + (holding.account_name || 'default') + '_' + (holding.account_type || '特定')">
+                                <template x-for="holding in getSortedHoldings" :key="(holding.code || holding.fund_name || '') + '_' + (holding.account_name || 'default') + '_' + (holding.account_type || '特定')">
                                     <tr>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <div x-show="holding.type === 'stock' || (!holding.type && holding.code)">
@@ -1025,14 +1025,17 @@
                                             <div class="text-sm text-gray-500" x-text="trans.company_name"></div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
-                                            <span x-text="trans.detailed_type || (trans.transaction_type === 'buy' ? '買付' : '売却')"
-                                                  :class="{
-                                                      'bg-blue-100 text-blue-800': trans.detailed_type === '新規買い' || (!trans.detailed_type && trans.transaction_type === 'buy'),
-                                                      'bg-green-100 text-green-800': trans.detailed_type === '決済買い',
-                                                      'bg-red-100 text-red-800': trans.detailed_type === '新規売り',
-                                                      'bg-orange-100 text-orange-800': trans.detailed_type === '決済売り' || (!trans.detailed_type && trans.transaction_type === 'sell')
-                                                  }"
-                                                  class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"></span>
+                                            <div class="flex items-center gap-1">
+                                                <span x-text="trans.detailed_type || (trans.transaction_type === 'buy' ? '買付' : '売却')"
+                                                      :class="{
+                                                          'bg-blue-100 text-blue-800': trans.detailed_type === '新規買い' || (!trans.detailed_type && trans.transaction_type === 'buy'),
+                                                          'bg-green-100 text-green-800': trans.detailed_type === '決済買い',
+                                                          'bg-red-100 text-red-800': trans.detailed_type === '新規売り',
+                                                          'bg-orange-100 text-orange-800': trans.detailed_type === '決済売り' || (!trans.detailed_type && trans.transaction_type === 'sell')
+                                                      }"
+                                                      class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"></span>
+                                                <span x-show="trans.remarks && (trans.remarks.includes('信用') || trans.remarks.includes('(信用)'))" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">信用</span>
+                                            </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="trans.quantity.toLocaleString()"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="formatCurrency(trans.price)"></td>
@@ -1398,12 +1401,12 @@
          @keydown.escape.window="portfolio.showHoldingModal = false">
         <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <!-- 背景オーバーレイ -->
-            <div class="fixed inset-0 transition-opacity" aria-hidden="true" @click="portfolio.showHoldingModal = false">
+            <div class="fixed inset-0 modal-transition" aria-hidden="true" @click="closeModal()">
                 <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
             </div>
 
             <!-- モーダル本体 -->
-            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-visible shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-visible shadow-xl transform modal-content sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
                 <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4"
                         x-text="portfolio.editingHolding ? '保有銘柄を編集' : '保有銘柄を追加'"></h3>
@@ -1412,22 +1415,25 @@
                     <div x-show="!portfolio.editingHolding" class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 mb-1">銘柄検索</label>
                         <div class="relative">
-                            <input type="text" x-model="portfolio.stockSearchQuery"
-                                   @input="searchStocks()"
+                            <input type="text"
+                                   x-model.lazy="portfolio.stockSearchQuery"
+                                   @keyup.debounce.200ms="searchStocks()"
                                    placeholder="銘柄コードまたは会社名"
                                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                             <!-- 検索結果ドロップダウン -->
                             <div x-show="portfolio.stockSearchResults.length > 0"
-                                 x-transition
+                                 x-transition:enter="transition ease-out duration-100"
+                                 x-transition:enter-start="transform opacity-0 scale-95"
+                                 x-transition:enter-end="transform opacity-100 scale-100"
+                                 x-transition:leave="transition ease-in duration-75"
+                                 x-transition:leave-start="transform opacity-100 scale-100"
+                                 x-transition:leave-end="transform opacity-0 scale-95"
                                  class="absolute z-50 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
                                  style="z-index: 9999;">
-                                <div x-show="portfolio.stockSearchResults.length === 0" class="px-4 py-2 text-gray-500">
-                                    検索中...
-                                </div>
-                                <template x-for="stock in portfolio.stockSearchResults" :key="stock.full_code">
+                                <template x-for="stock in portfolio.stockSearchResults" :key="stock.code">
                                     <div @click="selectStock(stock)" class="cursor-pointer hover:bg-gray-100 px-4 py-2">
                                         <div class="font-medium" x-text="`${stock.code} - ${stock.company_name}`"></div>
-                                        <div class="text-xs text-gray-500" x-text="`${stock.market_name} / ${stock.sector17_name}`"></div>
+                                        <div class="text-xs text-gray-500" x-text="stock.market || ''"></div>
                                     </div>
                                 </template>
                             </div>
@@ -1456,7 +1462,8 @@
                     <!-- 数量 -->
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 mb-1">数量</label>
-                        <input type="number" x-model.number="portfolio.holdingForm.quantity"
+                        <input type="number"
+                               x-model.lazy.number="portfolio.holdingForm.quantity"
                                min="1"
                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
@@ -1464,7 +1471,8 @@
                     <!-- 平均取得価格 -->
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 mb-1">平均取得価格</label>
-                        <input type="number" x-model.number="portfolio.holdingForm.average_price"
+                        <input type="number"
+                               x-model.lazy.number="portfolio.holdingForm.average_price"
                                min="0.01" step="0.01"
                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
@@ -1490,12 +1498,12 @@
          @keydown.escape.window="portfolio.showTransactionModal = false">
         <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <!-- 背景オーバーレイ -->
-            <div class="fixed inset-0 transition-opacity" aria-hidden="true" @click="portfolio.showTransactionModal = false">
+            <div class="fixed inset-0 modal-transition" aria-hidden="true" @click="portfolio.showTransactionModal = false">
                 <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
             </div>
 
             <!-- モーダル本体 -->
-            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-visible shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-visible shadow-xl transform modal-content sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
                 <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4"
                         x-text="portfolio.editingTransaction ? '取引を編集' : '取引を追加'"></h3>
@@ -1505,21 +1513,20 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">銘柄検索</label>
                         <div class="relative">
                             <input type="text" x-model="portfolio.transactionStockSearchQuery"
-                                   @input="searchTransactionStocks()"
+                                   @input.debounce.150ms="searchTransactionStocks()"
                                    placeholder="銘柄コードまたは会社名"
                                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                             <!-- 検索結果ドロップダウン -->
                             <div x-show="portfolio.transactionStockSearchResults.length > 0"
-                                 x-transition
-                                 class="absolute z-50 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                 class="absolute z-50 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm search-results"
                                  style="z-index: 9999;">
                                 <div x-show="portfolio.transactionStockSearchResults.length === 0" class="px-4 py-2 text-gray-500">
                                     検索中...
                                 </div>
-                                <template x-for="stock in portfolio.transactionStockSearchResults" :key="stock.full_code">
+                                <template x-for="stock in portfolio.transactionStockSearchResults" :key="stock.code">
                                     <div @click="selectTransactionStock(stock)" class="cursor-pointer hover:bg-gray-100 px-4 py-2">
                                         <div class="font-medium" x-text="`${stock.code} - ${stock.company_name}`"></div>
-                                        <div class="text-xs text-gray-500" x-text="`${stock.market_name} / ${stock.sector17_name}`"></div>
+                                        <div class="text-xs text-gray-500" x-text="stock.market || ''"></div>
                                     </div>
                                 </template>
                             </div>
@@ -1545,17 +1552,29 @@
                     <!-- 取引種別 -->
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 mb-1">取引種別</label>
-                        <select x-model="portfolio.transactionForm.transaction_type"
+                        <select x-model="portfolio.transactionForm.detailed_type"
+                                @change="portfolio.transactionForm.transaction_type = portfolio.transactionForm.detailed_type.includes('buy') ? 'buy' : 'sell'"
                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <option value="buy">買付</option>
-                            <option value="sell">売却</option>
+                            <option value="new_buy">新規買い</option>
+                            <option value="new_sell">新規売り</option>
+                            <option value="close_buy">決済買い</option>
+                            <option value="close_sell">決済売り</option>
                         </select>
+                    </div>
+
+                    <!-- 信用取引 -->
+                    <div class="mb-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" x-model="portfolio.transactionForm.is_margin"
+                                   class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <span class="ml-2 text-sm text-gray-700">信用取引</span>
+                        </label>
                     </div>
 
                     <!-- 数量 -->
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 mb-1">数量</label>
-                        <input type="number" x-model.number="portfolio.transactionForm.quantity"
+                        <input type="number" x-model.number.lazy="portfolio.transactionForm.quantity"
                                min="1"
                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
@@ -1563,7 +1582,7 @@
                     <!-- 単価 -->
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 mb-1">単価</label>
-                        <input type="number" x-model.number="portfolio.transactionForm.price"
+                        <input type="number" x-model.number.lazy="portfolio.transactionForm.price"
                                min="0.01" step="0.01"
                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
@@ -1571,7 +1590,7 @@
                     <!-- 手数料 -->
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 mb-1">手数料</label>
-                        <input type="number" x-model.number="portfolio.transactionForm.commission"
+                        <input type="number" x-model.number.lazy="portfolio.transactionForm.commission"
                                min="0" step="0.01"
                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
@@ -1579,9 +1598,19 @@
                     <!-- 税金 -->
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 mb-1">税金</label>
-                        <input type="number" x-model.number="portfolio.transactionForm.tax"
+                        <input type="number" x-model.number.lazy="portfolio.transactionForm.tax"
                                min="0" step="0.01"
                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <!-- 実現損益 (決済取引時のみ表示) -->
+                    <div x-show="portfolio.transactionForm.detailed_type === 'close_sell' || portfolio.transactionForm.detailed_type === 'close_buy'" class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">実現損益</label>
+                        <input type="number" x-model.number.lazy="portfolio.transactionForm.realized_profit"
+                               step="0.01"
+                               placeholder="自動計算される場合は空欄"
+                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <p class="mt-1 text-sm text-gray-500">手動で入力する場合のみ値を設定してください</p>
                     </div>
 
                     <!-- 備考 -->
@@ -1616,6 +1645,21 @@ function swingApp() {
         processingMessage: '',
         isLoggedIn: {{ 'true' if user else 'false' }},
         isPortfolioOnly: {{ 'true' if portfolio_only else 'false' }},
+
+        // ソート済み保有銘柄のキャッシュ
+        _sortedHoldingsCache: null,
+        _sortedHoldingsCacheKey: null,
+
+        // Computedプロパティ風のgetter
+        get getSortedHoldings() {
+            const cacheKey = `${this.portfolio.holdings.length}_${this.portfolio.sortKey}_${this.portfolio.sortDirection}`;
+            if (this._sortedHoldingsCacheKey === cacheKey && this._sortedHoldingsCache) {
+                return this._sortedHoldingsCache;
+            }
+            this._sortedHoldingsCache = this.sortedHoldings();
+            this._sortedHoldingsCacheKey = cacheKey;
+            return this._sortedHoldingsCache;
+        },
         processingStates: {
             data: false,
             screening: false,
@@ -1745,31 +1789,6 @@ function swingApp() {
             // モーダル関連
             showHoldingModal: false,
             showTransactionModal: false,
-            editingHolding: false,
-            editingTransaction: false,
-            holdingForm: {
-                code: '',
-                company_name: '',
-                account_name: 'default',
-                quantity: 0,
-                average_price: 0
-            },
-            transactionForm: {
-                id: null,
-                code: '',
-                company_name: '',
-                transaction_date: '',
-                transaction_type: 'buy',
-                quantity: 0,
-                price: 0,
-                commission: 0,
-                tax: 0,
-                remarks: ''
-            },
-            stockSearchQuery: '',
-            stockSearchResults: [],
-            transactionStockSearchQuery: '',
-            transactionStockSearchResults: [],
             // 可視化関連
             visualizationType: 'composition',
             visualizationLoading: false,
@@ -2065,7 +2084,7 @@ function swingApp() {
 
         async loadPortfolioSummary() {
             if (!this.isLoggedIn) return;
-            const result = await apiCall('/portfolio/summary', {}, 'GET');
+            const result = await apiCall('/portfolio/summary', {}, 'GET', true);
             if (result.success) {
                 this.portfolio.summary = result.summary;
             }
@@ -2081,7 +2100,7 @@ function swingApp() {
                 }
 
                 console.log('保有銘柄を読み込み中...', params.toString());
-                const result = await apiCall('/portfolio/holdings?' + params.toString(), {}, 'GET');
+                const result = await apiCall('/portfolio/holdings?' + params.toString(), {}, 'GET', true);
 
                 if (result.success) {
                     this.portfolio.holdings = result.holdings || [];
@@ -2102,9 +2121,9 @@ function swingApp() {
 
         async loadAccounts() {
             if (!this.isLoggedIn) return;
-            const result = await apiCall('/portfolio/accounts', {}, 'GET');
+            const result = await apiCall('/portfolio/accounts', {}, 'GET', true);
             if (result.success) {
-                this.portfolio.accounts = result.accounts;
+                this.portfolio.accounts = result.account_list || [];
             }
         },
 
@@ -2114,6 +2133,7 @@ function swingApp() {
             if (this.portfolio.filter.code) params.append('code', this.portfolio.filter.code);
             if (this.portfolio.filter.startDate) params.append('start_date', this.portfolio.filter.startDate);
             if (this.portfolio.filter.endDate) params.append('end_date', this.portfolio.filter.endDate);
+            if (this.portfolio.filter.transactionType) params.append('transaction_type', this.portfolio.filter.transactionType);
             params.append('page', page.toString());
             params.append('per_page', this.portfolio.perPage.toString());
 
@@ -2152,8 +2172,11 @@ function swingApp() {
 
                 if (result.success) {
                     showNotification('success', result.message);
-                    await this.loadHoldings();
-                    await this.loadPortfolioSummary();
+                    // API呼び出しを並列化
+                    await Promise.all([
+                        this.loadHoldings(),
+                        this.loadPortfolioSummary()
+                    ]);
                     this.portfolio.holdingsFile = null;
                     this.portfolio.accountName = '';
                     // フォームのリセット
@@ -2190,7 +2213,10 @@ function swingApp() {
 
                 if (result.success) {
                     showNotification('success', result.message);
-                    await this.loadHoldings();
+                    // refreshフラグがtrueの場合のみ画面を更新
+                    if (result.refresh) {
+                        await this.loadHoldings();
+                    }
                 } else {
                     showNotification('error', result.error);
                 }
@@ -2214,8 +2240,11 @@ function swingApp() {
             const result = await apiCall('/portfolio/holdings/delete', data);
             if (result.success) {
                 showNotification('success', result.message);
-                await this.loadHoldings();
-                await this.loadPortfolioSummary();
+                // API呼び出しを並列化
+                await Promise.all([
+                    this.loadHoldings(),
+                    this.loadPortfolioSummary()
+                ]);
                 this.portfolio.deleteAccount = '';
             }
         },
@@ -2238,10 +2267,12 @@ function swingApp() {
                     const notificationType = result.partial ? 'warning' : 'success';
                     showNotification(notificationType, result.message);
 
-                    // データを再読み込み
-                    await this.loadTransactions();
-                    await this.loadHoldings();
-                    await this.loadPortfolioSummary();
+                    // データを再読み込み（並列化）
+                    await Promise.all([
+                        this.loadTransactions(),
+                        this.loadHoldings(),
+                        this.loadPortfolioSummary()
+                    ]);
                     this.portfolio.transactionsFile = null;
 
                     // フォームが存在する場合のみリセット
@@ -2391,8 +2422,13 @@ function swingApp() {
                 quantity: holding.quantity,
                 average_price: holding.average_price
             };
+            this.portfolio.stockSearchQuery = `${holding.code} - ${holding.company_name || ''}`;
+            this.portfolio.stockSearchResults = [];
             this.portfolio.showHoldingModal = true;
         },
+
+        // 検索リクエストのAbortController
+        searchAbortController: null,
 
         async searchStocks() {
             const query = this.portfolio.stockSearchQuery;
@@ -2401,33 +2437,47 @@ function swingApp() {
                 return;
             }
 
+            // 前の検索をキャンセル
+            if (this.searchAbortController) {
+                this.searchAbortController.abort();
+            }
+
+            this.searchAbortController = new AbortController();
+
             try {
                 const response = await fetch(`/api/portfolio/stocks/search?q=${encodeURIComponent(query)}`, {
                     method: 'GET',
-                    credentials: 'same-origin', // クッキーを送信
+                    credentials: 'same-origin',
+                    signal: this.searchAbortController.signal,
                     headers: {
                         'Content-Type': 'application/json',
                     }
                 });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
                 const result = await response.json();
-                console.log('銘柄検索結果:', result); // デバッグ用
                 if (result.success) {
                     this.portfolio.stockSearchResults = result.stocks;
-                    console.log('検索結果件数:', this.portfolio.stockSearchResults.length); // デバッグ用
                 } else {
-                    console.error('銘柄検索エラー:', result.error);
                     this.portfolio.stockSearchResults = [];
                 }
             } catch (e) {
-                console.error('銘柄検索エラー:', e);
-                this.portfolio.stockSearchResults = [];
+                if (e.name !== 'AbortError') {
+                    console.error('銘柄検索エラー:', e);
+                    this.portfolio.stockSearchResults = [];
+                }
             }
         },
 
         selectStock(stock) {
-            this.portfolio.holdingForm.code = stock.code;
+            // 証券コードが5桁の場合は末尾1桁を削除
+            const code = stock.code.length === 5 ? stock.code.slice(0, 4) : stock.code;
+            this.portfolio.holdingForm.code = code;
             this.portfolio.holdingForm.company_name = stock.company_name;
-            this.portfolio.stockSearchQuery = `${stock.code} - ${stock.company_name}`;
+            this.portfolio.stockSearchQuery = `${code} - ${stock.company_name}`;
             this.portfolio.stockSearchResults = [];
         },
 
@@ -2458,9 +2508,48 @@ function swingApp() {
                 if (result.success) {
                     showNotification('success', result.message);
                     this.portfolio.showHoldingModal = false;
-                    await this.loadHoldings();
-                    await this.loadPortfolioSummary();
-                    await this.loadAccounts();
+
+                    // 追加/更新した銘柄情報を使って即座に画面を更新
+                    if (result.holding) {
+                        const holding = result.holding;
+                        if (this.portfolio.editingHolding) {
+                            // 編集の場合、既存のアイテムを更新
+                            const index = this.portfolio.holdings.findIndex(h =>
+                                h.code === holding.code && h.account_name === holding.account_name
+                            );
+                            if (index !== -1) {
+                                this.portfolio.holdings[index] = {
+                                    ...this.portfolio.holdings[index],
+                                    quantity: holding.quantity,
+                                    average_price: holding.average_price
+                                };
+                            }
+                        } else {
+                            // 新規追加の場合、リストに追加
+                            this.portfolio.holdings.push({
+                                type: 'stock',
+                                code: holding.code,
+                                company_name: holding.company_name,
+                                account_name: holding.account_name,
+                                account_type: '特定',
+                                quantity: holding.quantity,
+                                average_price: holding.average_price,
+                                market_value: 0,
+                                profit_loss: 0,
+                                profit_loss_ratio: 0,
+                                updated_at: new Date().toISOString()
+                            });
+                        }
+                    }
+
+                    // バックグラウンドで全データを更新
+                    this.$nextTick(() => {
+                        Promise.all([
+                            this.loadHoldings(),
+                            this.loadPortfolioSummary(),
+                            this.loadAccounts()
+                        ]);
+                    });
                 } else {
                     showNotification('error', result.error);
                 }
@@ -2480,9 +2569,12 @@ function swingApp() {
 
                 if (result.success) {
                     showNotification('success', result.message);
-                    await this.loadHoldings();
-                    await this.loadPortfolioSummary();
-                    await this.loadAccounts();
+                    // API呼び出しを並列化
+                    await Promise.all([
+                        this.loadHoldings(),
+                        this.loadPortfolioSummary(),
+                        this.loadAccounts()
+                    ]);
                 } else {
                     showNotification('error', result.error);
                 }
@@ -2499,10 +2591,13 @@ function swingApp() {
                 company_name: '',
                 transaction_date: new Date().toISOString().split('T')[0],
                 transaction_type: 'buy',
+                detailed_type: 'new_buy',
+                is_margin: false,
                 quantity: 0,
                 price: 0,
                 commission: 0,
                 tax: 0,
+                realized_profit: null,
                 remarks: ''
             };
             this.portfolio.transactionStockSearchQuery = '';
@@ -2512,16 +2607,34 @@ function swingApp() {
 
         showEditTransactionModal(transaction) {
             this.portfolio.editingTransaction = true;
+            // detailed_typeから取引種別を判定
+            let detailedType = transaction.detailed_type;
+            if (!detailedType) {
+                // 旧データの場合はtransaction_typeから推測
+                detailedType = transaction.transaction_type === 'buy' ? 'new_buy' : 'new_sell';
+            } else {
+                // 日本語から英語に変換
+                const typeMap = {
+                    '新規買い': 'new_buy',
+                    '新規売り': 'new_sell',
+                    '決済買い': 'close_buy',
+                    '決済売り': 'close_sell'
+                };
+                detailedType = typeMap[detailedType] || detailedType;
+            }
             this.portfolio.transactionForm = {
                 id: transaction.id,
                 code: transaction.code,
                 company_name: transaction.company_name || '',
                 transaction_date: transaction.transaction_date,
                 transaction_type: transaction.transaction_type,
+                detailed_type: detailedType,
+                is_margin: transaction.is_margin || (transaction.remarks && transaction.remarks.includes('信用')) || false,
                 quantity: transaction.quantity,
                 price: transaction.price,
                 commission: transaction.commission || 0,
                 tax: transaction.tax || 0,
+                realized_profit: transaction.realized_profit || null,
                 remarks: transaction.remarks || ''
             };
             this.portfolio.showTransactionModal = true;
@@ -2534,6 +2647,10 @@ function swingApp() {
                 return;
             }
 
+            // すでに検索中の場合はスキップ
+            if (this.portfolio.transactionStockSearching) return;
+
+            this.portfolio.transactionStockSearching = true;
             try {
                 const response = await fetch(`/api/portfolio/stocks/search?q=${encodeURIComponent(query)}`, {
                     method: 'GET',
@@ -2552,13 +2669,17 @@ function swingApp() {
             } catch (e) {
                 console.error('銘柄検索エラー:', e);
                 this.portfolio.transactionStockSearchResults = [];
+            } finally {
+                this.portfolio.transactionStockSearching = false;
             }
         },
 
         selectTransactionStock(stock) {
-            this.portfolio.transactionForm.code = stock.code;
+            // 証券コードが5桁の場合は末尾1桁を削除
+            const code = stock.code.length === 5 ? stock.code.slice(0, 4) : stock.code;
+            this.portfolio.transactionForm.code = code;
             this.portfolio.transactionForm.company_name = stock.company_name;
-            this.portfolio.transactionStockSearchQuery = `${stock.code} - ${stock.company_name}`;
+            this.portfolio.transactionStockSearchQuery = `${code} - ${stock.company_name}`;
             this.portfolio.transactionStockSearchResults = [];
         },
 
@@ -2813,20 +2934,20 @@ function swingApp() {
                                     }
                                 });
 
-                                if (data.stock_chart) {
-                                    const stockData = JSON.parse(data.stock_chart);
+                                if (data.stock_composition) {
+                                    const stockData = JSON.parse(data.stock_composition);
                                     Plotly.newPlot('stock-composition-chart', stockData.data, stockData.layout, config);
                                 }
-                                if (data.sector_chart) {
-                                    const sectorData = JSON.parse(data.sector_chart);
+                                if (data.sector_composition) {
+                                    const sectorData = JSON.parse(data.sector_composition);
                                     Plotly.newPlot('sector-composition-chart', sectorData.data, sectorData.layout, config);
                                 }
-                                if (data.market_chart) {
-                                    const marketData = JSON.parse(data.market_chart);
+                                if (data.market_composition) {
+                                    const marketData = JSON.parse(data.market_composition);
                                     Plotly.newPlot('market-composition-chart', marketData.data, marketData.layout, config);
                                 }
-                                if (data.account_chart) {
-                                    const accountData = JSON.parse(data.account_chart);
+                                if (data.account_composition) {
+                                    const accountData = JSON.parse(data.account_composition);
                                     Plotly.newPlot('account-composition-chart', accountData.data, accountData.layout, config);
                                 }
                             });
@@ -2859,9 +2980,9 @@ function swingApp() {
                                     const valueData = JSON.parse(data.value_chart);
                                     Plotly.newPlot('value-performance-chart', valueData.data, valueData.layout, config);
                                 }
-                                if (data.profit_chart) {
-                                    const profitData = JSON.parse(data.profit_chart);
-                                    Plotly.newPlot('profit-performance-chart', profitData.data, profitData.layout, config);
+                                if (data.return_chart) {
+                                    const returnData = JSON.parse(data.return_chart);
+                                    Plotly.newPlot('profit-performance-chart', returnData.data, returnData.layout, config);
                                 }
                                 if (data.benchmark_chart) {
                                     const benchmarkData = JSON.parse(data.benchmark_chart);
@@ -2893,12 +3014,12 @@ function swingApp() {
                                     }
                                 });
 
-                                if (data.stocks_heatmap) {
-                                    const stocksData = JSON.parse(data.stocks_heatmap);
+                                if (data.stock_heatmap) {
+                                    const stocksData = JSON.parse(data.stock_heatmap);
                                     Plotly.newPlot('stocks-heatmap', stocksData.data, stocksData.layout, config);
                                 }
-                                if (data.sectors_heatmap) {
-                                    const sectorsData = JSON.parse(data.sectors_heatmap);
+                                if (data.sector_heatmap) {
+                                    const sectorsData = JSON.parse(data.sector_heatmap);
                                     Plotly.newPlot('sectors-heatmap', sectorsData.data, sectorsData.layout, config);
                                 }
                                 if (data.distribution_chart) {
@@ -2929,6 +3050,7 @@ function swingApp() {
         }
     }
 }
+
 </script>
 
 {% endblock %}

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop, 'feature/**' ]
+    branches: [ main, develop, 'feature/**', 'refactor/**' ]
   pull_request:
     branches: [ main ]
 
@@ -50,10 +50,12 @@ jobs:
         python -m pip install --upgrade pip wheel setuptools
         # CI環境では最小限の依存関係のみインストール
         pip install -r requirements.txt -r requirements-test.txt
+        # パッケージを開発モードでインストール（モジュール解決のため）
+        pip install -e .
 
     - name: Run linters
       run: |
-        ruff check --fix .
+        ruff check .
         black --check .
         isort --check-only .
 
@@ -81,6 +83,11 @@ jobs:
           exit 1
         fi
 
+        # Create test config files
+        mkdir -p config
+        echo '{"idToken": "test_token_for_ci"}' > config/idtoken.json
+        echo '{"mail": "test@example.com", "password": "test_password"}' > config/account.json
+
     - name: Run tests
       env:
         PYTHONPATH: "${{ github.workspace }}"
@@ -89,11 +96,38 @@ jobs:
         FLASK_ENV: "testing"
         DATABASE_PATH: "${{ github.workspace }}/test_stock.db"
       run: |
+        # デバッグ情報を表示
+        echo "Python path: $PYTHONPATH"
+        echo "Current directory: $(pwd)"
+        echo "Python version: $(python --version)"
+        echo "Installed packages:"
+        pip list | grep -E "(pytest|pandas|numpy|flask)"
+
+        # ディレクトリ構造の確認
+        echo "Test directory structure:"
+        ls -la tests/
+        echo "Check for __init__.py files:"
+        find . -name "__init__.py" -path "*/tests/*" -o -path "*/src/*" -o -path "*/backtest/*" -o -path "*/db/*" -o -path "*/fetch/*" -o -path "*/screening/*" | head -20
+
+        # テストコレクションのドライラン
+        echo "Collecting tests..."
+        pytest --collect-only -q || {
+          echo "::error::Test collection failed"
+          pytest --collect-only -vvv
+          exit 1
+        }
+
         # テストを実行
-        pytest -v --tb=short --cov=. --cov-report=xml --cov-report=term -W ignore::FutureWarning -W ignore::UserWarning || {
+        pytest -v --tb=short || {
           EXIT_CODE=$?
           echo "::error::Test failed with exit code: $EXIT_CODE"
-          pytest --lf -v --tb=long -W ignore::FutureWarning -W ignore::UserWarning || true
+          if [ $EXIT_CODE -eq 4 ]; then
+            echo "::error::No tests were collected. Checking test discovery..."
+            pytest --collect-only -vvv
+          else
+            # 失敗したテストの詳細を表示
+            pytest --lf -vvv --tb=long || true
+          fi
           exit $EXIT_CODE
         }
 
@@ -109,6 +143,7 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   validate-config:
     name: Validate Configuration
@@ -138,7 +173,7 @@ jobs:
 
     - name: Check Python imports
       run: |
-        python -c "import sys; sys.path.append('.'); from src.config import Config" || echo "::error::Failed to import Config"
+        python -c "import sys; sys.path.append('.'); from src.config import THRESHOLDS_FILE" || echo "::error::Failed to import from src.config"
 
   build:
     name: Build Package

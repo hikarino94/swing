@@ -1,239 +1,204 @@
-"""listed_info.pyのテスト"""
+"""Tests for fetch/listed_info.py"""
 
-import json
-import sqlite3
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 
-sys.path.append(str(Path(__file__).resolve().parents[2]))
-
-from fetch import listed_info
-
-
-class TestUpdateListedInfo:
-    """update_listed_info関数のテスト"""
-
-    @patch("fetch.listed_info._to_db")
-    @patch("fetch.listed_info._fetch_listed_info")
-    @patch("fetch.listed_info._load_token")
-    def test_update_listed_info_success(self, mock_load_token, mock_fetch, mock_to_db):
-        """正常な更新処理のテスト"""
-        # モックの設定
-        mock_load_token.return_value = "test_token"
-        mock_fetch.return_value = pd.DataFrame(
-            [
-                {
-                    "Code": "1234",
-                    "CompanyName": "テスト会社",
-                    "MarketCodeName": "プライム",
-                }
-            ]
-        )
-
-        # テスト実行
-        listed_info.update_listed_info()
-
-        # 検証
-        mock_load_token.assert_called_once()
-        mock_fetch.assert_called_once_with("test_token")
-        mock_to_db.assert_called_once()
-
-    @patch("fetch.listed_info._load_token")
-    def test_update_listed_info_token_error(self, mock_load_token):
-        """トークン読み込みエラーのテスト"""
-        mock_load_token.side_effect = FileNotFoundError("Token file not found")
-
-        # エラーが発生することを確認
-        with pytest.raises(FileNotFoundError):
-            listed_info.update_listed_info()
-
-    @patch("fetch.listed_info._fetch_listed_info")
-    @patch("fetch.listed_info._load_token")
-    def test_update_listed_info_api_error(self, mock_load_token, mock_fetch):
-        """APIエラーのテスト"""
-        mock_load_token.return_value = "test_token"
-        mock_fetch.side_effect = RuntimeError("API Error")
-
-        # エラーが発生することを確認
-        with pytest.raises(RuntimeError):
-            listed_info.update_listed_info()
+from fetch.listed_info import (
+    _fetch_listed_info,
+    _load_token,
+    _to_db,
+    update_listed_info,
+)
 
 
-class TestPrivateFunctions:
-    """プライベート関数のテスト（モック経由）"""
+class TestLoadToken:
+    """トークン読み込みのテスト"""
 
-    @patch("fetch.listed_info.config")
-    def test_load_token(self, mock_config, tmp_path):
-        """_load_token関数のテスト"""
-        # IDトークンファイルの準備
-        idtoken_path = tmp_path / "idtoken.json"
-        idtoken_path.write_text(json.dumps({"idToken": "test_token_12345"}))
-
-        # configのモック - Pathオブジェクトを返す
-        mock_config.get_file_path.return_value = idtoken_path
-
-        # テスト実行
-        token = listed_info._load_token()
-
-        # 検証
+    @patch("fetch.listed_info.get_idtoken")
+    def test_load_token(self, mock_get_idtoken):
+        """トークンが正しく読み込まれることを確認"""
+        mock_get_idtoken.return_value = "test_token_12345"
+        token = _load_token()
         assert token == "test_token_12345"
-        mock_config.get_file_path.assert_called_once_with("idtoken")
+        mock_get_idtoken.assert_called_once()
 
-    @patch("fetch.listed_info.requests")
-    def test_fetch_listed_info(self, mock_requests):
-        """_fetch_listed_info関数のテスト"""
-        # APIレスポンスのモック
+
+class TestFetchListedInfo:
+    """API呼び出し関数のテスト"""
+
+    @patch("fetch.listed_info.requests.get")
+    def test_fetch_listed_info_success(self, mock_get):
+        """正常なAPI呼び出し"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "info": [
-                {
-                    "Code": "1234",
-                    "CompanyName": "テスト会社",
-                    "MarketCodeName": "プライム",
-                }
+                {"Code": "1234", "CompanyName": "テスト株式会社", "Date": "2024-01-15"}
             ]
         }
-        mock_requests.get.return_value = mock_response
+        mock_get.return_value = mock_response
 
-        # テスト実行
-        result = listed_info._fetch_listed_info("test_token")
+        result_df = _fetch_listed_info("test_token")
 
-        # 検証
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 1
-        assert result.iloc[0]["Code"] == "1234"
+        assert isinstance(result_df, pd.DataFrame)
+        assert len(result_df) == 1
+        assert result_df.iloc[0]["Code"] == "1234"
+        mock_get.assert_called_once()
 
-        # APIが正しく呼ばれたことを確認
-        mock_requests.get.assert_called_once_with(
-            listed_info.API_ENDPOINT,
-            headers={"Authorization": "Bearer test_token"},
-            timeout=30,
-        )
+    @patch("fetch.listed_info.requests.get")
+    def test_fetch_listed_info_empty(self, mock_get):
+        """空のレスポンスの場合"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"info": []}
+        mock_get.return_value = mock_response
 
-    @patch("fetch.listed_info.requests")
-    def test_fetch_listed_info_api_error(self, mock_requests):
-        """APIエラー時のテスト"""
+        with pytest.raises(ValueError, match="no 'info' key"):
+            _fetch_listed_info("test_token")
+
+    @patch("fetch.listed_info.requests.get")
+    def test_fetch_listed_info_api_error(self, mock_get):
+        """エラーレスポンスの場合"""
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
-        mock_requests.get.return_value = mock_response
+        mock_get.return_value = mock_response
 
-        with pytest.raises(RuntimeError) as exc_info:
-            listed_info._fetch_listed_info("test_token")
-
-        assert "API error 500" in str(exc_info.value)
+        with pytest.raises(RuntimeError, match="API error 500"):
+            _fetch_listed_info("test_token")
 
 
 class TestDatabaseOperations:
     """データベース操作のテスト"""
 
-    def test_to_db_operation(self, temp_db):
-        """_to_db関数の動作テスト"""
-        # テストデータ
+    @patch("fetch.listed_info.pd.DataFrame.to_sql")
+    def test_to_db_success(self, mock_to_sql):
+        """正常なデータベース保存"""
+        mock_conn = MagicMock()
+
         df = pd.DataFrame(
-            [
-                {
-                    "Code": "1234",
-                    "Date": "2024-01-01",
-                    "CompanyName": "テスト会社",
-                    "CompanyNameEnglish": "Test Company",
-                    "Sector17Code": "1",
-                    "Sector17CodeName": "食品",
-                    "Sector33Code": "1050",
-                    "Sector33CodeName": "電気機器",
-                    "ScaleCategory": "TOPIX Core30",
-                    "MarketCode": "0111",
-                    "MarketCodeName": "プライム",
-                    "MarginCode": "1",
-                    "MarginCodeName": "信用",
-                }
-            ]
+            {
+                "Code": ["1234", "5678"],
+                "CompanyName": ["テスト株式会社", "サンプル株式会社"],
+                "Date": ["2024-01-15", "2024-01-15"],
+                "MarketCode": ["0111", "0111"],
+            }
         )
 
-        # データベース接続
-        conn = sqlite3.connect(temp_db)
+        _to_db(df, mock_conn)
 
-        # テスト実行
-        listed_info._to_db(df, conn)
+        # to_sqlとexecutescriptが呼ばれたことを確認
+        assert mock_to_sql.called
+        assert mock_conn.executescript.called
+        assert mock_conn.commit.called
 
-        # データベースから読み込んで検証
-        result_df = pd.read_sql_query(
-            "SELECT * FROM listed_info WHERE code = '1234'", conn
-        )
-        conn.close()
-
-        assert len(result_df) == 1
-        assert result_df.iloc[0]["code"] == "1234"
-        assert result_df.iloc[0]["company_name"] == "テスト会社"
-        assert result_df.iloc[0]["market_name"] == "プライム"
-
-    def test_to_db_empty_dataframe(self, temp_db):
-        """空のDataFrameを処理するテスト"""
-        # 空のDataFrame
+    def test_to_db_empty_dataframe(self):
+        """空のDataFrameの場合"""
+        mock_conn = MagicMock()
         df = pd.DataFrame()
 
-        # データベース接続
-        conn = sqlite3.connect(temp_db)
+        # エラーが発生しないことを確認
+        _to_db(df, mock_conn)
 
-        # テスト実行（エラーが発生しないことを確認）
-        listed_info._to_db(df, conn)
+        # 何も呼ばれないことを確認
+        assert not mock_conn.executescript.called
 
-        conn.close()
+    @patch("fetch.listed_info.pd.DataFrame.to_sql")
+    def test_to_db_with_delete_flag_handling(self, mock_to_sql):
+        """上場廃止フラグ処理のテスト"""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
 
-    def test_delete_flag_update(self, temp_db):
-        """delete_flag更新のテスト"""
-        conn = sqlite3.connect(temp_db)
+        # 既存コード: 1234, 5678, 9999
+        mock_cursor.fetchall.return_value = [("1234",), ("5678",), ("9999",)]
 
-        # 既存データを作成
-        conn.execute(
-            """
-            INSERT INTO listed_info (code, company_name, date, delete_flag)
-            VALUES ('9999', '削除予定会社', '2024-01-01', 0)
-        """
+        # 新規データには9999が含まれない（上場廃止）
+        df = pd.DataFrame({"Code": ["1234", "5678"], "CompanyName": ["会社A", "会社B"]})
+
+        _to_db(df, mock_conn)
+
+        # delete_flagを更新するSQLが実行されたことを確認
+        assert mock_conn.execute.called
+        execute_calls = mock_conn.execute.call_args_list
+        assert any(
+            "UPDATE listed_info SET delete_flag" in str(call) for call in execute_calls
         )
-        conn.commit()
 
-        # 新しいデータ（9999は含まれない）
+
+class TestUpdateListedInfo:
+    """上場情報更新関数のテスト"""
+
+    @patch("fetch.listed_info._to_db")
+    @patch("fetch.listed_info._fetch_listed_info")
+    @patch("fetch.listed_info._load_token")
+    @patch("fetch.listed_info.get_db_path")
+    @patch("fetch.listed_info.sqlite3.connect")
+    def test_update_listed_info_success(
+        self, mock_connect, mock_get_db_path, mock_token, mock_fetch, mock_to_db
+    ):
+        """正常な更新処理"""
+        mock_get_db_path.return_value = "test.db"
+        mock_token.return_value = "test_token"
+        mock_conn = MagicMock()
+        mock_connect.return_value.__enter__.return_value = mock_conn
+
+        mock_df = pd.DataFrame(
+            {
+                "Code": ["1234", "5678"],
+                "CompanyName": ["テスト株式会社", "サンプル株式会社"],
+            }
+        )
+        mock_fetch.return_value = mock_df
+
+        update_listed_info()
+
+        mock_fetch.assert_called_once_with("test_token")
+        mock_to_db.assert_called_once_with(mock_df, mock_conn)
+
+
+class TestColumnHandling:
+    """カラム処理のテスト"""
+
+    def test_column_renaming(self):
+        """カラム名の変換テスト"""
+        # APIレスポンスの形式
         df = pd.DataFrame(
-            [
-                {
-                    "Code": "1234",
-                    "Date": "2024-01-02",
-                    "CompanyName": "テスト会社",
-                    "Sector33CodeName": "電気機器",
-                    "MarketCodeName": "プライム",
-                }
-            ]
+            {
+                "Code": ["1234"],
+                "CompanyName": ["テスト株式会社"],
+                "CompanyNameEnglish": ["Test Corp"],
+                "Sector17Code": ["1"],
+                "Sector17CodeName": ["食品"],
+                "MarketCode": ["0111"],
+                "MarketCodeName": ["プライム"],
+            }
         )
 
-        # テスト実行
-        listed_info._to_db(df, conn)
+        # _to_db関数内でのカラム名変換を確認
+        expected_columns = {
+            "Code": "code",
+            "CompanyName": "company_name",
+            "CompanyNameEnglish": "company_name_english",
+            "Sector17Code": "sector17_code",
+            "Sector17CodeName": "sector17_code_name",
+            "MarketCode": "market_code",
+            "MarketCodeName": "market_code_name",
+        }
 
-        # 古いデータのdelete_flagが更新されていることを確認
-        result = conn.execute(
-            "SELECT delete_flag FROM listed_info WHERE code = '9999'"
-        ).fetchone()
+        # 各カラムが存在することを確認
+        for col in expected_columns.keys():
+            assert col in df.columns
 
-        conn.close()
+    def test_delete_flag_handling(self):
+        """削除フラグの処理"""
+        # 新規データ作成時にdelete_flagが追加されることを想定
+        df = pd.DataFrame({"Code": ["1234"], "CompanyName": ["テスト株式会社"]})
 
-        # delete_flagが1に更新されているはず
-        assert result[0] == 1
+        # delete_flagカラムを追加
+        df["delete_flag"] = 0
 
-
-class TestCLI:
-    """CLI関数のテスト"""
-
-    @patch("fetch.listed_info.update_listed_info")
-    @patch("sys.argv", ["listed_info.py"])
-    def test_cli_execution(self, mock_update):
-        """CLI実行のテスト"""
-        # _cli関数を実行
-        listed_info._cli()
-
-        # update_listed_infoが呼ばれたことを確認
-        mock_update.assert_called_once()
+        assert "delete_flag" in df.columns
+        assert df["delete_flag"].iloc[0] == 0

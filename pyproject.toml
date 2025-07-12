@@ -45,12 +45,14 @@ dev = [
 
 [project.scripts]
 swing-setup = "setup_environment:main"
-swing-update-token = "update_idtoken:_cli"
+swing-update-token = "src.cli.update_idtoken:_cli"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["*"]
-exclude = ["tests*", "docs*"]
+[tool.setuptools]
+packages = ["src", "backtest", "db", "fetch", "screening", "scripts"]
+
+[tool.setuptools.package-data]
+screening = ["*.json", "*.json.example"]
+db = ["*.sql"]
 
 [tool.black]
 line-length = 88
@@ -67,7 +69,7 @@ select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
     "F",  # pyflakes
-    "I",  # isort
+    # "I",  # isort - disabled to avoid conflicts with isort tool
     "B",  # flake8-bugbear
     "C4", # flake8-comprehensions
     "UP", # pyupgrade
@@ -82,6 +84,7 @@ ignore = [
 "__init__.py" = ["F401"]
 "tests/*.py" = ["E402"]  # Allow module imports after sys.path.append in tests
 "backtest/*.py" = ["E402"]  # Allow module imports after sys.path.append in backtest scripts
+"src/ui/web.py" = ["E402"]  # Allow module imports after sys.path.append and request type assignment
 
 [tool.isort]
 profile = "black"
@@ -107,9 +110,23 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
-addopts = "-v --cov=. --cov-report=html --cov-report=term-missing"
+python_classes = ["Test*", "*Tests"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--ignore=venv",
+    "--ignore=.venv",
+    "--ignore=htmlcov",
+    "--ignore=dist",
+    "--ignore=build",
+    "--ignore=scripts/venv",
+    "-p", "no:warnings",
+]
 filterwarnings = [
     "ignore::DeprecationWarning:numpy",
     "ignore::RuntimeWarning:numpy",
@@ -117,8 +134,16 @@ filterwarnings = [
     "ignore::UserWarning:pandas",
     "ignore::UserWarning",
     "ignore::FutureWarning",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
 ]
-pythonpath = "."
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+norecursedirs = [".git", ".tox", "dist", "build", "*.egg", "venv", ".venv", "htmlcov"]
+timeout = 300
 
 [tool.coverage.run]
 branch = true
@@ -140,3 +165,24 @@ exclude_lines = [
     "raise AssertionError",
     "raise NotImplementedError",
 ]
+
+[tool.pyright]
+# Pyrightの設定（VSCodeやbasedpyrightで使用）
+include = ["src", "fetch", "db", "screening", "backtest", "scripts"]
+exclude = ["**/node_modules", "**/__pycache__", "tests", "dev_tools"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportGeneralTypeIssues = "warning"
+reportOptionalMemberAccess = "warning"
+reportOptionalCall = "warning"
+reportOptionalIterable = "warning"
+reportOptionalContextManager = "warning"
+reportOptionalOperand = "warning"
+reportPrivateImportUsage = "none"
+reportUnusedImport = "warning"
+reportUnusedVariable = "warning"
+reportDuplicateImport = "warning"
+reportUntypedFunctionDecorator = "none"
+reportUntypedClassDecorator = "none"
+reportUntypedBaseClass = "none"
+reportMissingTypeStubs = "none"
