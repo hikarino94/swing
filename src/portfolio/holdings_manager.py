@@ -52,59 +52,10 @@ class HoldingsManager:
             # 口座タイプを取得（デフォルトは"特定"）
             account_type = data.get("account_type", "特定")
 
-            # 既存の保有銘柄を検索（論理削除されたものも含めて検索）
-            conn = sqlite3.connect(get_db_path())
-            cursor = conn.cursor()
-            try:
-                cursor.execute(
-                    """
-                    SELECT id, deleted_at FROM holdings
-                    WHERE user_id = ? AND code = ? AND account_name = ? AND account_type = ?
-                    """,
-                    (user_id, data["code"], account_name, account_type),
-                )
-                existing_row = cursor.fetchone()
-                existing_id = existing_row[0] if existing_row else None
-                is_deleted = existing_row[1] is not None if existing_row else False
-            finally:
-                conn.close()
-
-            existing = None
-            if existing_id and not is_deleted:
-                # 論理削除されていない場合のみ取得
-                existing = Holding.find_by_user_code_and_account(
-                    user_id, data["code"], account_name, account_type
-                )
-            elif existing_id and is_deleted:
-                # 論理削除されている場合は、復活させる処理を行う
-                conn = sqlite3.connect(get_db_path())
-                cursor = conn.cursor()
-                try:
-                    cursor.execute(
-                        """
-                        UPDATE holdings
-                        SET deleted_at = NULL, updated_at = datetime('now')
-                        WHERE id = ?
-                        """,
-                        (existing_id,),
-                    )
-                    conn.commit()
-                    # 復活させた後、既存レコードとして取得
-                    existing = Holding(
-                        user_id=user_id,
-                        code=data["code"],
-                        account_name=account_name,
-                        account_type=account_type,
-                    )
-                    existing.id = existing_id
-                    logger.debug(
-                        f"論理削除されていた銘柄を復活: {data['code']} ({account_type})"
-                    )
-                except sqlite3.Error as e:
-                    logger.error(f"論理削除銘柄の復活エラー: {e}")
-                    conn.rollback()
-                finally:
-                    conn.close()
+            # 既存の保有銘柄を検索
+            existing = Holding.find_by_user_code_and_account(
+                user_id, data["code"], account_name, account_type
+            )
 
             if is_standard_format:
                 # 標準形式の処理: 重複時は上書き、PER等の再計算なし
@@ -221,7 +172,7 @@ class HoldingsManager:
         user_id: int, holdings_data: list[dict], account_name: str
     ) -> int:
         """
-        CSVに含まれていない株式を論理削除
+        CSVに含まれていない株式を物理削除
 
         Args:
             user_id: ユーザーID
@@ -247,12 +198,10 @@ class HoldingsManager:
                     placeholders = ",".join("?" * len(csv_codes))
                     cursor.execute(
                         f"""
-                        UPDATE holdings
-                        SET deleted_at = datetime('now')
+                        DELETE FROM holdings
                         WHERE user_id = ?
                           AND account_name = ?
                           AND code NOT IN ({placeholders})
-                          AND deleted_at IS NULL
                         """,
                         [user_id, account_name, *csv_codes],
                     )
@@ -261,11 +210,9 @@ class HoldingsManager:
                     # CSVに株式データがない場合は全ての株式を削除
                     cursor.execute(
                         """
-                        UPDATE holdings
-                        SET deleted_at = datetime('now')
+                        DELETE FROM holdings
                         WHERE user_id = ?
                           AND account_name = ?
-                          AND deleted_at IS NULL
                         """,
                         (user_id, account_name),
                     )
@@ -274,11 +221,9 @@ class HoldingsManager:
                 # CSVに株式データがない場合は全ての株式を削除
                 cursor.execute(
                     """
-                    UPDATE holdings
-                    SET deleted_at = datetime('now')
+                    DELETE FROM holdings
                     WHERE user_id = ?
                       AND account_name = ?
-                      AND deleted_at IS NULL
                     """,
                     (user_id, account_name),
                 )
@@ -286,13 +231,13 @@ class HoldingsManager:
 
             if stock_deleted_count > 0:
                 logger.info(
-                    f"CSVに存在しない株式を論理削除しました: {stock_deleted_count}件"
+                    f"CSVに存在しない株式を物理削除しました: {stock_deleted_count}件"
                 )
 
             conn.commit()
 
         except sqlite3.Error as e:
-            logger.error(f"株式論理削除エラー: {e}")
+            logger.error(f"株式物理削除エラー: {e}")
             conn.rollback()
         finally:
             conn.close()
@@ -393,14 +338,14 @@ class HoldingsManager:
         try:
             # 株式の削除対象件数を取得
             cursor.execute(
-                "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND deleted_at IS NULL",
+                "SELECT COUNT(*) FROM holdings WHERE user_id = ?",
                 (user_id,),
             )
             stock_count = cursor.fetchone()[0]
 
-            # 株式を論理削除
+            # 株式を物理削除
             cursor.execute(
-                "UPDATE holdings SET deleted_at = datetime('now') WHERE user_id = ? AND deleted_at IS NULL",
+                "DELETE FROM holdings WHERE user_id = ?",
                 (user_id,),
             )
 
@@ -434,14 +379,14 @@ class HoldingsManager:
         try:
             # 株式の削除対象件数を取得
             cursor.execute(
-                "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
+                "SELECT COUNT(*) FROM holdings WHERE user_id = ? AND account_name = ?",
                 (user_id, account_name),
             )
             stock_count = cursor.fetchone()[0]
 
-            # 株式を論理削除
+            # 株式を物理削除
             cursor.execute(
-                "UPDATE holdings SET deleted_at = datetime('now') WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
+                "DELETE FROM holdings WHERE user_id = ? AND account_name = ?",
                 (user_id, account_name),
             )
 

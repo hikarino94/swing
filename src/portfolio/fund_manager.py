@@ -83,7 +83,7 @@ class FundManager:
                 # 既存の投資信託保有情報を検索
                 cursor.execute(
                     """
-                    SELECT id, deleted_at FROM fund_holdings
+                    SELECT id FROM fund_holdings
                     WHERE user_id = ? AND fund_id = ? AND account_name = ? AND account_type = ?
                     """,
                     (user_id, fund_id, account_name, account_type),
@@ -98,8 +98,7 @@ class FundManager:
                         SET quantity = ?, average_price = ?,
                             market_value = ?, profit_loss = ?,
                             profit_loss_ratio = ?,
-                            updated_at = datetime('now'),
-                            deleted_at = NULL
+                            updated_at = datetime('now')
                         WHERE id = ?
                         """,
                         (
@@ -192,7 +191,7 @@ class FundManager:
         user_id: int, holdings_data: list[dict], account_name: str
     ) -> int:
         """
-        CSVに含まれていない投資信託を論理削除
+        CSVに含まれていない投資信託を物理削除
 
         Args:
             user_id: ユーザーID
@@ -230,12 +229,10 @@ class FundManager:
                         fund_id_placeholders = ",".join("?" * len(csv_fund_ids))
                         cursor.execute(
                             f"""
-                            UPDATE fund_holdings
-                            SET deleted_at = datetime('now')
+                            DELETE FROM fund_holdings
                             WHERE user_id = ?
                               AND account_name = ?
                               AND fund_id NOT IN ({fund_id_placeholders})
-                              AND deleted_at IS NULL
                             """,
                             [user_id, account_name, *csv_fund_ids],
                         )
@@ -246,11 +243,9 @@ class FundManager:
                     # CSVに投資信託データがない場合は全ての投資信託を削除
                     cursor.execute(
                         """
-                        UPDATE fund_holdings
-                        SET deleted_at = datetime('now')
+                        DELETE FROM fund_holdings
                         WHERE user_id = ?
                           AND account_name = ?
-                          AND deleted_at IS NULL
                         """,
                         (user_id, account_name),
                     )
@@ -259,11 +254,9 @@ class FundManager:
                 # CSVに投資信託データがない場合は全ての投資信託を削除
                 cursor.execute(
                     """
-                    UPDATE fund_holdings
-                    SET deleted_at = datetime('now')
+                    DELETE FROM fund_holdings
                     WHERE user_id = ?
                       AND account_name = ?
-                      AND deleted_at IS NULL
                     """,
                     (user_id, account_name),
                 )
@@ -271,13 +264,13 @@ class FundManager:
 
             if fund_deleted_count > 0:
                 logger.info(
-                    f"CSVに存在しない投資信託を論理削除しました: {fund_deleted_count}件"
+                    f"CSVに存在しない投資信託を物理削除しました: {fund_deleted_count}件"
                 )
 
             conn.commit()
 
         except sqlite3.Error as e:
-            logger.error(f"投資信託論理削除エラー: {e}")
+            logger.error(f"投資信託物理削除エラー: {e}")
             conn.rollback()
         finally:
             conn.close()
@@ -301,14 +294,14 @@ class FundManager:
         try:
             # 投資信託の削除対象件数を取得
             cursor.execute(
-                "SELECT COUNT(*) FROM fund_holdings WHERE user_id = ? AND deleted_at IS NULL",
+                "SELECT COUNT(*) FROM fund_holdings WHERE user_id = ?",
                 (user_id,),
             )
             fund_count = cursor.fetchone()[0]
 
-            # 投資信託を論理削除
+            # 投資信託を物理削除
             cursor.execute(
-                "UPDATE fund_holdings SET deleted_at = datetime('now') WHERE user_id = ? AND deleted_at IS NULL",
+                "DELETE FROM fund_holdings WHERE user_id = ?",
                 (user_id,),
             )
 
@@ -342,14 +335,14 @@ class FundManager:
         try:
             # 投資信託の削除対象件数を取得
             cursor.execute(
-                "SELECT COUNT(*) FROM fund_holdings WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
+                "SELECT COUNT(*) FROM fund_holdings WHERE user_id = ? AND account_name = ?",
                 (user_id, account_name),
             )
             fund_count = cursor.fetchone()[0]
 
-            # 投資信託を論理削除
+            # 投資信託を物理削除
             cursor.execute(
-                "UPDATE fund_holdings SET deleted_at = datetime('now') WHERE user_id = ? AND account_name = ? AND deleted_at IS NULL",
+                "DELETE FROM fund_holdings WHERE user_id = ? AND account_name = ?",
                 (user_id, account_name),
             )
 

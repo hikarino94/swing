@@ -531,6 +531,39 @@ def delete_single_holding(code, account_name):
         return jsonify({"success": False, "error": str(e)})
 
 
+@holdings_bp.route("/holdings/delete/fund/<fund_id>/<account_name>", methods=["DELETE"])
+@login_required
+def delete_single_fund_holding(fund_id, account_name):
+    """特定の投資信託保有を削除"""
+    try:
+        conn = sqlite3.connect(get_db_path())
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            DELETE FROM fund_holdings
+            WHERE user_id = ? AND fund_id = ? AND account_name = ?
+            """,
+            (request.current_user.id, fund_id, account_name),
+        )
+
+        deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+
+        if deleted > 0:
+            logger.info(f"投資信託削除成功: fund_id={fund_id} (口座: {account_name})")
+            return jsonify({"success": True, "message": "投資信託を削除しました"})
+        else:
+            return jsonify(
+                {"success": False, "error": "指定された投資信託が見つかりません"}
+            )
+
+    except Exception as e:
+        logger.error(f"投資信託削除エラー: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
+
 @holdings_bp.route("/indicators/update", methods=["POST"])
 @login_required
 def indicators_update():
