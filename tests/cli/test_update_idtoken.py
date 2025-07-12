@@ -181,3 +181,106 @@ class TestUpdate:
         with tempfile.NamedTemporaryFile(suffix=".json") as f:
             with pytest.raises(requests.exceptions.HTTPError):
                 update("test@example.com", "wrong_password", f.name)
+
+
+class TestCLI:
+    """CLI関数のテスト"""
+
+    @patch(
+        "sys.argv",
+        ["update_idtoken.py", "--mail", "test@example.com", "--password", "pass123"],
+    )
+    @patch("src.cli.update_idtoken.update")
+    def test_cli_with_mail_and_password(self, mock_update):
+        """メールとパスワードを直接指定した場合のテスト"""
+        from src.cli.update_idtoken import _cli
+
+        mock_update.return_value = "token123"
+
+        _cli()
+
+        # updateが正しい引数で呼ばれることを確認
+        mock_update.assert_called_once()
+        call_args = mock_update.call_args[0]
+        assert call_args[0] == "test@example.com"
+        assert call_args[1] == "pass123"
+
+    @patch("sys.argv", ["update_idtoken.py", "--account", "account.json"])
+    @patch("src.cli.update_idtoken._load_account")
+    @patch("src.cli.update_idtoken.update")
+    def test_cli_with_account_file(self, mock_update, mock_load_account):
+        """アカウントファイルを指定した場合のテスト"""
+        from src.cli.update_idtoken import _cli
+
+        # アカウントファイルから読み込まれる値
+        mock_load_account.return_value = ("file@example.com", "filepass", "hash")
+        mock_update.return_value = "token123"
+
+        _cli()
+
+        # load_accountが呼ばれることを確認
+        mock_load_account.assert_called_once_with("account.json")
+
+        # updateが正しい引数で呼ばれることを確認
+        mock_update.assert_called_once()
+        call_args = mock_update.call_args[0]
+        assert call_args[0] == "file@example.com"
+        assert call_args[1] == "filepass"
+
+    @patch("sys.argv", ["update_idtoken.py", "--mail", "test@example.com"])
+    @patch("src.cli.update_idtoken._load_account")
+    @patch("src.cli.update_idtoken.update")
+    def test_cli_with_partial_args(self, mock_update, mock_load_account):
+        """メールのみ指定してパスワードをファイルから読む場合のテスト"""
+        from src.cli.update_idtoken import _cli
+
+        # アカウントファイルから読み込まれる値
+        mock_load_account.return_value = ("file@example.com", "filepass", "hash")
+        mock_update.return_value = "token123"
+
+        _cli()
+
+        # updateが正しい引数で呼ばれることを確認（メールは引数、パスワードはファイルから）
+        mock_update.assert_called_once()
+        call_args = mock_update.call_args[0]
+        assert call_args[0] == "test@example.com"
+        assert call_args[1] == "filepass"
+
+    @patch("sys.argv", ["update_idtoken.py"])
+    @patch("src.cli.update_idtoken._load_account")
+    def test_cli_no_credentials_error(self, mock_load_account):
+        """認証情報が提供されない場合のエラーテスト"""
+        from src.cli.update_idtoken import _cli
+
+        # アカウントファイルも空
+        mock_load_account.return_value = ("", "", "")
+
+        # argparse.ArgumentParser.errorが呼ばれることを期待
+        with pytest.raises(SystemExit):
+            _cli()
+
+    @patch(
+        "sys.argv",
+        [
+            "update_idtoken.py",
+            "--mail",
+            "test@example.com",
+            "--password",
+            "pass123",
+            "--out",
+            "custom.json",
+        ],
+    )
+    @patch("src.cli.update_idtoken.update")
+    def test_cli_with_custom_output(self, mock_update):
+        """カスタム出力ファイルを指定した場合のテスト"""
+        from src.cli.update_idtoken import _cli
+
+        mock_update.return_value = "token123"
+
+        _cli()
+
+        # updateが正しい引数で呼ばれることを確認
+        mock_update.assert_called_once()
+        call_args = mock_update.call_args[0]
+        assert call_args[2] == "custom.json"
