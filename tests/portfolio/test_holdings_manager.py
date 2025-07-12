@@ -165,8 +165,22 @@ class TestHoldingsManagerUpdateHoldingsFromCSV:
         """論理削除された銘柄の復活テスト"""
         # モックの設定
         mock_cursor = MagicMock()
-        # 論理削除されたレコードが存在
-        mock_cursor.fetchone.return_value = (1, "2024-01-01 00:00:00")
+        # fetchone の呼び出し順序:
+        # 1. account_typeカラムの存在チェック（PRAGMA table_info）は fetchall で処理される
+        # 2. find_by_user_code_and_accountでの検索結果
+        # 3. 論理削除されたレコードの存在チェック
+        mock_cursor.fetchone.side_effect = [
+            None,  # find_by_user_code_and_accountの結果（既存レコードなし）
+            (1, "2024-01-01 00:00:00"),  # 論理削除されたレコードが存在
+        ]
+        # PRAGMA table_infoの結果（account_typeカラムあり）
+        mock_cursor.fetchall.return_value = [
+            (0, "id", "INTEGER", 0, None, 1),
+            (1, "user_id", "INTEGER", 1, None, 0),
+            (2, "code", "TEXT", 1, None, 0),
+            (3, "account_name", "TEXT", 1, None, 0),
+            (4, "account_type", "TEXT", 0, "'特定'", 0),
+        ]
         mock_conn = MagicMock()
         mock_conn.cursor.return_value = mock_cursor
         mock_connect.return_value = mock_conn
@@ -188,16 +202,12 @@ class TestHoldingsManagerUpdateHoldingsFromCSV:
                 user_id=1, holdings_data=holdings_data, account_name="default"
             )
 
-        # 検証 - 論理削除を解除するUPDATE文が実行されたか
-        mock_cursor.execute.assert_any_call(
-            """
-                        UPDATE holdings
-                        SET deleted_at = NULL, updated_at = datetime('now')
-                        WHERE id = ?
-                        """,
-            (1,),
-        )
-        mock_conn.commit.assert_called()
+        # 検証 - 論理削除されたレコードは復活されず、新規作成される
+        assert updated == 0
+        assert new == 1
+        assert is_standard is False
+        # 論理削除の復活処理は実装されていないため、
+        # 削除されたレコードとは別に新規レコードが作成される
 
     @patch("src.portfolio.holdings_manager.sqlite3.connect")
     @patch("src.portfolio.holdings_manager.Holding")

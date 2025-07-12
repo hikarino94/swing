@@ -110,11 +110,19 @@ class TestPortfolioIntegration:
 
         os.unlink(db_path)
 
-    @patch("src.config.get_db_path")
+    @patch("src.portfolio.models.holding.get_db_path")
     def test_holdings_crud_operations(self, mock_get_db_path, temp_db):
         """保有銘柄のCRUD操作の統合テスト"""
         mock_get_db_path.return_value = temp_db
         print(f"Test DB Path: {temp_db}")
+
+        # テーブルを確認（デバッグ用）
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM holdings")
+        initial_count = cursor.fetchone()[0]
+        print(f"Initial holdings count: {initial_count}")
+        conn.close()
 
         # 1. 新規保有銘柄の作成
         holding = Holding(
@@ -155,13 +163,34 @@ class TestPortfolioIntegration:
         print(f"Found {len(all_holdings)} holdings:")
         for h in all_holdings:
             print(f"  - Code: {h.code}, Quantity: {h.quantity}, User: {h.user_id}")
+
+        # デバッグ: 実際のデータを確認
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM holdings WHERE user_id = 1")
+        rows = cursor.fetchall()
+        print(f"Raw DB data for user_id=1: {len(rows)} rows")
+        for row in rows:
+            print(f"  Raw: {row}")
+        conn.close()
+
         assert len(all_holdings) == 1
         assert all_holdings[0].code == "1234"
 
-    @patch("src.config.get_db_path")
-    def test_transaction_to_holdings_flow(self, mock_get_db_path, temp_db):
+    @patch("src.portfolio.models.holding.get_db_path")
+    @patch("src.portfolio.models.transaction.get_db_path")
+    @patch("src.portfolio.transaction_manager.get_db_path")
+    def test_transaction_to_holdings_flow(
+        self,
+        mock_tm_get_db_path,
+        mock_trans_get_db_path,
+        mock_hold_get_db_path,
+        temp_db,
+    ):
         """取引履歴から保有銘柄への反映フロー"""
-        mock_get_db_path.return_value = temp_db
+        mock_hold_get_db_path.return_value = temp_db
+        mock_trans_get_db_path.return_value = temp_db
+        mock_tm_get_db_path.return_value = temp_db
 
         # 1. 取引履歴を作成
         transactions_data = [

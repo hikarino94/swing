@@ -89,9 +89,10 @@ class TestTransactionsParser:
 
         # 現物売り
         assert result[1]["transaction_type"] == "sell"
+        assert result[1]["detailed_type"] == "決済売り"
         assert (
-            result[1]["realized_profit"] is None
-        )  # 注文一覧形式では決済損益は取得できない
+            result[1]["realized_profit"] == 58900.0
+        )  # 現物売りでも決済損益が設定される
 
         # 信用新規買い
         assert result[2]["code"] == "5678"
