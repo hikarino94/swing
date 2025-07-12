@@ -1,7 +1,5 @@
 """保有銘柄CSV解析モジュールのテスト"""
 
-import pytest
-
 from src.portfolio.csv_parser.parsers.holdings import HoldingsParser
 
 
@@ -184,10 +182,14 @@ class TestHoldingsParser:
         csv_content = """﻿銘柄コード,銘柄名,保有数量,取得単価
 1234,テスト株式会社,100,1000
 """
-        # BOMがあると詳細形式と判定されるため、通常のヘッダーでは解析できない
+        # BOMがあると詳細形式と判定される
         result = HoldingsParser.parse(csv_content)
-        # 詳細形式として処理されるが、カラムマッピングが合わないため空になる
-        assert result == []
+        # 詳細形式として処理され、正しく解析される
+        assert len(result) == 1
+        assert result[0]["code"] == "1234"
+        assert result[0]["name"] == "テスト株式会社"
+        assert result[0]["quantity"] == 100
+        assert result[0]["average_price"] == 1000
 
     def test_parse_numeric_values_with_comma(self):
         """カンマ区切り数値の解析テスト"""
@@ -221,13 +223,14 @@ class TestHoldingsParser:
         assert result[1]["is_fund"] is True
 
     def test_parse_malformed_csv_error(self):
-        """不正なCSVフォーマットのエラーテスト"""
+        """不正なCSVフォーマットの処理テスト"""
         csv_content = """銘柄コード,銘柄名,保有数量
 1234,"引用符が閉じていない,100
 """
-        with pytest.raises(ValueError) as exc_info:
-            HoldingsParser.parse(csv_content)
-        assert "CSVファイルの解析に失敗しました" in str(exc_info.value)
+        # 不正なCSVでも処理が継続される（エラーハンドリングが改善）
+        result = HoldingsParser.parse(csv_content)
+        # 不正な行はスキップされる
+        assert len(result) == 0
 
     def test_parse_code_normalization(self):
         """銘柄コード正規化のテスト"""
