@@ -45,7 +45,7 @@ dev = [
 
 [project.scripts]
 swing-setup = "setup_environment:main"
-swing-update-token = "update_idtoken:_cli"
+swing-update-token = "src.cli.update_idtoken:_cli"
 
 [tool.setuptools]
 packages = ["src", "backtest", "db", "fetch", "screening", "scripts"]

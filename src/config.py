@@ -200,6 +200,9 @@ OUTPUT_BASE_DIR = config.output_base_dir
 LOG_DIR = config.log_dir
 MODEL_DIR = config.model_dir
 
+# スクリーニング用の閾値ファイル
+THRESHOLDS_FILE = str(config.get_file_path("thresholds"))
+
 
 def get_idtoken() -> str:
     """IDトークンを取得
