@@ -81,7 +81,7 @@ class PortfolioAggregator:
 
                 # 損益率の計算
                 total_cost = holding["total_quantity"] * holding["weighted_avg_price"]
-                if total_cost > 0:
+                if total_cost > 0 and holding["total_profit_loss"] is not None:
                     holding["profit_loss_ratio"] = (
                         holding["total_profit_loss"] / total_cost
                     ) * 100
