@@ -3,12 +3,11 @@
 
 from __future__ import annotations
 
-import sqlite3
 import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from src.config import get_db_path
+from src.utils.db_utils import get_db_connection
 
 TABLES = {
     "prices": "date",
@@ -20,7 +19,7 @@ TABLES = {
 
 
 def main() -> None:
-    with sqlite3.connect(get_db_path()) as conn:
+    with get_db_connection() as conn:
         for table, date_col in TABLES.items():
             cur = conn.execute(
                 f"SELECT COUNT(*), MIN({date_col}), MAX({date_col}) FROM {table}"

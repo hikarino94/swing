@@ -1,263 +1,405 @@
-"""共通のテストフィクスチャと設定"""
+"""
+pytest共通設定とフィクスチャ定義
+"""
 
-import os
-import sqlite3
+import sys
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 
-# テスト用の環境変数を設定
-os.environ["TESTING"] = "1"
-os.environ["FLASK_ENV"] = "testing"
+# プロジェクトルートをパスに追加
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 @pytest.fixture
-def temp_db() -> Generator[Path, None, None]:
-    """テスト用の一時データベースを作成"""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = Path(f.name)
-
-    # テーブルを作成 - init_schemaを使用してすべてのテーブルを作成
-    from db.db_schema import init_schema
-
-    init_schema(db_path)
-
-    yield db_path
-
-    # クリーンアップ
-    os.unlink(db_path)
+def temp_dir() -> Generator[Path, None, None]:
+    """一時ディレクトリを作成するフィクスチャ"""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        yield Path(temp_dir)
 
 
 @pytest.fixture
-def authenticated_client(tmp_path):
-    """認証済みのテストクライアント"""
-    # テスト用の一時データベースパスを設定
-    test_db_path = tmp_path / "test_stock.db"
-    os.environ["DATABASE_PATH"] = str(test_db_path)
-
-    from werkzeug.security import generate_password_hash
-
-    from src.ui.web import app
-
-    app.config["TESTING"] = True
-    app.config["WTF_CSRF_ENABLED"] = False
-
-    with app.test_client() as client:
-        # テスト用データベースを初期化
-        from db.db_schema import init_schema
-
-        init_schema(test_db_path)
-
-        # テストユーザーを作成
-        conn = sqlite3.connect(test_db_path)
-        cursor = conn.cursor()
-
-        # 既存のユーザーを削除（念のため）
-        cursor.execute("DELETE FROM users WHERE email = ?", ("test@example.com",))
-
-        cursor.execute(
-            """
-            INSERT INTO users (username, email, password_hash, role)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                "testuser",
-                "test@example.com",
-                generate_password_hash("testpass123"),
-                "admin",
-            ),
-        )
-        user_id = cursor.lastrowid
-
-        # セッションを作成
-        session_id = "test-session-id"
-        cursor.execute(
-            """
-            INSERT INTO sessions (id, user_id, expires_at)
-            VALUES (?, ?, datetime('now', '+1 day'))
-            """,
-            (session_id, user_id),
-        )
-        conn.commit()
-        conn.close()
-
-        # セッションクッキーを設定
-        with client.session_transaction() as sess:
-            sess["session_id"] = session_id
-            sess["_user_id"] = str(user_id)
-
-        yield client
+def temp_db(temp_dir: Path) -> Path:
+    """テスト用の一時データベースファイルを作成するフィクスチャ"""
+    db_path = temp_dir / "test_stock.db"
+    return db_path
 
 
 @pytest.fixture
-def sample_prices_df():
-    """テスト用の価格データフレーム"""
-    return pd.DataFrame(
-        {
-            "code": ["1234", "1234", "1234", "5678", "5678"],
-            "date": [
-                "2024-01-01",
-                "2024-01-02",
-                "2024-01-03",
-                "2024-01-01",
-                "2024-01-02",
-            ],
-            "open": [100.0, 101.0, 102.0, 200.0, 201.0],
-            "high": [105.0, 106.0, 107.0, 205.0, 206.0],
-            "low": [95.0, 96.0, 97.0, 195.0, 196.0],
-            "close": [102.0, 103.0, 104.0, 202.0, 203.0],
-            "volume": [10000, 11000, 12000, 20000, 21000],
-            "adjustment_close": [102.0, 103.0, 104.0, 202.0, 203.0],
-        }
-    )
+def mock_config_dir(temp_dir: Path, monkeypatch) -> Path:
+    """テスト用の設定ディレクトリを作成するフィクスチャ"""
+    config_dir = temp_dir / "config"
+    config_dir.mkdir(exist_ok=True)
+
+    # 環境変数を設定
+    monkeypatch.setenv("SWING_CONFIG_DIR", str(config_dir))
+
+    return config_dir
 
 
 @pytest.fixture
-def sample_statements_df():
-    """テスト用の財務諸表データフレーム"""
-    return pd.DataFrame(
-        {
-            "code": ["1234", "1234", "5678"],
-            "disclosure_date": ["2024-01-10", "2023-10-10", "2024-01-10"],
-            "type_of_document": ["1Q", "3Q", "1Q"],
-            "net_sales": [1000000, 900000, 2000000],
-            "operating_profit": [100000, 90000, 200000],
-            "ordinary_profit": [110000, 95000, 210000],
-            "profit_attributable_to_owners_of_parent": [80000, 70000, 150000],
-            "total_assets": [5000000, 4500000, 8000000],
-            "net_assets": [2000000, 1800000, 3000000],
-            "equity_to_asset_ratio": [0.4, 0.4, 0.375],
-            "book_value_per_share": [200.0, 180.0, 300.0],
-        }
-    )
+def sample_account_config(mock_config_dir: Path) -> dict:
+    """サンプルのアカウント設定を作成するフィクスチャ"""
+    import json
+
+    account_data = {"mail": "test@example.com", "password": "test_password"}
+
+    with open(mock_config_dir / "account.json", "w") as f:
+        json.dump(account_data, f)
+
+    return account_data
 
 
 @pytest.fixture
-def mock_jquants_response():
-    """J-Quants APIレスポンスのモック"""
+def sample_idtoken_config(mock_config_dir: Path) -> dict:
+    """サンプルのIDトークン設定を作成するフィクスチャ"""
+    import json
 
-    def _create_response(data_type):
-        if data_type == "daily_quotes":
-            return {
-                "daily_quotes": [
-                    {
-                        "Code": "1234",
-                        "Date": "2024-01-01",
-                        "Open": 100,
-                        "High": 105,
-                        "Low": 95,
-                        "Close": 102,
-                        "Volume": 10000,
-                        "TurnoverValue": 1020000,
-                        "AdjustmentFactor": 1.0,
-                        "AdjustmentOpen": 100,
-                        "AdjustmentHigh": 105,
-                        "AdjustmentLow": 95,
-                        "AdjustmentClose": 102,
-                        "AdjustmentVolume": 10000,
-                    }
-                ]
-            }
-        elif data_type == "listed_info":
-            return {
-                "info": [
-                    {
-                        "Code": "1234",
-                        "CompanyName": "テスト会社",
-                        "CompanyNameEnglish": "Test Company",
-                        "Sector17Code": "1",
-                        "Sector17CodeName": "食品",
-                        "Sector33Code": "1050",
-                        "Sector33CodeName": "電気機器",
-                        "ScaleCategory": "TOPIX Core30",
-                        "MarketCode": "0111",
-                        "MarketCodeName": "プライム",
-                    }
-                ]
-            }
-        elif data_type == "statements":
-            return {
-                "statements": [
-                    {
-                        "Code": "1234",
-                        "DisclosureDate": "2024-01-10",
-                        "TypeOfDocument": "1Q",
-                        "NetSales": 1000000,
-                        "OperatingProfit": 100000,
-                        "OrdinaryProfit": 110000,
-                        "ProfitAttributableToOwnersOfParent": 80000,
-                        "TotalAssets": 5000000,
-                        "NetAssets": 2000000,
-                        "EquityToAssetRatio": 0.4,
-                        "BookValuePerShare": 200.0,
-                    }
-                ]
-            }
-        elif data_type == "idtoken":
-            return {"idToken": "test_id_token_12345"}
-        return {}
+    token_data = {"idToken": "test_id_token_12345"}
 
-    return _create_response
+    with open(mock_config_dir / "idtoken.json", "w") as f:
+        json.dump(token_data, f)
+
+    return token_data
 
 
 @pytest.fixture
-def sample_config(tmp_path: Path) -> Path:
-    """テスト用の設定ファイルを作成"""
-    config_path = tmp_path / "config.json"
-    config_path.write_text(
-        """
-    {
-        "database": {
-            "path": "test.db"
-        },
-        "api": {
-            "base_url": "https://api.example.com/v1",
-            "endpoints": {
-                "auth": "/auth",
-                "daily_quotes": "/quotes"
-            },
-            "rate_limit": {
-                "sleep_seconds": 0.1
-            }
-        },
-        "files": {
-            "account": "account.json",
-            "idtoken": "idtoken.json",
-            "thresholds": "thresholds.json"
-        },
-        "logging": {
-            "level": "DEBUG",
-            "format": "%(message)s"
-        }
+def sample_stock_data() -> pd.DataFrame:
+    """サンプルの株価データを作成するフィクスチャ"""
+    data = {
+        "Date": pd.date_range("2024-01-01", periods=5),
+        "Code": ["1234"] * 5,
+        "Open": [1000, 1010, 1020, 1015, 1025],
+        "High": [1020, 1025, 1030, 1025, 1035],
+        "Low": [990, 1005, 1015, 1010, 1020],
+        "Close": [1010, 1020, 1025, 1020, 1030],
+        "Volume": [100000, 120000, 110000, 90000, 105000],
+        "TurnoverValue": [101000000, 122400000, 112750000, 91800000, 108150000],
+        "AdjustmentFactor": [1.0] * 5,
+        "AdjustmentOpen": [1000, 1010, 1020, 1015, 1025],
+        "AdjustmentHigh": [1020, 1025, 1030, 1025, 1035],
+        "AdjustmentLow": [990, 1005, 1015, 1010, 1020],
+        "AdjustmentClose": [1010, 1020, 1025, 1020, 1030],
+        "AdjustmentVolume": [100000, 120000, 110000, 90000, 105000],
     }
+    return pd.DataFrame(data)
+
+
+@pytest.fixture
+def sample_statements_data() -> pd.DataFrame:
+    """サンプルの財務諸表データを作成するフィクスチャ"""
+    data = {
+        "DisclosedDate": ["2024-01-15"],
+        "DisclosedTime": ["15:00"],
+        "LocalCode": ["1234"],
+        "DisclosureNumber": ["20240115150000"],
+        "TypeOfDocument": ["1Qc"],
+        "TypeOfCurrentPeriod": ["1Q"],
+        "CurrentPeriodStartDate": ["2023-10-01"],
+        "CurrentPeriodEndDate": ["2023-12-31"],
+        "CurrentFiscalYearStartDate": ["2023-10-01"],
+        "CurrentFiscalYearEndDate": ["2024-09-30"],
+        "NextFiscalYearStartDate": ["2024-10-01"],
+        "NextFiscalYearEndDate": ["2025-09-30"],
+        "NetSales": [1000000000],
+        "OperatingProfit": [150000000],
+        "OrdinaryProfit": [140000000],
+        "Profit": [100000000],
+        "EarningsPerShare": [50.5],
+        "DilutedEarningsPerShare": [50.0],
+        "TotalAssets": [5000000000],
+        "Equity": [2000000000],
+        "EquityToAssetRatio": [0.40],
+        "BookValuePerShare": [1000.0],
+        "CashFlowsFromOperatingActivities": [200000000],
+        "CashFlowsFromInvestingActivities": [-50000000],
+        "CashFlowsFromFinancingActivities": [-100000000],
+        "CashAndEquivalents": [500000000],
+        "ResultDividendPerShareAnnual": [20.0],
+        "ResultPayoutRatio": [0.4],
+        "ForecastDividendPerShareAnnual": [25.0],
+        "ForecastPayoutRatio": [0.35],
+        "NextYearForecastDividendPerShareAnnual": [30.0],
+        "NextYearForecastPayoutRatio": [0.35],
+        "ForecastNetSales": [4500000000],
+        "ForecastOperatingProfit": [700000000],
+        "ForecastOrdinaryProfit": [680000000],
+        "ForecastProfit": [480000000],
+        "ForecastEarningsPerShare": [240.0],
+        "NextYearForecastNetSales": [5000000000],
+        "NextYearForecastOperatingProfit": [800000000],
+        "NextYearForecastOrdinaryProfit": [780000000],
+        "NextYearForecastProfit": [550000000],
+        "NextYearForecastEarningsPerShare": [275.0],
+        "MaterialChangesInSubsidiaries": [False],
+        "SignificantChangesInTheScopeOfConsolidation": [None],
+        "ChangesInAccountingEstimates": [False],
+        "RetrospectiveRestatement": [False],
+        "NumberOfIssuedAndOutstandingSharesAtTheEndOfFiscalYearIncludingTreasuryStock": [
+            2100000
+        ],
+        "NumberOfTreasuryStockAtTheEndOfFiscalYear": [100000],
+        "AverageNumberOfShares": [2000000],
+        "NonConsolidatedNetSales": [None],
+        "NonConsolidatedOperatingProfit": [None],
+        "NonConsolidatedOrdinaryProfit": [None],
+        "NonConsolidatedProfit": [None],
+        "NonConsolidatedEarningsPerShare": [None],
+        "NonConsolidatedTotalAssets": [None],
+        "NonConsolidatedEquity": [None],
+        "NonConsolidatedEquityToAssetRatio": [None],
+        "NonConsolidatedBookValuePerShare": [None],
+        "ForecastNonConsolidatedNetSales": [None],
+        "ForecastNonConsolidatedOperatingProfit": [None],
+        "ForecastNonConsolidatedOrdinaryProfit": [None],
+        "ForecastNonConsolidatedProfit": [None],
+        "ForecastNonConsolidatedEarningsPerShare": [None],
+        "NextYearForecastNonConsolidatedNetSales": [None],
+        "NextYearForecastNonConsolidatedOperatingProfit": [None],
+        "NextYearForecastNonConsolidatedOrdinaryProfit": [None],
+        "NextYearForecastNonConsolidatedProfit": [None],
+        "NextYearForecastNonConsolidatedEarningsPerShare": [None],
+    }
+    return pd.DataFrame(data)
+
+
+@pytest.fixture
+def sample_listed_info() -> pd.DataFrame:
+    """サンプルの上場企業情報データを作成するフィクスチャ"""
+    data = {
+        "Date": ["2024-01-01"],
+        "Code": ["1234"],
+        "CompanyName": ["テスト株式会社"],
+        "CompanyNameEnglish": ["Test Corporation"],
+        "Sector17Code": ["1"],
+        "Sector17CodeName": ["食品"],
+        "Sector33Code": ["0050"],
+        "Sector33CodeName": ["水産・農林業"],
+        "ScaleCategory": ["TOPIX Small 2"],
+        "MarketCode": ["0111"],
+        "MarketCodeName": ["プライム"],
+        "MarginCode": ["1"],
+        "MarginCodeName": ["制度信用"],
+        "delete_flag": [False],
+    }
+    return pd.DataFrame(data)
+
+
+@pytest.fixture
+def mock_requests_get():
+    """requests.getをモックするフィクスチャ"""
+    with patch("requests.get") as mock_get:
+        # デフォルトのモックレスポンス
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": "test"}
+        mock_response.text = '{"data": "test"}'
+        mock_get.return_value = mock_response
+
+        yield mock_get
+
+
+@pytest.fixture
+def mock_requests_post():
+    """requests.postをモックするフィクスチャ"""
+    with patch("requests.post") as mock_post:
+        # デフォルトのモックレスポンス
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"idToken": "test_token"}
+        mock_response.text = '{"idToken": "test_token"}'
+        mock_post.return_value = mock_response
+
+        yield mock_post
+
+
+@pytest.fixture
+def mock_sqlite_connection(temp_db: Path):
+    """SQLite接続をモックするフィクスチャ"""
+    import sqlite3
+
+    # テスト用データベースを初期化
+    conn = sqlite3.connect(temp_db)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # WALモードを有効化
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+
+    # 基本的なテーブルを作成
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS prices (
+            Date TEXT,
+            Code TEXT,
+            Open REAL,
+            High REAL,
+            Low REAL,
+            Close REAL,
+            Volume INTEGER,
+            TurnoverValue REAL,
+            AdjustmentFactor REAL,
+            AdjustmentOpen REAL,
+            AdjustmentHigh REAL,
+            AdjustmentLow REAL,
+            AdjustmentClose REAL,
+            AdjustmentVolume INTEGER,
+            PRIMARY KEY (Date, Code)
+        )
     """
     )
-    return config_path
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS listed_info (
+            Date TEXT,
+            Code TEXT PRIMARY KEY,
+            CompanyName TEXT,
+            CompanyNameEnglish TEXT,
+            Sector17Code TEXT,
+            Sector17CodeName TEXT,
+            Sector33Code TEXT,
+            Sector33CodeName TEXT,
+            ScaleCategory TEXT,
+            MarketCode TEXT,
+            MarketCodeName TEXT,
+            MarginCode TEXT,
+            MarginCodeName TEXT,
+            delete_flag INTEGER DEFAULT 0
+        )
+    """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS statements (
+            DisclosedDate TEXT,
+            DisclosedTime TEXT,
+            LocalCode TEXT,
+            DisclosureNumber TEXT PRIMARY KEY,
+            TypeOfDocument TEXT,
+            TypeOfCurrentPeriod TEXT,
+            CurrentPeriodStartDate TEXT,
+            CurrentPeriodEndDate TEXT,
+            CurrentFiscalYearStartDate TEXT,
+            CurrentFiscalYearEndDate TEXT,
+            NextFiscalYearStartDate TEXT,
+            NextFiscalYearEndDate TEXT,
+            NetSales REAL,
+            OperatingProfit REAL,
+            OrdinaryProfit REAL,
+            Profit REAL,
+            EarningsPerShare REAL,
+            DilutedEarningsPerShare REAL,
+            TotalAssets REAL,
+            Equity REAL,
+            EquityToAssetRatio REAL,
+            BookValuePerShare REAL,
+            CashFlowsFromOperatingActivities REAL,
+            CashFlowsFromInvestingActivities REAL,
+            CashFlowsFromFinancingActivities REAL,
+            CashAndEquivalents REAL,
+            ResultDividendPerShareAnnual REAL,
+            ResultPayoutRatio REAL,
+            ForecastDividendPerShareAnnual REAL,
+            ForecastPayoutRatio REAL,
+            NextYearForecastDividendPerShareAnnual REAL,
+            NextYearForecastPayoutRatio REAL,
+            ForecastNetSales REAL,
+            ForecastOperatingProfit REAL,
+            ForecastOrdinaryProfit REAL,
+            ForecastProfit REAL,
+            ForecastEarningsPerShare REAL,
+            NextYearForecastNetSales REAL,
+            NextYearForecastOperatingProfit REAL,
+            NextYearForecastOrdinaryProfit REAL,
+            NextYearForecastProfit REAL,
+            NextYearForecastEarningsPerShare REAL,
+            MaterialChangesInSubsidiaries INTEGER,
+            SignificantChangesInTheScopeOfConsolidation TEXT,
+            ChangesInAccountingEstimates INTEGER,
+            RetrospectiveRestatement INTEGER,
+            NumberOfIssuedAndOutstandingSharesAtTheEndOfFiscalYearIncludingTreasuryStock INTEGER,
+            NumberOfTreasuryStockAtTheEndOfFiscalYear INTEGER,
+            AverageNumberOfShares INTEGER,
+            NonConsolidatedNetSales REAL,
+            NonConsolidatedOperatingProfit REAL,
+            NonConsolidatedOrdinaryProfit REAL,
+            NonConsolidatedProfit REAL,
+            NonConsolidatedEarningsPerShare REAL,
+            NonConsolidatedTotalAssets REAL,
+            NonConsolidatedEquity REAL,
+            NonConsolidatedEquityToAssetRatio REAL,
+            NonConsolidatedBookValuePerShare REAL,
+            ForecastNonConsolidatedNetSales REAL,
+            ForecastNonConsolidatedOperatingProfit REAL,
+            ForecastNonConsolidatedOrdinaryProfit REAL,
+            ForecastNonConsolidatedProfit REAL,
+            ForecastNonConsolidatedEarningsPerShare REAL,
+            NextYearForecastNonConsolidatedNetSales REAL,
+            NextYearForecastNonConsolidatedOperatingProfit REAL,
+            NextYearForecastNonConsolidatedOrdinaryProfit REAL,
+            NextYearForecastNonConsolidatedProfit REAL,
+            NextYearForecastNonConsolidatedEarningsPerShare REAL
+        )
+    """
+    )
+
+    conn.commit()
+
+    with patch("sqlite3.connect") as mock_connect:
+        mock_connect.return_value = conn
+        yield conn
+
+    conn.close()
 
 
 @pytest.fixture
-def mock_idtoken(tmp_path: Path) -> Path:
-    """テスト用のIDトークンファイルを作成"""
-    token_path = tmp_path / "idtoken.json"
-    token_path.write_text('{"idToken": "test-token-12345"}')
-    return token_path
+def disable_logging():
+    """テスト中のロギングを無効化するフィクスチャ"""
+    import logging
+
+    # 全てのロガーのレベルをCRITICALに設定
+    logging.disable(logging.CRITICAL)
+
+    yield
+
+    # テスト後にロギングを再度有効化
+    logging.disable(logging.NOTSET)
 
 
-@pytest.fixture
-def test_db() -> Generator[str, None, None]:
-    """test_daily_quotes.py用のテストデータベース"""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = f.name
+# モックヘルパー関数
+def create_mock_response(
+    status_code: int = 200, json_data: dict = None, text: str = None
+):
+    """HTTPレスポンスのモックを作成するヘルパー関数"""
+    mock_response = MagicMock()
+    mock_response.status_code = status_code
 
-    # テーブルを作成 - init_schemaを使用してすべてのテーブルを作成
-    from db.db_schema import init_schema
+    if json_data is not None:
+        mock_response.json.return_value = json_data
+        if text is None:
+            import json
 
-    init_schema(db_path)
+            text = json.dumps(json_data)
 
-    yield db_path
+    if text is not None:
+        mock_response.text = text
 
-    # クリーンアップ
-    os.unlink(db_path)
+    return mock_response
+
+
+def create_mock_db_cursor(results: list = None):
+    """データベースカーソルのモックを作成するヘルパー関数"""
+    mock_cursor = MagicMock()
+
+    if results is not None:
+        mock_cursor.fetchall.return_value = results
+        mock_cursor.fetchone.return_value = results[0] if results else None
+
+    return mock_cursor

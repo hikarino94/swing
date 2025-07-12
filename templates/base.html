@@ -27,6 +27,11 @@
     <style>
         [x-cloak] { display: none !important; }
 
+        /* Alpine.jsのトランジション最適化 */
+        [x-transition] {
+            will-change: opacity, transform;
+        }
+
         /* スクロールバーのスタイリング */
         .custom-scrollbar::-webkit-scrollbar {
             width: 6px;
@@ -99,6 +104,21 @@
             justify-content: center;
         }
 
+        /* モーダル最適化 */
+        .modal-transition {
+            transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .modal-content {
+            transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 検索結果のパフォーマンス最適化 */
+        .search-results {
+            contain: layout style;
+            will-change: contents;
+        }
+
         .processing-message {
             background: white;
             padding: 2rem;
@@ -124,11 +144,11 @@
                     <span class="text-sm text-gray-600">
                         {{ user.username }}
                     </span>
-                    <a href="{{ url_for('logout') }}" class="text-sm text-blue-600 hover:text-blue-800">
+                    <a href="{{ url_for('auth.logout') }}" class="text-sm text-blue-600 hover:text-blue-800">
                         ログアウト
                     </a>
                     {% else %}
-                    <a href="{{ url_for('login') }}" class="text-sm text-blue-600 hover:text-blue-800">
+                    <a href="{{ url_for('auth.login') }}" class="text-sm text-blue-600 hover:text-blue-800">
                         ログイン
                     </a>
                     {% endif %}
@@ -148,7 +168,7 @@
     <!-- グローバルスクリプト -->
     <script>
         // API呼び出しのヘルパー関数
-        async function apiCall(endpoint, data = {}, method = 'POST') {
+        async function apiCall(endpoint, data = {}, method = 'POST', silent = false) {
             try {
                 const options = {
                     method: method,
@@ -165,15 +185,25 @@
                 const response = await fetch(`/api${endpoint}`, options);
                 const result = await response.json();
 
-                if (result.success) {
-                    showNotification('success', result.description + ' - 完了');
-                } else {
-                    showNotification('error', result.description + ' - エラー: ' + result.error);
+                if (!silent) {
+                    if (result.success) {
+                        if (result.description) {
+                            showNotification('success', result.description + ' - 完了');
+                        }
+                    } else {
+                        if (result.description) {
+                            showNotification('error', result.description + ' - エラー: ' + result.error);
+                        } else {
+                            showNotification('error', result.error || 'エラーが発生しました');
+                        }
+                    }
                 }
 
                 return result;
             } catch (error) {
-                showNotification('error', 'API呼び出しエラー: ' + error.message);
+                if (!silent) {
+                    showNotification('error', 'API呼び出しエラー: ' + error.message);
+                }
                 return { success: false, error: error.message };
             }
         }

@@ -4,11 +4,11 @@
 
 プロジェクトでは以下の設定ファイルを使用します：
 
-- `config.json` - アプリケーション全体の設定
-- `account.json` - J-Quants認証情報
+- `config/config.json` - アプリケーション全体の設定
+- `config/account.json` - J-Quants認証情報
 - `screening/thresholds.json` - スクリーニング閾値
 
-## config.json
+## config/config.json
 
 中央設定ファイルで、以下の項目を管理します：
 
@@ -47,8 +47,8 @@
     }
   },
   "files": {
-    "account": "account.json",
-    "idtoken": "idtoken.json",
+    "account": "config/account.json",
+    "idtoken": "config/idtoken.json",
     "thresholds": "screening/thresholds.json"
   },
   "logging": {
@@ -78,7 +78,7 @@
 #### logging
 - ログレベルとフォーマットの設定
 
-## account.json
+## config/account.json
 
 J-Quantsの認証情報を保存します：
 

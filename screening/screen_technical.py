@@ -1,22 +1,19 @@
 #!/usr/bin/env python
 """
-screen_technical.py
+screen_technical.py - テクニカルスクリーニング
 
-Swing-trade signal extraction tool based on technical indicators.
-
-Commands:
-  indicators   Calculate & upsert daily signal flags into `technical_indicators`
-  screen       Preview today’s signals (optional)
-
-Usage examples:
-  python screen_technical.py indicators --db ./db/stock.db --as-of 2025-06-07
-  python screen_technical.py screen     --db ./db/stock.db --as-of 2025-06-07
+テクニカル指標を計算してシグナルを生成します。
+高速化のために以下の最適化を実施:
+1. 銘柄単位での並列処理（日付単位ではなく）
+2. データ型の最適化（float64→float32）
+3. バッチ処理の最適化
+4. より効率的なデータベースアクセス
 """
 import argparse
 import logging
 import sqlite3
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -25,7 +22,7 @@ import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from screening.thresholds import (  # noqa: E402
+from screening.thresholds import (
     ADX_THRESHOLD,
     FIRST_LOOKBACK_DAYS,
     OVERHEAT_FACTOR,
@@ -35,7 +32,7 @@ from screening.thresholds import (  # noqa: E402
     SIGNAL_COUNT_MIN,
     log_thresholds,
 )
-from src.config import get_db_path  # noqa: E402
+from src.config import get_db_path
 
 LOG_FMT = "%(asctime)s [%(levelname)s] %(message)s"
 logging.basicConfig(format=LOG_FMT, level=logging.INFO)
@@ -43,28 +40,37 @@ logger = logging.getLogger("screen_technical")
 log_thresholds(logger)
 
 # 並列処理の設定
-MAX_WORKERS = 4  # NumPyのGILを考慮してワーカー数を抑える
-BATCH_SIZE = 100  # バッチ挿入のサイズ
+MAX_WORKERS = 8  # CPUコア数に応じて調整
+BATCH_SIZE = 1000  # バッチ挿入のサイズ
+CHUNK_SIZE = 50  # 各ワーカーが処理する銘柄数
 
 # Price history to load for indicator calculation
-# Holidays can create gaps, so keep roughly 80 days of data
 PRICE_LOOKBACK_DAYS = 80
 
-# --- Compute flags ----------------------------------------------------------
 
+def compute_indicators_for_code(args):
+    """単一銘柄の全日付分のインジケーターを計算"""
+    code, price_data, date_list = args
 
-def compute_indicators(df):
-    """単一銘柄のテクニカル指標を計算"""
-    df = df.copy()
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df = df.dropna(subset=["date"]).sort_values("date").set_index("date")
+    # 価格データをDataFrameに変換
+    df = pd.DataFrame(price_data)
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values("date").set_index("date")
+
+    # データ型を最適化（NaNを適切に処理）
     for col in ["adj_open", "adj_high", "adj_low", "adj_close"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+        df[col] = pd.to_numeric(df[col], errors="coerce").astype(np.float32)
+
+    # 欠損値を前方・後方補完
     df[["adj_open", "adj_high", "adj_low", "adj_close"]] = (
         df[["adj_open", "adj_high", "adj_low", "adj_close"]].ffill().bfill()
     )
+
+    # 必要なデータが不足している場合はスキップ
     if len(df) < 50:
-        return pd.DataFrame()
+        return []
+
+    # インジケーターを一度に計算
     # --- Moving averages ---
     sma5 = df["adj_close"].rolling(5).mean()
     sma10 = df["adj_close"].rolling(10).mean()
@@ -102,10 +108,11 @@ def compute_indicators(df):
     dx = (plus_di - minus_di).abs() / (plus_di + minus_di) * 100
     adx14 = dx.rolling(14).mean()
 
-    # --- Bollinger Bands (20-day, 1σ) ---
+    # --- Bollinger Bands ---
     ma20 = sma20
     std20 = df["adj_close"].rolling(20).std()
     bb_up1 = ma20 + std20
+    bb_low1 = ma20 - std20
 
     # --- MACD ---
     ema12 = df["adj_close"].ewm(span=12, adjust=False).mean()
@@ -113,46 +120,40 @@ def compute_indicators(df):
     macd = ema12 - ema26
     macd_signal = macd.ewm(span=9, adjust=False).mean()
 
-    # --- Bollinger lower band (20-day, 1σ) for short ---
-    bb_low1 = ma20 - std20
-
     # --- Overheating & oversold checks ---
     overheat = (df["adj_close"] > sma10 * OVERHEAT_FACTOR).astype(int)
     oversold = (df["adj_close"] < sma5 * OVERSOLD_FACTOR).astype(int)
 
-    flags = pd.DataFrame(
-        {
-            "signal_ma": (
-                (sma10 > sma20)
-                & (sma20 > sma50)
-                & (slope10 > 0)
-                & (slope20 > 0)
-                & (slope50 > 0)
-            ).astype(int),
-            "signal_rsi": (rsi14 >= RSI_THRESHOLD).astype(int),
-            "signal_adx": (adx14 >= ADX_THRESHOLD).astype(int),
-            "signal_bb": (df["adj_close"] >= bb_up1).astype(int),
-            "signal_macd": (macd > macd_signal).astype(int),
-            "signal_ma_short": (
-                (sma50 > sma20)
-                & (sma20 > sma10)
-                & (slope10 < 0)
-                & (slope20 < 0)
-                & (slope50 < 0)
-            ).astype(int),
-            "signal_rsi_short": (rsi14 <= RSI_THRESHOLD).astype(int),
-            "signal_bb_short": (df["adj_close"] <= bb_low1).astype(int),
-            "signal_macd_short": (macd < macd_signal).astype(int),
-            # signals_overheating: flag when close is >10% above its 10MA
-            "signals_overheating": overheat,
-            # signals_oversold: flag when close is <5% below its 5MA
-            "signals_oversold": oversold,
-        },
-        index=df.index,
-    )
+    # シグナルフラグの計算
+    flags = pd.DataFrame(index=df.index)
+    flags["signal_ma"] = (
+        (sma10 > sma20)
+        & (sma20 > sma50)
+        & (slope10 > 0)
+        & (slope20 > 0)
+        & (slope50 > 0)
+    ).astype(int)
+    flags["signal_rsi"] = (rsi14 >= RSI_THRESHOLD).astype(int)
+    flags["signal_adx"] = (adx14 >= ADX_THRESHOLD).astype(int)
+    flags["signal_bb"] = (df["adj_close"] >= bb_up1).astype(int)
+    flags["signal_macd"] = (macd > macd_signal).astype(int)
+    flags["signal_ma_short"] = (
+        (sma50 > sma20)
+        & (sma20 > sma10)
+        & (slope10 < 0)
+        & (slope20 < 0)
+        & (slope50 < 0)
+    ).astype(int)
+    flags["signal_rsi_short"] = (rsi14 <= RSI_THRESHOLD).astype(int)
+    flags["signal_bb_short"] = (df["adj_close"] <= bb_low1).astype(int)
+    flags["signal_macd_short"] = (macd < macd_signal).astype(int)
+    flags["signals_overheating"] = overheat
+    flags["signals_oversold"] = oversold
+
+    # 重み付けスコアの計算
     WEIGHTS = {
-        "signal_ma": 2,  # trend confirmation
-        "signal_bb": 2,  # momentum confirmation
+        "signal_ma": 2,
+        "signal_bb": 2,
         "signal_rsi": 1,
         "signal_adx": 1,
         "signal_macd": 1,
@@ -160,6 +161,7 @@ def compute_indicators(df):
     flags["signals_count"] = (
         flags[list(WEIGHTS)].mul(pd.Series(WEIGHTS)).sum(axis=1).astype(int)
     )
+
     SHORT_WEIGHTS = {
         "signal_ma_short": 2,
         "signal_bb_short": 2,
@@ -170,231 +172,257 @@ def compute_indicators(df):
     flags["signals_short_count"] = (
         flags[list(SHORT_WEIGHTS)].mul(pd.Series(SHORT_WEIGHTS)).sum(axis=1).astype(int)
     )
-    flags = flags.reset_index().rename(columns={"date": "signal_date"})
-    return flags
 
-
-def compute_indicators_parallel(code_groups, max_workers=MAX_WORKERS):
-    """複数銘柄のテクニカル指標を並列計算"""
+    # 指定された日付のみフィルタリング
     results = []
-
-    def process_code(code, group):
-        try:
-            result = compute_indicators(group)
-            if not result.empty:
-                result["code"] = code
-                return result
-        except Exception as e:
-            logger.warning(f"銘柄 {code} の処理中にエラー: {e}")
-        return None
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {}
-        for code, group in code_groups:
-            future = executor.submit(process_code, code, group)
-            futures[future] = code
-
-        for future in as_completed(futures):
-            result = future.result()
-            if result is not None:
-                results.append(result)
-
-            # 進捗状況のログ出力（100銘柄ごと）
-            if len(results) % 100 == 0 and len(results) > 0:
-                logger.info(f"  処理中: {len(results)}/{len(code_groups)} 銘柄完了")
+    for target_date in date_list:
+        if target_date in flags.index:
+            row = flags.loc[target_date]
+            results.append(
+                {
+                    "code": code,
+                    "signal_date": target_date.strftime("%Y-%m-%d"),
+                    "signal_ma": int(row["signal_ma"]),
+                    "signal_rsi": int(row["signal_rsi"]),
+                    "signal_adx": int(row["signal_adx"]),
+                    "signal_bb": int(row["signal_bb"]),
+                    "signal_macd": int(row["signal_macd"]),
+                    "signal_ma_short": int(row["signal_ma_short"]),
+                    "signal_rsi_short": int(row["signal_rsi_short"]),
+                    "signal_bb_short": int(row["signal_bb_short"]),
+                    "signal_macd_short": int(row["signal_macd_short"]),
+                    "signals_count": int(row["signals_count"]),
+                    "signals_short_count": int(row["signals_short_count"]),
+                    "signals_overheating": int(row["signals_overheating"]),
+                    "signals_oversold": int(row["signals_oversold"]),
+                }
+            )
 
     return results
 
 
-# --- Run indicators ---------------------------------------------------------
-def run_indicators(conn, as_of=None, use_parallel=True, max_workers=MAX_WORKERS):
+def process_chunk(chunk_data):
+    """チャンクごとに銘柄を処理"""
+    results = []
+    for args in chunk_data:
+        try:
+            code_results = compute_indicators_for_code(args)
+            results.extend(code_results)
+        except Exception as e:
+            logger.warning(f"銘柄 {args[0]} の処理中にエラー: {e}")
+    return results
+
+
+def run_indicators_fast(conn, date_list, use_parallel=True, max_workers=MAX_WORKERS):
     """
-    テクニカル指標を計算してデータベースに保存
+    高速化されたテクニカル指標計算
 
     Args:
         conn: データベース接続
-        as_of: 計算対象日（YYYY-MM-DD）
+        date_list: 計算対象日のリスト
         use_parallel: 並列処理を使用するかどうか
         max_workers: 並列処理のワーカー数
     """
-    if not as_of:
-        as_of = datetime.today().strftime("%Y-%m-%d")
-    cnt = conn.execute("SELECT COUNT(*) FROM prices WHERE date=?", (as_of,)).fetchone()[
-        0
-    ]
-    if cnt == 0:
-        logger.info("%s の価格データがないためスキップ", as_of)
+    if not date_list:
+        logger.info("計算対象日がありません")
         return
-    start = (
-        datetime.strptime(as_of, "%Y-%m-%d") - timedelta(days=PRICE_LOOKBACK_DAYS)
-    ).strftime("%Y-%m-%d")
 
-    # --- Load price data for all target codes in a single query ---
-    logger.info("価格データを読み込み中...")
-    # 必要なカラムのみを選択し、データ型を最適化
-    df_price = pd.read_sql(
-        """
+    # 日付範囲を計算
+    min_date = min(date_list)
+    max_date = max(date_list)
+    start_date = (min_date - timedelta(days=PRICE_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+    end_date = max_date.strftime("%Y-%m-%d")
+
+    logger.info(f"価格データを読み込み中... ({start_date} から {end_date})")
+
+    # 全銘柄の価格データを一度に読み込む
+    query = """
         SELECT P.code, P.date, P.adj_open, P.adj_high, P.adj_low, P.adj_close
         FROM prices P
         JOIN listed_info L ON P.code = L.code
-        WHERE L.market_code != '0109' AND P.date>=? AND P.date<=?
+        WHERE L.market_code != '0109' AND P.date >= ? AND P.date <= ?
         ORDER BY P.code, P.date
-        """,
-        conn,
-        params=(start, as_of),
-        dtype={
-            "adj_open": np.float32,
-            "adj_high": np.float32,
-            "adj_low": np.float32,
-            "adj_close": np.float32,
-        },
-    )
+    """
 
-    if df_price.empty:
+    df_all = pd.read_sql(query, conn, params=(start_date, end_date))
+
+    if df_all.empty:
         logger.info("対象銘柄なし")
         return
 
-    codes = df_price["code"].unique()
-    total = len(codes)
-    logger.info("開始: %d 銘柄を処理します (as_of=%s)", total, as_of)
-    records = []
+    # 銘柄ごとにグループ化
+    grouped = df_all.groupby("code")
+    codes = list(grouped.groups.keys())
+    total_codes = len(codes)
+    logger.info(f"開始: {total_codes} 銘柄を処理します")
 
-    # 各銘柄ごとにインジケーターを計算
-    if use_parallel:
+    # 各銘柄のデータを準備
+    task_data = []
+    for code in codes:
+        price_data = grouped.get_group(code).to_dict("records")
+        task_data.append((code, price_data, date_list))
+
+    # 処理実行
+    all_results = []
+
+    if use_parallel and total_codes > 100:
         # 並列処理
-        code_groups = list(df_price.groupby("code"))
-        results = compute_indicators_parallel(code_groups, max_workers)
-        processed_count = len(results)
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            # タスクをチャンクに分割
+            chunks = [
+                task_data[i : i + CHUNK_SIZE]
+                for i in range(0, len(task_data), CHUNK_SIZE)
+            ]
+
+            # 各チャンクを並列処理
+            futures = {
+                executor.submit(process_chunk, chunk): i
+                for i, chunk in enumerate(chunks)
+            }
+
+            completed = 0
+            for future in as_completed(futures):
+                try:
+                    chunk_results = future.result()
+                    all_results.extend(chunk_results)
+                    completed += 1
+
+                    # 進捗表示
+                    processed_codes = completed * CHUNK_SIZE
+                    if processed_codes % 500 == 0:
+                        logger.info(
+                            f"  処理中: {min(processed_codes, total_codes)}/{total_codes} 銘柄完了"
+                        )
+
+                except Exception as e:
+                    logger.error(f"チャンク処理中にエラー: {e}")
     else:
-        # 逐次処理（従来の方法）
-        results = []
-        processed_count = 0
-        for code, group in df_price.groupby("code"):
-            result = compute_indicators(group)
-            if not result.empty:
-                result["code"] = code
-                results.append(result)
-                processed_count += 1
+        # 逐次処理
+        for i, args in enumerate(task_data):
+            try:
+                code_results = compute_indicators_for_code(args)
+                all_results.extend(code_results)
 
-            # 進捗状況のログ出力（100銘柄ごと）
-            if len(results) % 100 == 0 and len(results) > 0:
-                logger.info("  処理中: %d/%d 銘柄完了", len(results), total)
+                if (i + 1) % 100 == 0:
+                    logger.info(f"  処理中: {i + 1}/{total_codes} 銘柄完了")
 
-    if not results:
-        logger.info("全ての銘柄で計算結果が空でした (処理銘柄数: %d)", total)
-        return
+            except Exception as e:
+                logger.warning(f"銘柄 {args[0]} の処理中にエラー: {e}")
 
-    logger.info("インジケーター計算完了: %d/%d 銘柄で結果取得", processed_count, total)
+    logger.info(f"インジケーター計算完了: {len(all_results)} レコード生成")
 
-    all_flags = pd.concat(results, ignore_index=True)
-
-    today = pd.to_datetime(as_of)
-    # デバッグ用：データフレームの構造を確認
-    if all_flags.empty:
+    if not all_results:
         logger.info("計算結果が空です")
         return
 
-    logger.debug("all_flags columns: %s", list(all_flags.columns))
+    # シグナルの初回判定を行う
+    df_results = pd.DataFrame(all_results)
 
-    # signal_dateカラムが存在することを確認
-    if "signal_date" not in all_flags.columns:
-        logger.error(
-            "signal_dateカラムが見つかりません。利用可能なカラム: %s",
-            list(all_flags.columns),
-        )
-        return
+    # 各日付ごとに処理
+    for target_date in date_list:
+        date_str = target_date.strftime("%Y-%m-%d")
+        date_results = df_results[df_results["signal_date"] == date_str].copy()
 
-    today_flags = all_flags[all_flags["signal_date"] == today]
-    if today_flags.empty:
-        logger.info("当日シグナルなし")
-        return
+        if date_results.empty:
+            continue
 
-    start_30 = (today - timedelta(days=FIRST_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
-    hist = pd.read_sql(
-        "SELECT DISTINCT code FROM technical_indicators "
-        "WHERE signal_date>=? AND signal_date<? AND signals_count>=?",
-        conn,
-        params=(start_30, as_of, SIGNAL_COUNT_MIN),
-    )
-    hist_codes = set(hist["code"]) if not hist.empty else set()
-
-    hist_short = pd.read_sql(
-        "SELECT DISTINCT code FROM technical_indicators "
-        "WHERE signal_date>=? AND signal_date<? AND signals_short_count>=?",
-        conn,
-        params=(start_30, as_of, SHORT_SIGNAL_COUNT_MIN),
-    )
-    hist_short_codes = set(hist_short["code"]) if not hist_short.empty else set()
-
-    today_flags = today_flags.copy()
-    # Filter out oversold symbols and those with recent short signals
-    today_flags = today_flags[
-        (today_flags["signals_oversold"] == 0)
-        & (~today_flags["code"].isin(hist_short_codes))
-    ]
-    today_flags["signals_first"] = 0
-    today_flags["signals_short_first"] = 0
-    mask = today_flags["signals_count"] >= SIGNAL_COUNT_MIN
-    today_flags.loc[mask, "signals_first"] = (
-        ~today_flags.loc[mask, "code"].isin(hist_codes)
-    ).astype(int)
-    mask_short = today_flags["signals_short_count"] >= SHORT_SIGNAL_COUNT_MIN
-    today_flags.loc[mask_short, "signals_short_first"] = (
-        ~today_flags.loc[mask_short, "code"].isin(hist_short_codes)
-    ).astype(int)
-
-    today_flags["signal_date"] = today_flags["signal_date"].dt.strftime("%Y-%m-%d")
-    records = today_flags.to_dict("records")
-
-    # ログ出力を最小限に抑える（サマリーのみ）
-    if records:
-        signal_counts = [
-            r["signals_count"]
-            for r in records
-            if r["signals_count"] >= SIGNAL_COUNT_MIN
-        ]
-        short_counts = [
-            r["signals_short_count"]
-            for r in records
-            if r["signals_short_count"] >= SHORT_SIGNAL_COUNT_MIN
-        ]
-        logger.info(
-            "シグナルサマリー: ロング=%d銘柄, ショート=%d銘柄, 全体=%d銘柄",
-            len(signal_counts),
-            len(short_counts),
-            len(records),
+        # 過去30日間のシグナル履歴を取得
+        start_30 = (target_date - timedelta(days=FIRST_LOOKBACK_DAYS)).strftime(
+            "%Y-%m-%d"
         )
 
-        # バッチ挿入でパフォーマンスを向上
-        sql = """INSERT OR REPLACE INTO technical_indicators
-            (code, signal_date, signal_ma, signal_rsi,
-            signal_adx, signal_bb, signal_macd,
-            signal_ma_short, signal_rsi_short,
-            signal_bb_short, signal_macd_short,
-            signals_count, signals_short_count,
-            signals_overheating, signals_oversold, signals_short_first, signals_first)
-            VALUES (:code, :signal_date, :signal_ma, :signal_rsi,
-            :signal_adx, :signal_bb,
-            :signal_macd,
-            :signal_ma_short, :signal_rsi_short,
-            :signal_bb_short, :signal_macd_short,
-            :signals_count, :signals_short_count,
-            :signals_overheating, :signals_oversold, :signals_short_first, :signals_first)"""
+        # ロングシグナル履歴
+        hist_long = pd.read_sql(
+            """SELECT DISTINCT code FROM technical_indicators
+               WHERE signal_date >= ? AND signal_date < ? AND signals_count >= ?""",
+            conn,
+            params=(start_30, date_str, SIGNAL_COUNT_MIN),
+        )
+        hist_long_codes = set(hist_long["code"]) if not hist_long.empty else set()
 
-        # バッチサイズで挿入
-        for i in range(0, len(records), BATCH_SIZE):
-            batch = records[i : i + BATCH_SIZE]
-            conn.executemany(sql, batch)
-        conn.commit()
+        # ショートシグナル履歴
+        hist_short = pd.read_sql(
+            """SELECT DISTINCT code FROM technical_indicators
+               WHERE signal_date >= ? AND signal_date < ? AND signals_short_count >= ?""",
+            conn,
+            params=(start_30, date_str, SHORT_SIGNAL_COUNT_MIN),
+        )
+        hist_short_codes = set(hist_short["code"]) if not hist_short.empty else set()
+
+        # 初回フラグを設定
+        date_results["signals_first"] = 0
+        date_results["signals_short_first"] = 0
+
+        # oversoldでない、かつ最近ショートシグナルがない銘柄のみ対象
+        valid_mask = (date_results["signals_oversold"] == 0) & (
+            ~date_results["code"].isin(hist_short_codes)
+        )
+        date_results = date_results[valid_mask].copy()
+
+        # ロング初回判定
+        long_mask = date_results["signals_count"] >= SIGNAL_COUNT_MIN
+        date_results.loc[long_mask, "signals_first"] = (
+            ~date_results.loc[long_mask, "code"].isin(hist_long_codes)
+        ).astype(int)
+
+        # ショート初回判定
+        short_mask = date_results["signals_short_count"] >= SHORT_SIGNAL_COUNT_MIN
+        date_results.loc[short_mask, "signals_short_first"] = (
+            ~date_results.loc[short_mask, "code"].isin(hist_short_codes)
+        ).astype(int)
+
+        # データベースに保存
+        if not date_results.empty:
+            records = date_results.to_dict("records")
+
+            # ログ出力
+            signal_counts = len(
+                date_results[date_results["signals_count"] >= SIGNAL_COUNT_MIN]
+            )
+            short_counts = len(
+                date_results[
+                    date_results["signals_short_count"] >= SHORT_SIGNAL_COUNT_MIN
+                ]
+            )
+            logger.info(
+                f"{date_str}: ロング={signal_counts}銘柄, ショート={short_counts}銘柄, 全体={len(date_results)}銘柄"
+            )
+
+            # バッチ挿入
+            sql = """INSERT OR REPLACE INTO technical_indicators
+                (code, signal_date, signal_ma, signal_rsi,
+                signal_adx, signal_bb, signal_macd,
+                signal_ma_short, signal_rsi_short,
+                signal_bb_short, signal_macd_short,
+                signals_count, signals_short_count,
+                signals_overheating, signals_oversold, signals_short_first, signals_first)
+                VALUES (:code, :signal_date, :signal_ma, :signal_rsi,
+                :signal_adx, :signal_bb,
+                :signal_macd,
+                :signal_ma_short, :signal_rsi_short,
+                :signal_bb_short, :signal_macd_short,
+                :signals_count, :signals_short_count,
+                :signals_overheating, :signals_oversold, :signals_short_first, :signals_first)"""
+
+            for i in range(0, len(records), BATCH_SIZE):
+                batch = records[i : i + BATCH_SIZE]
+                conn.executemany(sql, batch)
+
+            conn.commit()
+
     logger.info("全処理完了")
 
 
-# --- Screen signals --------------------------------------------------------
-def screen_signals(conn, as_of=None):
+def screen_signals(conn, as_of=None, lookback=None):
+    """シグナルのスクリーニング（従来と同じ）"""
+    if lookback is None:
+        lookback = FIRST_LOOKBACK_DAYS
+
     if not as_of:
         as_of = conn.execute(
             "SELECT MAX(signal_date) FROM technical_indicators"
         ).fetchone()[0]
+
     df = pd.read_sql(
         "SELECT * FROM technical_indicators "
         "WHERE signal_date=? AND (signals_count>=? OR signals_short_count>=?)",
@@ -406,11 +434,8 @@ def screen_signals(conn, as_of=None):
 
 # --- Main -------------------------------------------------------------------
 if __name__ == "__main__":
-    # • 引数を解析してコマンドを判定
-    # • SQLite DB に接続
-    # • indicators: run_indicators() / screen: screen_signals()
     parser = argparse.ArgumentParser(
-        description="スイングトレード向けテクニカルシグナルツール"
+        description="高速化されたスイングトレード向けテクニカルシグナルツール"
     )
     parser.add_argument("command", choices=["indicators", "screen"])
     parser.add_argument("--db", default=get_db_path(), help="SQLite DB のパス")
@@ -433,27 +458,43 @@ if __name__ == "__main__":
         help=f"並列処理のワーカー数（デフォルト: {MAX_WORKERS}）",
     )
     args = parser.parse_args()
+
     conn = sqlite3.connect(args.db)
+
     if args.command == "indicators":
         if args.as_of:
-            # 引数 --as-of に YYYY-MM-DD 形式の日付が指定されていたら、
-            # 指定された期間ぶん遡って処理する
+            # 指定された期間の日付リストを作成
             end_date = datetime.strptime(args.as_of, "%Y-%m-%d").date()
             back_days = max(args.lookback, 0)
             start_date = end_date - timedelta(days=back_days)
-            for i in range(back_days + 1):
-                target = (start_date + timedelta(days=i)).strftime("%Y-%m-%d")
-                logger.info("===== 実行日: %s =====", target)
-                run_indicators(
-                    conn,
-                    target,
-                    use_parallel=not args.no_parallel,
-                    max_workers=args.workers,
-                )
+
+            date_list = []
+            current = start_date
+            while current <= end_date:
+                date_list.append(pd.Timestamp(current))
+                current += timedelta(days=1)
+
+            logger.info(
+                f"処理対象: {len(date_list)} 日分 ({start_date} から {end_date})"
+            )
+
+            # 高速版を実行
+            run_indicators_fast(
+                conn,
+                date_list,
+                use_parallel=not args.no_parallel,
+                max_workers=args.workers,
+            )
         else:
-            # 日付指定なしなら従来通り最新日だけ処理
-            run_indicators(
-                conn, None, use_parallel=not args.no_parallel, max_workers=args.workers
+            # 日付指定なしなら最新日だけ処理
+            today = pd.Timestamp(datetime.today().date())
+            run_indicators_fast(
+                conn,
+                [today],
+                use_parallel=not args.no_parallel,
+                max_workers=args.workers,
             )
     else:
-        screen_signals(conn, args.as_of)
+        screen_signals(conn, args.as_of, args.lookback)
+
+    conn.close()
