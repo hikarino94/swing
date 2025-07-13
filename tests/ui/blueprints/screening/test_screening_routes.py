@@ -516,7 +516,7 @@ class TestScreenMl:
     """MLスクリーニングのテスト"""
 
     @patch("src.ui.blueprints.screening.routes.run_command")
-    def test_screen_ml_train_action(self, mock_get_user, mock_run, client, admin_user):
+    def test_screen_ml_train_action(self, mock_run, client, admin_user):
         """trainアクションのテスト"""
         # TESTINGモードでは自動的にcurrent_userが設定される
         mock_run.return_value = {"success": True, "message": "Training completed"}
@@ -538,7 +538,7 @@ class TestScreenMl:
         mock_run.assert_called_once_with(expected_cmd, "MLtrain")
 
     @patch("src.ui.blueprints.screening.routes.run_command")
-    def test_screen_ml_screen_action(self, mock_get_user, mock_run, client, admin_user):
+    def test_screen_ml_screen_action(self, mock_run, client, admin_user):
         """screenアクションのテスト"""
         # TESTINGモードでは自動的にcurrent_userが設定される
         mock_run.return_value = {
@@ -607,7 +607,7 @@ class TestScreeningIntegration:
     """スクリーニング統合テスト"""
 
     @patch("src.ui.blueprints.screening.routes.run_command")
-    def test_all_screening_endpoints(self, mock_get_user, mock_run, client, admin_user):
+    def test_all_screening_endpoints(self, mock_run, client, admin_user):
         """全スクリーニングエンドポイントの動作確認"""
         # TESTINGモードでは自動的にcurrent_userが設定される
         mock_run.return_value = {"success": True, "message": "Success"}
@@ -691,6 +691,11 @@ class TestScreeningIntegration:
             # 最大幅50に制限されることを確認
             mock_worksheet.set_column.assert_called()
             call_args = mock_worksheet.set_column.call_args_list
+            # 3つのカラムに対して呼ばれることを確認
+            assert len(call_args) == 3
             for call in call_args:
-                _, _, width = call[0]
-                assert width <= 50  # 最大幅制限
+                # set_column(i, i, width) の形式で呼ばれる
+                args = call[0]
+                if len(args) >= 3:
+                    width = args[2]
+                    assert width <= 50  # 最大幅制限

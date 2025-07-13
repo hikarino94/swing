@@ -27,39 +27,40 @@ class TestGetSecretKey:
         with patch.dict(os.environ, {"SECRET_KEY": test_key}):
             assert get_secret_key() == test_key
 
-    @patch("src.ui.common.project_root", Path("/test/project"))
     def test_get_secret_key_from_file(self):
         """ファイルからシークレットキーを読み込み"""
         test_key = "test-secret-key-from-file"
-        mock_file = MagicMock()
-        mock_file.exists.return_value = True
-        mock_file.read_text.return_value = f"{test_key}\n"
+
+        mock_path = MagicMock()
+        mock_path.exists.return_value = True
+        mock_path.read_text.return_value = f"{test_key}\n"
 
         with patch.dict(os.environ, {}, clear=True):  # 環境変数をクリア
-            with patch("pathlib.Path.__truediv__", return_value=mock_file):
+            with patch("src.ui.common.project_root") as mock_root:
+                mock_root.__truediv__.return_value = mock_path
                 assert get_secret_key() == test_key
 
-    @patch("src.ui.common.project_root", Path("/test/project"))
     @patch("src.ui.common.secrets.token_urlsafe")
     def test_get_secret_key_generate_new(self, mock_token):
         """新しいシークレットキーを生成"""
         test_key = "new-generated-secret-key"
         mock_token.return_value = test_key
 
-        mock_file = MagicMock()
-        mock_file.exists.return_value = False
+        mock_path = MagicMock()
+        mock_path.exists.return_value = False
         mock_parent = MagicMock()
-        mock_file.parent = mock_parent
+        mock_path.parent = mock_parent
 
         with patch.dict(os.environ, {}, clear=True):
-            with patch("pathlib.Path.__truediv__", return_value=mock_file):
+            with patch("src.ui.common.project_root") as mock_root:
+                mock_root.__truediv__.return_value = mock_path
                 result = get_secret_key()
 
                 assert result == test_key
                 mock_token.assert_called_once_with(32)
                 mock_parent.mkdir.assert_called_once_with(exist_ok=True)
-                mock_file.write_text.assert_called_once_with(test_key)
-                mock_file.chmod.assert_called_once_with(0o600)
+                mock_path.write_text.assert_called_once_with(test_key)
+                mock_path.chmod.assert_called_once_with(0o600)
 
 
 class TestGenerateCsrfToken:
@@ -98,7 +99,14 @@ class TestGenerateCsrfToken:
 class TestCompressResponse:
     """compress_responseデコレータのテスト"""
 
-    def test_compress_text_response(self):
+    @pytest.fixture
+    def app(self):
+        """テスト用のFlaskアプリケーション"""
+        app = Flask(__name__)
+        app.config["TESTING"] = True
+        return app
+
+    def test_compress_text_response(self, app):
         """テキストレスポンスの圧縮"""
 
         @compress_response
@@ -106,17 +114,18 @@ class TestCompressResponse:
             response = Response("This is a test response", mimetype="text/plain")
             return response
 
-        response = view()
+        with app.app_context():
+            response = view()
 
-        # 圧縮されていることを確認
-        assert response.headers["Content-Encoding"] == "gzip"
-        assert response.headers["Content-Length"] == str(len(response.data))
+            # 圧縮されていることを確認
+            assert response.headers["Content-Encoding"] == "gzip"
+            assert response.headers["Content-Length"] == str(len(response.data))
 
-        # 解凍して元のテキストと比較
-        decompressed = gzip.decompress(response.data).decode("utf-8")
-        assert decompressed == "This is a test response"
+            # 解凍して元のテキストと比較
+            decompressed = gzip.decompress(response.data).decode("utf-8")
+            assert decompressed == "This is a test response"
 
-    def test_compress_json_response(self):
+    def test_compress_json_response(self, app):
         """JSONレスポンスの圧縮"""
 
         @compress_response
@@ -126,13 +135,14 @@ class TestCompressResponse:
                 mimetype="application/json",
             )
 
-        response = view()
+        with app.app_context():
+            response = view()
 
-        assert response.headers["Content-Encoding"] == "gzip"
-        decompressed = gzip.decompress(response.data).decode("utf-8")
-        assert decompressed == '{"test": "data"}'
+            assert response.headers["Content-Encoding"] == "gzip"
+            decompressed = gzip.decompress(response.data).decode("utf-8")
+            assert decompressed == '{"test": "data"}'
 
-    def test_compress_javascript_response(self):
+    def test_compress_javascript_response(self, app):
         """JavaScriptレスポンスの圧縮"""
 
         @compress_response
@@ -142,13 +152,14 @@ class TestCompressResponse:
                 mimetype="application/javascript",
             )
 
-        response = view()
+        with app.app_context():
+            response = view()
 
-        assert response.headers["Content-Encoding"] == "gzip"
-        decompressed = gzip.decompress(response.data).decode("utf-8")
-        assert decompressed == 'console.log("test");'
+            assert response.headers["Content-Encoding"] == "gzip"
+            decompressed = gzip.decompress(response.data).decode("utf-8")
+            assert decompressed == 'console.log("test");'
 
-    def test_no_compress_binary_response(self):
+    def test_no_compress_binary_response(self, app):
         """バイナリレスポンスは圧縮しない"""
 
         @compress_response
@@ -158,13 +169,14 @@ class TestCompressResponse:
                 mimetype="application/octet-stream",
             )
 
-        response = view()
+        with app.app_context():
+            response = view()
 
-        # 圧縮されていないことを確認
-        assert "Content-Encoding" not in response.headers
-        assert response.data == b"\x00\x01\x02\x03"
+            # 圧縮されていないことを確認
+            assert "Content-Encoding" not in response.headers
+            assert response.data == b"\x00\x01\x02\x03"
 
-    def test_no_compress_image_response(self):
+    def test_no_compress_image_response(self, app):
         """画像レスポンスは圧縮しない"""
 
         @compress_response
@@ -174,10 +186,11 @@ class TestCompressResponse:
                 mimetype="image/png",
             )
 
-        response = view()
+        with app.app_context():
+            response = view()
 
-        assert "Content-Encoding" not in response.headers
-        assert response.data == b"fake-image-data"
+            assert "Content-Encoding" not in response.headers
+            assert response.data == b"fake-image-data"
 
 
 class TestTimestampedPath:

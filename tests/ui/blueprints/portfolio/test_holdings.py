@@ -45,7 +45,7 @@ class TestGetHoldings:
     """get_holdings関数のテスト"""
 
     @patch("src.ui.blueprints.portfolio.holdings.PortfolioManager")
-    @patch("src.ui.blueprints.portfolio.holdings.Holding")
+    @patch("src.portfolio.models.holding.Holding")
     @patch("src.ui.blueprints.portfolio.holdings.sqlite3.connect")
     def test_get_holdings_normal(
         self, mock_connect, mock_holding, mock_manager, client
@@ -96,7 +96,7 @@ class TestGetHoldings:
             }
         ]
 
-        response = client.get("/api/portfolio/holdings")
+        response = client.get("/holdings")
         assert response.status_code == 200
 
         data = json.loads(response.data)
@@ -105,7 +105,7 @@ class TestGetHoldings:
         assert len(data["funds"]) == 1
 
     @patch("src.ui.blueprints.portfolio.holdings.PortfolioManager")
-    @patch("src.ui.blueprints.portfolio.holdings.Holding")
+    @patch("src.portfolio.models.holding.Holding")
     @patch("src.ui.blueprints.portfolio.holdings.sqlite3.connect")
     def test_get_holdings_aggregated(
         self, mock_connect, mock_holding, mock_manager, client
@@ -142,7 +142,7 @@ class TestGetHoldings:
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = []
 
-        response = client.get("/api/portfolio/holdings?aggregate=true")
+        response = client.get("/holdings?aggregate=true")
         assert response.status_code == 200
 
         data = json.loads(response.data)
@@ -165,7 +165,7 @@ class TestImportHoldings:
 5678,テスト会社B,50,2000"""
 
         response = client.post(
-            "/api/portfolio/holdings/import",
+            "/holdings/upload",
             data={"csv_content": csv_content, "account_name": "特定口座"},
         )
 
@@ -177,7 +177,7 @@ class TestImportHoldings:
 
     def test_import_holdings_no_csv(self, client):
         """CSVデータなしエラー"""
-        response = client.post("/api/portfolio/holdings/import", data={})
+        response = client.post("/holdings/upload", data={})
 
         assert response.status_code == 400
         data = json.loads(response.data)
@@ -189,7 +189,7 @@ class TestAddHolding:
     """add_holding関数のテスト"""
 
     @patch("src.ui.blueprints.portfolio.holdings.PortfolioManager")
-    @patch("src.ui.blueprints.portfolio.holdings.Holding")
+    @patch("src.portfolio.models.holding.Holding")
     def test_add_holding_new(self, mock_holding_class, mock_manager, client):
         """新規保有銘柄追加"""
         # 既存レコードなし
@@ -204,7 +204,7 @@ class TestAddHolding:
         mock_manager.update_stock_indicators.return_value = None
 
         response = client.post(
-            "/api/portfolio/holdings/add",
+            "/holdings/add",
             json={
                 "code": "1234",
                 "quantity": 100,
@@ -218,7 +218,7 @@ class TestAddHolding:
         assert data["success"] is True
         assert "追加" in data["message"]
 
-    @patch("src.ui.blueprints.portfolio.holdings.Holding")
+    @patch("src.portfolio.models.holding.Holding")
     def test_add_holding_update_existing(self, mock_holding_class, client):
         """既存保有銘柄の更新"""
         # 既存レコードあり
@@ -229,7 +229,7 @@ class TestAddHolding:
         mock_holding_class.find_by_user_code_and_account.return_value = existing
 
         response = client.post(
-            "/api/portfolio/holdings/add",
+            "/holdings/add",
             json={
                 "code": "1234",
                 "quantity": 100,
