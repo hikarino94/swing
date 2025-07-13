@@ -42,8 +42,9 @@ def admin_user():
 def normal_user():
     """一般ユーザー"""
     user = MagicMock(spec=User)
+    user.id = 2
     user.username = "user"
-    user.role = "user"
+    user.role = "portfolio_only"  # admin_requiredデコレータが確認する値
     return user
 
 
@@ -91,34 +92,48 @@ class TestScreenFundamental:
         mock_conn = MagicMock()
         mock_connect.return_value = mock_conn
 
-        # Excel書き込みのモック
-        # pd.ExcelWriterを完全にモック
+        # Excel書き込み関連のモック
+        # xlsxwriterのモック
         mock_worksheet = MagicMock()
         mock_worksheet.set_column = MagicMock()
 
+        mock_workbook = MagicMock()
+        mock_workbook.add_worksheet = MagicMock(return_value=mock_worksheet)
+
+        # ExcelWriterのモック
         mock_writer = MagicMock()
         mock_writer.sheets = {"Signals": mock_worksheet}
+        mock_writer.book = mock_workbook
+        mock_writer.save = MagicMock()
+        mock_writer.close = MagicMock()
         mock_writer.__enter__ = MagicMock(return_value=mock_writer)
         mock_writer.__exit__ = MagicMock(return_value=None)
 
+        # DataFrame.to_excelのモック
+        def mock_to_excel(writer, sheet_name=None, index=True):
+            # writer.sheetsにワークシートを追加
+            if sheet_name:
+                writer.sheets[sheet_name] = mock_worksheet
+
         with patch(
-            "src.ui.blueprints.screening.routes.pd.ExcelWriter",
-            return_value=mock_writer,
-        ):
-            # リクエスト
-            response = client.post(
-                "/api/screen/fundamental",
-                json={
-                    "lookback": 365,
-                    "recent": 30,
-                    "as_of": "2024-01-15",
-                },
-            )
+            "src.ui.blueprints.screening.routes.pd.ExcelWriter"
+        ) as mock_excel_writer_class:
+            mock_excel_writer_class.return_value = mock_writer
+
+            with patch.object(pd.DataFrame, "to_excel", side_effect=mock_to_excel):
+                # リクエスト
+                response = client.post(
+                    "/api/screen/fundamental",
+                    json={
+                        "lookback": 365,
+                        "recent": 30,
+                        "as_of": "2024-01-15",
+                    },
+                )
 
         # 検証
         assert response.status_code == 200
         data = json.loads(response.data)
-        print(f"Response data: {data}")  # デバッグ出力
         assert data["success"] is True
         assert data["output_file"] == temp_file
 
@@ -160,15 +175,37 @@ class TestScreenFundamental:
         mock_conn = MagicMock()
         mock_connect.return_value = mock_conn
 
-        # Excel書き込みのモック
-        with patch("pandas.ExcelWriter") as mock_excel_writer:
-            mock_writer = MagicMock()
-            mock_excel_writer.return_value.__enter__.return_value = mock_writer
-            mock_worksheet = MagicMock()
-            mock_writer.sheets = {"Signals": mock_worksheet}
+        # Excel書き込み関連のモック
+        # xlsxwriterのモック
+        mock_worksheet = MagicMock()
+        mock_worksheet.set_column = MagicMock()
 
-            # リクエスト（パラメータなし）
-            response = client.post("/api/screen/fundamental", json={})
+        mock_workbook = MagicMock()
+        mock_workbook.add_worksheet = MagicMock(return_value=mock_worksheet)
+
+        # ExcelWriterのモック
+        mock_writer = MagicMock()
+        mock_writer.sheets = {"Signals": mock_worksheet}
+        mock_writer.book = mock_workbook
+        mock_writer.save = MagicMock()
+        mock_writer.close = MagicMock()
+        mock_writer.__enter__ = MagicMock(return_value=mock_writer)
+        mock_writer.__exit__ = MagicMock(return_value=None)
+
+        # DataFrame.to_excelのモック
+        def mock_to_excel(writer, sheet_name=None, index=True):
+            # writer.sheetsにワークシートを追加
+            if sheet_name:
+                writer.sheets[sheet_name] = mock_worksheet
+
+        with patch(
+            "src.ui.blueprints.screening.routes.pd.ExcelWriter"
+        ) as mock_excel_writer_class:
+            mock_excel_writer_class.return_value = mock_writer
+
+            with patch.object(pd.DataFrame, "to_excel", side_effect=mock_to_excel):
+                # リクエスト（パラメータなし）
+                response = client.post("/api/screen/fundamental", json={})
 
         # 検証
         assert response.status_code == 200
@@ -242,7 +279,9 @@ class TestScreenFundamental:
         mock_connect.return_value = mock_conn
 
         # Excel書き込みでエラー
-        with patch("pandas.ExcelWriter") as mock_excel_writer:
+        with patch(
+            "src.ui.blueprints.screening.routes.pd.ExcelWriter"
+        ) as mock_excel_writer:
             mock_excel_writer.side_effect = Exception("Write error")
 
             # リクエスト
@@ -282,19 +321,33 @@ class TestScreenFundamental:
         # エラーログの確認
         mock_logger.error.assert_called()
 
-    def test_screen_fundamental_not_logged_in(self, client):
+    def test_screen_fundamental_not_logged_in(self, app, client):
         """ログインしていない場合のテスト"""
-        # この行は削除（TESTINGモードでは常にユーザーが設定される）
+        # TESTINGモードを一時的に無効化
+        app.config["TESTING"] = False
 
-        response = client.post("/api/screen/fundamental", json={})
+        with patch(
+            "src.auth.decorators.AuthManager.get_user_by_session"
+        ) as mock_get_user:
+            # ユーザーが存在しない（ログインしていない）状態をシミュレート
+            mock_get_user.return_value = None
+
+            response = client.post("/api/screen/fundamental", json={})
 
         assert response.status_code == 401
 
-    def test_screen_fundamental_not_admin(self, client, normal_user):
+    def test_screen_fundamental_not_admin(self, app, client, normal_user):
         """管理者でない場合のテスト"""
-        # TESTINGモードでは自動的にcurrent_userが設定される
+        # TESTINGモードを一時的に無効化
+        app.config["TESTING"] = False
 
-        response = client.post("/api/screen/fundamental", json={})
+        with patch(
+            "src.auth.decorators.AuthManager.get_user_by_session"
+        ) as mock_get_user:
+            # portfolio_onlyユーザーを返す
+            mock_get_user.return_value = normal_user
+
+            response = client.post("/api/screen/fundamental", json={})
 
         assert response.status_code == 403
 
@@ -335,22 +388,44 @@ class TestScreenTechnical:
         mock_conn = MagicMock()
         mock_connect.return_value = mock_conn
 
-        # Excel書き込みのモック
-        with patch("pandas.ExcelWriter") as mock_excel_writer:
-            mock_writer = MagicMock()
-            mock_excel_writer.return_value.__enter__.return_value = mock_writer
-            mock_worksheet = MagicMock()
-            mock_writer.sheets = {"Signals": mock_worksheet}
+        # Excel書き込み関連のモック
+        # xlsxwriterのモック
+        mock_worksheet = MagicMock()
+        mock_worksheet.set_column = MagicMock()
 
-            # リクエスト
-            response = client.post(
-                "/api/screen/technical",
-                json={
-                    "action": "screen",
-                    "as_of": "2024-01-15",
-                    "lookback": 20,
-                },
-            )
+        mock_workbook = MagicMock()
+        mock_workbook.add_worksheet = MagicMock(return_value=mock_worksheet)
+
+        # ExcelWriterのモック
+        mock_writer = MagicMock()
+        mock_writer.sheets = {"Signals": mock_worksheet}
+        mock_writer.book = mock_workbook
+        mock_writer.save = MagicMock()
+        mock_writer.close = MagicMock()
+        mock_writer.__enter__ = MagicMock(return_value=mock_writer)
+        mock_writer.__exit__ = MagicMock(return_value=None)
+
+        # DataFrame.to_excelのモック
+        def mock_to_excel(writer, sheet_name=None, index=True):
+            # writer.sheetsにワークシートを追加
+            if sheet_name:
+                writer.sheets[sheet_name] = mock_worksheet
+
+        with patch(
+            "src.ui.blueprints.screening.routes.pd.ExcelWriter"
+        ) as mock_excel_writer_class:
+            mock_excel_writer_class.return_value = mock_writer
+
+            with patch.object(pd.DataFrame, "to_excel", side_effect=mock_to_excel):
+                # リクエスト
+                response = client.post(
+                    "/api/screen/technical",
+                    json={
+                        "action": "screen",
+                        "as_of": "2024-01-15",
+                        "lookback": 20,
+                    },
+                )
 
         # 検証
         assert response.status_code == 200
@@ -421,9 +496,37 @@ class TestScreenTechnical:
         mock_conn = MagicMock()
         mock_connect.return_value = mock_conn
 
-        with patch("pandas.ExcelWriter"):
-            # リクエスト（actionなし）
-            response = client.post("/api/screen/technical", json={})
+        # Excel書き込み関連のモック
+        # xlsxwriterのモック
+        mock_worksheet = MagicMock()
+        mock_worksheet.set_column = MagicMock()
+
+        mock_workbook = MagicMock()
+        mock_workbook.add_worksheet = MagicMock(return_value=mock_worksheet)
+
+        # ExcelWriterのモック
+        mock_writer = MagicMock()
+        mock_writer.sheets = {"Signals": mock_worksheet}
+        mock_writer.book = mock_workbook
+        mock_writer.save = MagicMock()
+        mock_writer.close = MagicMock()
+        mock_writer.__enter__ = MagicMock(return_value=mock_writer)
+        mock_writer.__exit__ = MagicMock(return_value=None)
+
+        # DataFrame.to_excelのモック
+        def mock_to_excel(writer, sheet_name=None, index=True):
+            # writer.sheetsにワークシートを追加
+            if sheet_name:
+                writer.sheets[sheet_name] = mock_worksheet
+
+        with patch(
+            "src.ui.blueprints.screening.routes.pd.ExcelWriter"
+        ) as mock_excel_writer_class:
+            mock_excel_writer_class.return_value = mock_writer
+
+            with patch.object(pd.DataFrame, "to_excel", side_effect=mock_to_excel):
+                # リクエスト（actionなし）
+                response = client.post("/api/screen/technical", json={})
 
         # 検証
         assert response.status_code == 200
@@ -517,12 +620,40 @@ class TestScreenTechnical:
         mock_conn = MagicMock()
         mock_connect.return_value = mock_conn
 
-        with patch("pandas.ExcelWriter"):
-            # リクエスト
-            response = client.post(
-                "/api/screen/technical",
-                json={"action": "screen", "as_of": "2024-01-15"},
-            )
+        # Excel書き込み関連のモック
+        # xlsxwriterのモック
+        mock_worksheet = MagicMock()
+        mock_worksheet.set_column = MagicMock()
+
+        mock_workbook = MagicMock()
+        mock_workbook.add_worksheet = MagicMock(return_value=mock_worksheet)
+
+        # ExcelWriterのモック
+        mock_writer = MagicMock()
+        mock_writer.sheets = {"Signals": mock_worksheet}
+        mock_writer.book = mock_workbook
+        mock_writer.save = MagicMock()
+        mock_writer.close = MagicMock()
+        mock_writer.__enter__ = MagicMock(return_value=mock_writer)
+        mock_writer.__exit__ = MagicMock(return_value=None)
+
+        # DataFrame.to_excelのモック
+        def mock_to_excel(writer, sheet_name=None, index=True):
+            # writer.sheetsにワークシートを追加
+            if sheet_name:
+                writer.sheets[sheet_name] = mock_worksheet
+
+        with patch(
+            "src.ui.blueprints.screening.routes.pd.ExcelWriter"
+        ) as mock_excel_writer_class:
+            mock_excel_writer_class.return_value = mock_writer
+
+            with patch.object(pd.DataFrame, "to_excel", side_effect=mock_to_excel):
+                # リクエスト
+                response = client.post(
+                    "/api/screen/technical",
+                    json={"action": "screen", "as_of": "2024-01-15"},
+                )
 
         # 検証
         assert response.status_code == 200
@@ -698,18 +829,40 @@ class TestScreeningIntegration:
         mock_conn = MagicMock()
         mock_connect.return_value = mock_conn
 
-        # Excel書き込みのモック
-        with patch("pandas.ExcelWriter") as mock_excel_writer:
-            mock_writer = MagicMock()
-            mock_excel_writer.return_value.__enter__.return_value = mock_writer
-            mock_worksheet = MagicMock()
-            mock_writer.sheets = {"Signals": mock_worksheet}
+        # Excel書き込み関連のモック
+        # xlsxwriterのモック
+        mock_worksheet = MagicMock()
+        mock_worksheet.set_column = MagicMock()
 
-            # リクエスト
-            response = client.post("/api/screen/fundamental", json={})
-            assert response.status_code == 200
+        mock_workbook = MagicMock()
+        mock_workbook.add_worksheet = MagicMock(return_value=mock_worksheet)
 
-            # 列幅設定の確認
-            # set_columnが呼ばれたことを確認
-            mock_worksheet.set_column.assert_called()
-            # 具体的な呼び出し内容は実装によって異なるため、詳細なアサーションは避ける
+        # ExcelWriterのモック
+        mock_writer = MagicMock()
+        mock_writer.sheets = {"Signals": mock_worksheet}
+        mock_writer.book = mock_workbook
+        mock_writer.save = MagicMock()
+        mock_writer.close = MagicMock()
+        mock_writer.__enter__ = MagicMock(return_value=mock_writer)
+        mock_writer.__exit__ = MagicMock(return_value=None)
+
+        # DataFrame.to_excelのモック
+        def mock_to_excel(writer, sheet_name=None, index=True):
+            # writer.sheetsにワークシートを追加
+            if sheet_name:
+                writer.sheets[sheet_name] = mock_worksheet
+
+        with patch(
+            "src.ui.blueprints.screening.routes.pd.ExcelWriter"
+        ) as mock_excel_writer_class:
+            mock_excel_writer_class.return_value = mock_writer
+
+            with patch.object(pd.DataFrame, "to_excel", side_effect=mock_to_excel):
+                # リクエスト
+                response = client.post("/api/screen/fundamental", json={})
+                assert response.status_code == 200
+
+                # 列幅設定の確認
+                # set_columnが呼ばれたことを確認
+                mock_worksheet.set_column.assert_called()
+                # 具体的な呼び出し内容は実装によって異なるため、詳細なアサーションは避ける
