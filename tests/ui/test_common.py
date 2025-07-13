@@ -31,13 +31,18 @@ class TestGetSecretKey:
         """ファイルからシークレットキーを読み込み"""
         test_key = "test-secret-key-from-file"
 
-        mock_path = MagicMock()
-        mock_path.exists.return_value = True
-        mock_path.read_text.return_value = f"{test_key}\n"
+        mock_secret_key_file = MagicMock()
+        mock_secret_key_file.exists.return_value = True
+        mock_secret_key_file.read_text.return_value = f"{test_key}\n"
+
+        mock_config = MagicMock()
+        mock_config.__truediv__.return_value = mock_secret_key_file
+
+        mock_root = MagicMock()
+        mock_root.__truediv__.return_value = mock_config
 
         with patch.dict(os.environ, {}, clear=True):  # 環境変数をクリア
-            with patch("src.ui.common.project_root") as mock_root:
-                mock_root.__truediv__.return_value = mock_path
+            with patch("src.ui.common.project_root", mock_root):
                 assert get_secret_key() == test_key
 
     @patch("src.ui.common.secrets.token_urlsafe")
@@ -46,21 +51,27 @@ class TestGetSecretKey:
         test_key = "new-generated-secret-key"
         mock_token.return_value = test_key
 
-        mock_path = MagicMock()
-        mock_path.exists.return_value = False
         mock_parent = MagicMock()
-        mock_path.parent = mock_parent
+
+        mock_secret_key_file = MagicMock()
+        mock_secret_key_file.exists.return_value = False
+        mock_secret_key_file.parent = mock_parent
+
+        mock_config = MagicMock()
+        mock_config.__truediv__.return_value = mock_secret_key_file
+
+        mock_root = MagicMock()
+        mock_root.__truediv__.return_value = mock_config
 
         with patch.dict(os.environ, {}, clear=True):
-            with patch("src.ui.common.project_root") as mock_root:
-                mock_root.__truediv__.return_value = mock_path
+            with patch("src.ui.common.project_root", mock_root):
                 result = get_secret_key()
 
                 assert result == test_key
                 mock_token.assert_called_once_with(32)
                 mock_parent.mkdir.assert_called_once_with(exist_ok=True)
-                mock_path.write_text.assert_called_once_with(test_key)
-                mock_path.chmod.assert_called_once_with(0o600)
+                mock_secret_key_file.write_text.assert_called_once_with(test_key)
+                mock_secret_key_file.chmod.assert_called_once_with(0o600)
 
 
 class TestGenerateCsrfToken:
