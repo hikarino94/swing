@@ -217,10 +217,11 @@ class TestCreateSectorCompositionChart:
 
         # 検証
         assert isinstance(fig, Figure)
-        # セクター別に集約されている
-        assert len(fig.data[0].labels) == 3
-        # Noneは"不明"に変換される
-        assert "不明" in fig.data[0].labels
+        # セクター別に集約されている（Noneは除外される）
+        assert len(fig.data[0].labels) == 2
+        # 情報通信は集約されて1つになる
+        assert "情報通信" in fig.data[0].labels
+        assert "電気機器" in fig.data[0].labels
         assert fig.layout.title.text == "セクター別構成比"
 
     def test_create_sector_composition_chart_colors(self):
@@ -259,8 +260,11 @@ class TestCreateMarketCompositionChart:
 
         # 検証
         assert isinstance(fig, Figure)
-        assert len(fig.data[0].labels) == 3
-        assert "不明" in fig.data[0].labels
+        # Noneは除外される
+        assert len(fig.data[0].labels) == 2
+        # 東証プライムと東証グロースのみ
+        assert "東証プライム" in fig.data[0].labels
+        assert "東証グロース" in fig.data[0].labels
         assert fig.layout.title.text == "市場別構成比"
         # Boldカラーパレットが使用されている
         assert fig.data[0].marker.colors is not None
@@ -432,7 +436,7 @@ class TestCompositionVisualizerIntegration:
         visualizer = CompositionVisualizer(user_id=123)
         fig = visualizer._create_stock_composition_chart(df, 180000)
 
-        # 会社名がNoneでもエラーにならないことを確認
+        # 会社名がNoneでも空文字として扱われる
         assert len(fig.data[0].labels) == 2
         # ラベルにコードが含まれることを確認
         assert "1234" in fig.data[0].labels[0]

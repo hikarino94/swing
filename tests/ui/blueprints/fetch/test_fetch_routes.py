@@ -2,7 +2,6 @@
 
 import json
 import sys
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -43,7 +42,7 @@ def normal_user():
     """一般ユーザー"""
     user = MagicMock(spec=User)
     user.username = "user"
-    user.role = "user"
+    user.role = "portfolio_only"
     return user
 
 
@@ -52,12 +51,9 @@ class TestFetchQuotes:
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
     @patch("src.ui.blueprints.fetch.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
-    def test_fetch_quotes_with_dates(
-        self, mock_get_user, mock_logger, mock_run, client, admin_user
-    ):
+    def test_fetch_quotes_with_dates(self, mock_logger, mock_run, client, admin_user):
         """日付指定時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {"success": True, "message": "Success"}
 
         # リクエスト
@@ -84,12 +80,9 @@ class TestFetchQuotes:
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
     @patch("src.ui.blueprints.fetch.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
-    def test_fetch_quotes_no_dates(
-        self, mock_get_user, mock_logger, mock_run, client, admin_user
-    ):
+    def test_fetch_quotes_no_dates(self, mock_logger, mock_run, client, admin_user):
         """日付指定なしのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {"success": True, "message": "Success"}
 
         # リクエスト（日付なし）
@@ -106,12 +99,9 @@ class TestFetchQuotes:
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
     @patch("src.ui.blueprints.fetch.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
-    def test_fetch_quotes_failure(
-        self, mock_get_user, mock_logger, mock_run, client, admin_user
-    ):
+    def test_fetch_quotes_failure(self, mock_logger, mock_run, client, admin_user):
         """取得失敗時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {
             "success": False,
             "error": "API connection failed",
@@ -132,12 +122,9 @@ class TestFetchQuotes:
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
     @patch("src.ui.blueprints.fetch.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
-    def test_fetch_quotes_exception(
-        self, mock_get_user, mock_logger, mock_run, client, admin_user
-    ):
+    def test_fetch_quotes_exception(self, mock_logger, mock_run, client, admin_user):
         """例外発生時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.side_effect = Exception("Unexpected error")
 
         # リクエスト
@@ -153,23 +140,41 @@ class TestFetchQuotes:
         # エラーログの確認
         mock_logger.error.assert_called()
 
-    @patch("src.auth.decorators.get_current_user")
-    def test_fetch_quotes_not_logged_in(self, mock_get_user, client):
+    def test_fetch_quotes_not_logged_in(self, app, client):
         """ログインしていない場合のテスト"""
-        mock_get_user.return_value = None
+        # TESTINGモードを一時的に無効化
+        app.config["TESTING"] = False
 
-        response = client.post("/api/fetch/quotes", json={})
+        with patch(
+            "src.auth.decorators.AuthManager.get_user_by_session"
+        ) as mock_get_user:
+            # ユーザーが存在しない（ログインしていない）状態をシミュレート
+            mock_get_user.return_value = None
 
-        assert response.status_code == 401
+            response = client.post("/api/fetch/quotes", json={})
 
-    @patch("src.auth.decorators.get_current_user")
-    def test_fetch_quotes_not_admin(self, mock_get_user, client, normal_user):
+            assert response.status_code == 401
+            data = json.loads(response.data)
+            assert data["success"] is False
+            assert data["error"] == "ログインが必要です"
+
+    def test_fetch_quotes_not_admin(self, app, client, normal_user):
         """管理者でない場合のテスト"""
-        mock_get_user.return_value = normal_user
+        # TESTINGモードを一時的に無効化
+        app.config["TESTING"] = False
 
-        response = client.post("/api/fetch/quotes", json={})
+        with patch(
+            "src.auth.decorators.AuthManager.get_user_by_session"
+        ) as mock_get_user:
+            # 一般ユーザー（portfolio_only権限）をシミュレート
+            mock_get_user.return_value = normal_user
 
-        assert response.status_code == 403
+            response = client.post("/api/fetch/quotes", json={})
+
+            assert response.status_code == 403
+            data = json.loads(response.data)
+            assert data["success"] is False
+            assert data["error"] == "管理者権限が必要です"
 
 
 class TestFetchListed:
@@ -177,12 +182,9 @@ class TestFetchListed:
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
     @patch("src.ui.blueprints.fetch.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
-    def test_fetch_listed_success(
-        self, mock_get_user, mock_logger, mock_run, client, admin_user
-    ):
+    def test_fetch_listed_success(self, mock_logger, mock_run, client, admin_user):
         """正常取得のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {"success": True, "message": "Success"}
 
         # リクエスト
@@ -203,12 +205,9 @@ class TestFetchListed:
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
     @patch("src.ui.blueprints.fetch.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
-    def test_fetch_listed_failure(
-        self, mock_get_user, mock_logger, mock_run, client, admin_user
-    ):
+    def test_fetch_listed_failure(self, mock_logger, mock_run, client, admin_user):
         """取得失敗時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {
             "success": False,
             "error": "Database error",
@@ -229,12 +228,9 @@ class TestFetchListed:
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
     @patch("src.ui.blueprints.fetch.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
-    def test_fetch_listed_exception(
-        self, mock_get_user, mock_logger, mock_run, client, admin_user
-    ):
+    def test_fetch_listed_exception(self, mock_logger, mock_run, client, admin_user):
         """例外発生時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.side_effect = Exception("Unexpected error")
 
         # リクエスト
@@ -253,12 +249,11 @@ class TestFetchStatements:
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
     @patch("src.ui.blueprints.fetch.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
     def test_fetch_statements_all_params(
-        self, mock_get_user, mock_logger, mock_run, client, admin_user
+        self, mock_logger, mock_run, client, admin_user
     ):
         """全パラメータ指定時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {"success": True, "message": "Success"}
 
         # リクエスト
@@ -285,12 +280,9 @@ class TestFetchStatements:
         mock_logger.info.assert_any_call("財務諸表取得（モード1）が正常に完了しました")
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
-    @patch("src.auth.decorators.get_current_user")
-    def test_fetch_statements_default_mode(
-        self, mock_get_user, mock_run, client, admin_user
-    ):
+    def test_fetch_statements_default_mode(self, mock_run, client, admin_user):
         """デフォルトモードのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {"success": True}
 
         # リクエスト（モード指定なし）
@@ -304,12 +296,9 @@ class TestFetchStatements:
         mock_run.assert_called_once_with(expected_cmd, "財務諸表2")
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
-    @patch("src.auth.decorators.get_current_user")
-    def test_fetch_statements_various_modes(
-        self, mock_get_user, mock_run, client, admin_user
-    ):
+    def test_fetch_statements_various_modes(self, mock_run, client, admin_user):
         """異なるモードのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {"success": True}
 
         modes = ["1", "2", "3"]
@@ -331,12 +320,9 @@ class TestFetchStatements:
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
     @patch("src.ui.blueprints.fetch.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
-    def test_fetch_statements_failure(
-        self, mock_get_user, mock_logger, mock_run, client, admin_user
-    ):
+    def test_fetch_statements_failure(self, mock_logger, mock_run, client, admin_user):
         """取得失敗時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {
             "success": False,
             "error": "Invalid date range",
@@ -360,10 +346,9 @@ class TestFetchIntegration:
     """フェッチ統合テスト"""
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
-    @patch("src.auth.decorators.get_current_user")
-    def test_all_fetch_endpoints(self, mock_get_user, mock_run, client, admin_user):
+    def test_all_fetch_endpoints(self, mock_run, client, admin_user):
         """全フェッチエンドポイントの動作確認"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {"success": True, "message": "Success"}
 
         endpoints = [
@@ -398,18 +383,16 @@ class TestFetchIntegration:
 
     @patch("builtins.print")
     @patch("src.ui.blueprints.fetch.routes.run_command")
-    @patch("src.auth.decorators.get_current_user")
-    def test_console_output(
-        self, mock_get_user, mock_run, mock_print, client, admin_user
-    ):
+    def test_console_output(self, mock_run, mock_print, client, admin_user):
         """コンソール出力のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {"success": True}
 
         # 現在時刻を固定
         with patch("src.ui.blueprints.fetch.routes.datetime") as mock_datetime:
-            mock_datetime.now.return_value = datetime(2024, 1, 15, 12, 0, 0)
-            mock_datetime.now().strftime.return_value = "2024-01-15 12:00:00"
+            mock_now = MagicMock()
+            mock_now.strftime.return_value = "2024-01-15 12:00:00"
+            mock_datetime.now.return_value = mock_now
 
             # リクエスト
             client.post(
@@ -425,10 +408,9 @@ class TestFetchIntegration:
             mock_print.assert_any_call("[API] 株価データ取得が正常に完了しました")
 
     @patch("src.ui.blueprints.fetch.routes.run_command")
-    @patch("src.auth.decorators.get_current_user")
-    def test_empty_json_values(self, mock_get_user, mock_run, client, admin_user):
+    def test_empty_json_values(self, mock_run, client, admin_user):
         """空のJSON値のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {"success": True}
 
         # 空の値を送信

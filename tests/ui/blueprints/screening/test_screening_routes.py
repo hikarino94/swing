@@ -55,10 +55,8 @@ class TestScreenFundamental:
     @patch("src.ui.blueprints.screening.routes.run_command")
     @patch("src.ui.blueprints.screening.routes.timestamped_path")
     @patch("src.ui.blueprints.screening.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_fundamental_all_params(
         self,
-        mock_get_user,
         mock_logger,
         mock_timestamp,
         mock_run,
@@ -68,7 +66,7 @@ class TestScreenFundamental:
         admin_user,
     ):
         """全パラメータ指定時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_timestamp.return_value = "/output/screening/fundamental_20240115.xlsx"
         mock_run.return_value = {"success": True, "message": "Success", "error": ""}
 
@@ -120,10 +118,8 @@ class TestScreenFundamental:
     @patch("src.ui.blueprints.screening.routes.sqlite3.connect")
     @patch("src.ui.blueprints.screening.routes.run_command")
     @patch("src.ui.blueprints.screening.routes.timestamped_path")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_fundamental_minimal_params(
         self,
-        mock_get_user,
         mock_timestamp,
         mock_run,
         mock_connect,
@@ -132,7 +128,7 @@ class TestScreenFundamental:
         admin_user,
     ):
         """最小パラメータのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_timestamp.return_value = "/output/screening/fundamental.xlsx"
         mock_run.return_value = {"success": True, "error": ""}
 
@@ -164,10 +160,8 @@ class TestScreenFundamental:
     @patch("src.ui.blueprints.screening.routes.run_command")
     @patch("src.ui.blueprints.screening.routes.timestamped_path")
     @patch("src.ui.blueprints.screening.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_fundamental_empty_results(
         self,
-        mock_get_user,
         mock_logger,
         mock_timestamp,
         mock_run,
@@ -177,7 +171,7 @@ class TestScreenFundamental:
         admin_user,
     ):
         """結果が空の場合のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_timestamp.return_value = "/output/screening/fundamental.xlsx"
         mock_run.return_value = {"success": True, "error": ""}
 
@@ -204,10 +198,8 @@ class TestScreenFundamental:
     @patch("src.ui.blueprints.screening.routes.run_command")
     @patch("src.ui.blueprints.screening.routes.timestamped_path")
     @patch("src.ui.blueprints.screening.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_fundamental_excel_error(
         self,
-        mock_get_user,
         mock_logger,
         mock_timestamp,
         mock_run,
@@ -217,7 +209,7 @@ class TestScreenFundamental:
         admin_user,
     ):
         """Excel出力エラーのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_timestamp.return_value = "/output/screening/fundamental.xlsx"
         mock_run.return_value = {"success": True, "error": ""}
 
@@ -246,12 +238,11 @@ class TestScreenFundamental:
 
     @patch("src.ui.blueprints.screening.routes.run_command")
     @patch("src.ui.blueprints.screening.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_fundamental_command_failure(
-        self, mock_get_user, mock_logger, mock_run, client, admin_user
+        self, mock_logger, mock_run, client, admin_user
     ):
         """コマンド実行失敗のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_run.return_value = {
             "success": False,
             "error": "Command failed",
@@ -269,19 +260,17 @@ class TestScreenFundamental:
         # エラーログの確認
         mock_logger.error.assert_called()
 
-    @patch("src.auth.decorators.get_current_user")
-    def test_screen_fundamental_not_logged_in(self, mock_get_user, client):
+    def test_screen_fundamental_not_logged_in(self, client):
         """ログインしていない場合のテスト"""
-        mock_get_user.return_value = None
+        # この行は削除（TESTINGモードでは常にユーザーが設定される）
 
         response = client.post("/api/screen/fundamental", json={})
 
         assert response.status_code == 401
 
-    @patch("src.auth.decorators.get_current_user")
-    def test_screen_fundamental_not_admin(self, mock_get_user, client, normal_user):
+    def test_screen_fundamental_not_admin(self, client, normal_user):
         """管理者でない場合のテスト"""
-        mock_get_user.return_value = normal_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
 
         response = client.post("/api/screen/fundamental", json={})
 
@@ -296,10 +285,8 @@ class TestScreenTechnical:
     @patch("src.ui.blueprints.screening.routes.run_command")
     @patch("src.ui.blueprints.screening.routes.timestamped_path")
     @patch("src.ui.blueprints.screening.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_technical_screen_action(
         self,
-        mock_get_user,
         mock_logger,
         mock_timestamp,
         mock_run,
@@ -309,7 +296,7 @@ class TestScreenTechnical:
         admin_user,
     ):
         """screenアクションのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_timestamp.return_value = "/output/screening/technical_20240115.xlsx"
         mock_run.return_value = {"success": True, "message": "Success", "error": ""}
 
@@ -361,12 +348,11 @@ class TestScreenTechnical:
 
     @patch("src.ui.blueprints.screening.routes.run_command")
     @patch("src.ui.blueprints.screening.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_technical_indicators_action(
-        self, mock_get_user, mock_logger, mock_run, client, admin_user
+        self, mock_logger, mock_run, client, admin_user
     ):
         """indicatorsアクションのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_run.return_value = {"success": True, "error": ""}
 
         # リクエスト
@@ -393,10 +379,8 @@ class TestScreenTechnical:
     @patch("src.ui.blueprints.screening.routes.sqlite3.connect")
     @patch("src.ui.blueprints.screening.routes.run_command")
     @patch("src.ui.blueprints.screening.routes.timestamped_path")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_technical_default_action(
         self,
-        mock_get_user,
         mock_timestamp,
         mock_run,
         mock_connect,
@@ -405,7 +389,7 @@ class TestScreenTechnical:
         admin_user,
     ):
         """デフォルトアクション（screen）のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_timestamp.return_value = "/output/screening/technical.xlsx"
         mock_run.return_value = {"success": True, "error": ""}
 
@@ -431,10 +415,8 @@ class TestScreenTechnical:
     @patch("src.ui.blueprints.screening.routes.run_command")
     @patch("src.ui.blueprints.screening.routes.timestamped_path")
     @patch("src.ui.blueprints.screening.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_technical_empty_results(
         self,
-        mock_get_user,
         mock_logger,
         mock_timestamp,
         mock_run,
@@ -444,7 +426,7 @@ class TestScreenTechnical:
         admin_user,
     ):
         """結果が空の場合のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_timestamp.return_value = "/output/screening/technical.xlsx"
         mock_run.return_value = {"success": True, "error": ""}
 
@@ -468,12 +450,11 @@ class TestScreenTechnical:
 
     @patch("src.ui.blueprints.screening.routes.run_command")
     @patch("src.ui.blueprints.screening.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_technical_exception(
-        self, mock_get_user, mock_logger, mock_run, client, admin_user
+        self, mock_logger, mock_run, client, admin_user
     ):
         """例外発生時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_run.side_effect = Exception("Unexpected error")
 
         # リクエスト
@@ -493,10 +474,8 @@ class TestScreenTechnical:
     @patch("src.ui.blueprints.screening.routes.run_command")
     @patch("src.ui.blueprints.screening.routes.timestamped_path")
     @patch("src.ui.blueprints.screening.routes.logger")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_technical_with_as_of_date(
         self,
-        mock_get_user,
         mock_logger,
         mock_timestamp,
         mock_run,
@@ -506,7 +485,7 @@ class TestScreenTechnical:
         admin_user,
     ):
         """as_of日付指定時のSQLクエリテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_timestamp.return_value = "/output/screening/technical.xlsx"
         mock_run.return_value = {"success": True, "error": ""}
 
@@ -537,10 +516,9 @@ class TestScreenMl:
     """MLスクリーニングのテスト"""
 
     @patch("src.ui.blueprints.screening.routes.run_command")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_ml_train_action(self, mock_get_user, mock_run, client, admin_user):
         """trainアクションのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_run.return_value = {"success": True, "message": "Training completed"}
 
         # リクエスト
@@ -560,10 +538,9 @@ class TestScreenMl:
         mock_run.assert_called_once_with(expected_cmd, "MLtrain")
 
     @patch("src.ui.blueprints.screening.routes.run_command")
-    @patch("src.auth.decorators.get_current_user")
     def test_screen_ml_screen_action(self, mock_get_user, mock_run, client, admin_user):
         """screenアクションのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_run.return_value = {
             "success": True,
             "message": "Screening completed",
@@ -591,12 +568,9 @@ class TestScreenMl:
         mock_run.assert_called_once_with(expected_cmd, "MLscreen")
 
     @patch("src.ui.blueprints.screening.routes.run_command")
-    @patch("src.auth.decorators.get_current_user")
-    def test_screen_ml_default_action(
-        self, mock_get_user, mock_run, client, admin_user
-    ):
+    def test_screen_ml_default_action(self, mock_run, client, admin_user):
         """デフォルトアクション（screen）のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_run.return_value = {"success": True}
 
         # リクエスト（actionなし）
@@ -610,12 +584,9 @@ class TestScreenMl:
         mock_run.assert_called_once_with(expected_cmd, "MLscreen")
 
     @patch("src.ui.blueprints.screening.routes.run_command")
-    @patch("src.auth.decorators.get_current_user")
-    def test_screen_ml_train_without_force(
-        self, mock_get_user, mock_run, client, admin_user
-    ):
+    def test_screen_ml_train_without_force(self, mock_run, client, admin_user):
         """forceフラグなしのtrainアクションテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_run.return_value = {"success": True}
 
         # リクエスト
@@ -636,10 +607,9 @@ class TestScreeningIntegration:
     """スクリーニング統合テスト"""
 
     @patch("src.ui.blueprints.screening.routes.run_command")
-    @patch("src.auth.decorators.get_current_user")
     def test_all_screening_endpoints(self, mock_get_user, mock_run, client, admin_user):
         """全スクリーニングエンドポイントの動作確認"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_run.return_value = {"success": True, "message": "Success"}
 
         endpoints = [
@@ -680,10 +650,8 @@ class TestScreeningIntegration:
     @patch("src.ui.blueprints.screening.routes.sqlite3.connect")
     @patch("src.ui.blueprints.screening.routes.run_command")
     @patch("src.ui.blueprints.screening.routes.timestamped_path")
-    @patch("src.auth.decorators.get_current_user")
     def test_excel_column_width_adjustment(
         self,
-        mock_get_user,
         mock_timestamp,
         mock_run,
         mock_connect,
@@ -692,7 +660,7 @@ class TestScreeningIntegration:
         admin_user,
     ):
         """Excel列幅調整のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードでは自動的にcurrent_userが設定される
         mock_timestamp.return_value = "/output/screening/fundamental.xlsx"
         mock_run.return_value = {"success": True, "error": ""}
 

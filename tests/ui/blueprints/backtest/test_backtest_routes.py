@@ -42,7 +42,7 @@ def normal_user():
     """一般ユーザー"""
     user = MagicMock(spec=User)
     user.username = "user"
-    user.role = "user"
+    user.role = "portfolio_only"
     return user
 
 
@@ -51,12 +51,11 @@ class TestBacktestFundamental:
 
     @patch("src.ui.blueprints.backtest.routes.run_command")
     @patch("src.ui.blueprints.backtest.routes.timestamped_path")
-    @patch("src.auth.decorators.get_current_user")
     def test_backtest_fundamental_all_params(
-        self, mock_get_user, mock_timestamp, mock_run, client, admin_user
+        self, mock_timestamp, mock_run, client, admin_user
     ):
         """全パラメータ指定時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_timestamp.return_value = "/output/backtest/fundamental_20240115.json"
         mock_run.return_value = {"success": True, "message": "Success"}
 
@@ -84,12 +83,11 @@ class TestBacktestFundamental:
 
     @patch("src.ui.blueprints.backtest.routes.run_command")
     @patch("src.ui.blueprints.backtest.routes.timestamped_path")
-    @patch("src.auth.decorators.get_current_user")
     def test_backtest_fundamental_minimal_params(
-        self, mock_get_user, mock_timestamp, mock_run, client, admin_user
+        self, mock_timestamp, mock_run, client, admin_user
     ):
         """最小パラメータのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_timestamp.return_value = "/output/backtest/fundamental.json"
         mock_run.return_value = {"success": True, "message": "Success"}
 
@@ -105,12 +103,11 @@ class TestBacktestFundamental:
 
     @patch("src.ui.blueprints.backtest.routes.run_command")
     @patch("src.ui.blueprints.backtest.routes.timestamped_path")
-    @patch("src.auth.decorators.get_current_user")
     def test_backtest_fundamental_failure(
-        self, mock_get_user, mock_timestamp, mock_run, client, admin_user
+        self, mock_timestamp, mock_run, client, admin_user
     ):
         """失敗時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_timestamp.return_value = "/output/backtest/fundamental.json"
         mock_run.return_value = {"success": False, "message": "Error occurred"}
 
@@ -123,23 +120,41 @@ class TestBacktestFundamental:
         assert data["success"] is False
         assert data["output_file"] is None
 
-    @patch("src.auth.decorators.get_current_user")
-    def test_backtest_fundamental_not_logged_in(self, mock_get_user, client):
+    def test_backtest_fundamental_not_logged_in(self, app, client):
         """ログインしていない場合のテスト"""
-        mock_get_user.return_value = None
+        # TESTINGモードを一時的に無効化
+        app.config["TESTING"] = False
 
-        response = client.post("/api/backtest/fundamental", json={})
+        with patch(
+            "src.auth.decorators.AuthManager.get_user_by_session"
+        ) as mock_get_user:
+            # ユーザーが存在しない（ログインしていない）状態をシミュレート
+            mock_get_user.return_value = None
 
-        assert response.status_code == 401
+            response = client.post("/api/backtest/fundamental", json={})
 
-    @patch("src.auth.decorators.get_current_user")
-    def test_backtest_fundamental_not_admin(self, mock_get_user, client, normal_user):
+            assert response.status_code == 401
+            data = json.loads(response.data)
+            assert data["success"] is False
+            assert data["error"] == "ログインが必要です"
+
+    def test_backtest_fundamental_not_admin(self, app, client, normal_user):
         """管理者でない場合のテスト"""
-        mock_get_user.return_value = normal_user
+        # TESTINGモードを一時的に無効化
+        app.config["TESTING"] = False
 
-        response = client.post("/api/backtest/fundamental", json={})
+        with patch(
+            "src.auth.decorators.AuthManager.get_user_by_session"
+        ) as mock_get_user:
+            # 一般ユーザー（portfolio_only権限）をシミュレート
+            mock_get_user.return_value = normal_user
 
-        assert response.status_code == 403
+            response = client.post("/api/backtest/fundamental", json={})
+
+            assert response.status_code == 403
+            data = json.loads(response.data)
+            assert data["success"] is False
+            assert data["error"] == "管理者権限が必要です"
 
 
 class TestBacktestTechnical:
@@ -147,12 +162,11 @@ class TestBacktestTechnical:
 
     @patch("src.ui.blueprints.backtest.routes.run_command")
     @patch("src.ui.blueprints.backtest.routes.timestamped_path")
-    @patch("src.auth.decorators.get_current_user")
     def test_backtest_technical_all_params(
-        self, mock_get_user, mock_timestamp, mock_run, client, admin_user
+        self, mock_timestamp, mock_run, client, admin_user
     ):
         """全パラメータ指定時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_timestamp.return_value = "/output/backtest/technical_20240115.json"
         mock_run.return_value = {"success": True, "message": "Success"}
 
@@ -180,12 +194,11 @@ class TestBacktestTechnical:
 
     @patch("src.ui.blueprints.backtest.routes.run_command")
     @patch("src.ui.blueprints.backtest.routes.timestamped_path")
-    @patch("src.auth.decorators.get_current_user")
     def test_backtest_technical_stop_loss_param(
-        self, mock_get_user, mock_timestamp, mock_run, client, admin_user
+        self, mock_timestamp, mock_run, client, admin_user
     ):
         """ストップロスパラメータのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_timestamp.return_value = "/output/backtest/technical.json"
         mock_run.return_value = {"success": True}
 
@@ -204,12 +217,11 @@ class TestBacktestTechnical:
 
     @patch("src.ui.blueprints.backtest.routes.run_command")
     @patch("src.ui.blueprints.backtest.routes.timestamped_path")
-    @patch("src.auth.decorators.get_current_user")
     def test_backtest_technical_empty_params(
-        self, mock_get_user, mock_timestamp, mock_run, client, admin_user
+        self, mock_timestamp, mock_run, client, admin_user
     ):
         """空のパラメータのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_timestamp.return_value = "/output/backtest/technical.json"
         mock_run.return_value = {"success": True}
 
@@ -234,12 +246,9 @@ class TestBacktestMl:
 
     @patch("src.ui.blueprints.backtest.routes.run_command")
     @patch("src.ui.blueprints.backtest.routes.timestamped_path")
-    @patch("src.auth.decorators.get_current_user")
-    def test_backtest_ml_all_params(
-        self, mock_get_user, mock_timestamp, mock_run, client, admin_user
-    ):
+    def test_backtest_ml_all_params(self, mock_timestamp, mock_run, client, admin_user):
         """全パラメータ指定時のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_timestamp.return_value = "/output/backtest/ml_20240115.json"
         mock_run.return_value = {"success": True, "message": "Success"}
 
@@ -266,12 +275,11 @@ class TestBacktestMl:
 
     @patch("src.ui.blueprints.backtest.routes.run_command")
     @patch("src.ui.blueprints.backtest.routes.timestamped_path")
-    @patch("src.auth.decorators.get_current_user")
     def test_backtest_ml_top_param_only(
-        self, mock_get_user, mock_timestamp, mock_run, client, admin_user
+        self, mock_timestamp, mock_run, client, admin_user
     ):
         """topパラメータのみのテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_timestamp.return_value = "/output/backtest/ml.json"
         mock_run.return_value = {"success": True}
 
@@ -297,12 +305,9 @@ class TestBacktestIntegration:
 
     @patch("src.ui.blueprints.backtest.routes.run_command")
     @patch("src.ui.blueprints.backtest.routes.timestamped_path")
-    @patch("src.auth.decorators.get_current_user")
-    def test_all_backtest_endpoints(
-        self, mock_get_user, mock_timestamp, mock_run, client, admin_user
-    ):
+    def test_all_backtest_endpoints(self, mock_timestamp, mock_run, client, admin_user):
         """全バックテストエンドポイントの動作確認"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {"success": True, "message": "Success"}
 
         endpoints = [
@@ -322,12 +327,9 @@ class TestBacktestIntegration:
             assert data["output_file"] is not None
 
     @patch("src.ui.blueprints.backtest.routes.run_command")
-    @patch("src.auth.decorators.get_current_user")
-    def test_command_injection_prevention(
-        self, mock_get_user, mock_run, client, admin_user
-    ):
+    def test_command_injection_prevention(self, mock_run, client, admin_user):
         """コマンドインジェクション防止のテスト"""
-        mock_get_user.return_value = admin_user
+        # TESTINGモードではcurrent_userが自動設定される
         mock_run.return_value = {"success": True}
 
         # 悪意のあるパラメータ
