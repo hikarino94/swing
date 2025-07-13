@@ -276,10 +276,14 @@ class PortfolioService:
         """CSVデータからHoldingオブジェクトを作成"""
         try:
             # 共通フィールド
-            code = str(data.get("code", "")).zfill(4)
+            code = str(data.get("code", "")).strip()
+            if not code:
+                return None
+
+            code = code.zfill(4)
             quantity = int(data.get("quantity", 0))
 
-            if not code or quantity == 0:
+            if quantity == 0:
                 return None
 
             # 口座タイプの取得（デフォルト: 特定）

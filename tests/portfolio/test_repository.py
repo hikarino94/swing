@@ -515,14 +515,14 @@ class TestGetPortfolioSummary:
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_get_db_connection.return_value.__enter__.return_value = mock_conn
-        mock_conn.execute.return_value = mock_cursor
 
         # DBから返されるデータ
         mock_rows = [
             ("特定口座", "specific", 3, 300000.0, 20000.0),
             ("NISA", "nisa", 2, 200000.0, 15000.0),
         ]
-        mock_cursor.fetchall.return_value = iter(mock_rows)
+        mock_cursor.__iter__ = lambda self: iter(mock_rows)
+        mock_conn.execute.return_value = mock_cursor
 
         # テスト実行
         result = PortfolioRepository.get_portfolio_summary(123)

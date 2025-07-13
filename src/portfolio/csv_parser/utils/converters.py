@@ -24,6 +24,14 @@ def normalize_code(code: str) -> str:
 
     # 372Aのような英字付きコードに対応
     code = str(code).strip()
+
+    # サフィックス（.T、T など）を削除
+    code = re.sub(r"[.\s]?T$", "", code, flags=re.IGNORECASE)
+
+    # 先頭の0を削除（5桁以上の場合）
+    if code.isdigit() and len(code) > 4:
+        code = code.lstrip("0")
+
     # 4桁の数字部分を抽出（英字は保持）
     if len(code) == 4:
         return code
@@ -33,7 +41,10 @@ def normalize_code(code: str) -> str:
         # 数字のみを抽出
         digits = re.findall(r"\d+", code)
         if digits:
-            return str(digits[0]).zfill(4)
+            digit_part = str(digits[0]).lstrip("0")
+            if len(digit_part) < 4:
+                return digit_part.zfill(4)
+            return digit_part
     return code
 
 

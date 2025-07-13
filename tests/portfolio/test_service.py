@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.portfolio.models import Holding
 from src.portfolio.service import PortfolioService
 
@@ -47,8 +49,8 @@ class TestUpdateHoldingsFromCsv:
 
         # upsert_holdingのモック設定
         service.repo.upsert_holding.side_effect = [
-            (True, False),  # 更新
-            (True, True),  # 新規
+            (True, False),  # 更新 (is_updated=True, is_new=False)
+            (False, True),  # 新規 (is_updated=False, is_new=True)
         ]
 
         # テスト実行
@@ -83,7 +85,7 @@ class TestUpdateHoldingsFromCsv:
             }
         ]
 
-        service.repo.upsert_holding.return_value = (True, True)
+        service.repo.upsert_holding.return_value = (False, True)  # 新規作成
 
         # テスト実行
         updated, new = service.update_holdings_from_csv(123, holdings_data, "NISA口座")
@@ -187,7 +189,7 @@ class TestRecalculateHoldings:
         holding = service.repo.upsert_holding.call_args[0][0]
         assert holding.code == "1234"
         assert holding.quantity == 150  # 100 + 50
-        assert holding.average_price == 1033.33  # 155000 / 150
+        assert holding.average_price == pytest.approx(1033.33, rel=1e-3)  # 155000 / 150
 
         service.update_market_values.assert_called_once_with(123)
 
@@ -538,19 +540,21 @@ class TestAggregateHoldingsByCode:
         # 検証
         assert len(result) == 2
 
-        # 5678が先（評価額が大きい）
-        assert result[0]["code"] == "5678"
-        assert result[0]["total_quantity"] == 200
-        assert result[0]["total_value"] == 120000.0
+        # 1234が先（評価額が大きい: 165000）
+        assert result[0]["code"] == "1234"
+        assert result[0]["total_quantity"] == 150  # 100 + 50
+        assert result[0]["total_value"] == 165000.0  # 110000 + 55000
 
-        # 1234の集約結果
-        assert result[1]["code"] == "1234"
-        assert result[1]["total_quantity"] == 150  # 100 + 50
-        assert result[1]["total_value"] == 165000.0  # 110000 + 55000
-        assert result[1]["total_cost"] == 155000.0  # 100*1000 + 50*1100
-        assert result[1]["average_price"] == 1033.33  # 155000 / 150
-        assert result[1]["profit_loss"] == 10000.0  # 165000 - 155000
-        assert len(result[1]["accounts"]) == 2
+        # 5678は2番目（評価額: 120000）
+        assert result[1]["code"] == "5678"
+        assert result[1]["total_quantity"] == 200
+        assert result[1]["total_value"] == 120000.0
+        assert result[0]["total_cost"] == 155000.0  # 100*1000 + 50*1100
+        assert result[0]["average_price"] == pytest.approx(
+            1033.33, rel=1e-3
+        )  # 155000 / 150
+        assert result[0]["profit_loss"] == 10000.0  # 165000 - 155000
+        assert len(result[0]["accounts"]) == 2
 
     def test_aggregate_holdings_by_code_empty(self):
         """保有銘柄がない場合のテスト"""

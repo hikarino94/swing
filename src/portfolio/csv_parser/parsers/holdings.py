@@ -30,13 +30,15 @@ class HoldingsParser(BaseCSVParser):
         if not lines:
             return []
 
-        # 保有証券_現物形式の判定（「銘柄」が複数回出現、またはBOMがある場合）
-        # またはカラム数が非常に多い場合（20以上）
+        # 保有証券_現物形式の判定
+        # - BOMがある場合
+        # - カラム数が非常に多い場合（20以上）
+        # - 「銘柄,銘柄」のように連続して出現する場合
         first_line_cols = len(lines[0].split(",")) if lines else 0
         if lines and (
-            lines[0].count("銘柄") >= 2
-            or lines[0].startswith("﻿銘柄")
+            lines[0].startswith("﻿銘柄")
             or first_line_cols > 20
+            or "銘柄,銘柄" in lines[0]  # 連続する「銘柄」列がある場合のみ
         ):
             logger.debug(
                 f"詳細形式と判定: 銘柄数={lines[0].count('銘柄')}, カラム数={first_line_cols}"
@@ -107,6 +109,10 @@ class HoldingsParser(BaseCSVParser):
                     ),
                 }
 
+                # オプションフィールド：貸株数量
+                if "貸株数量" in row:
+                    holding["lending_quantity"] = parse_number(row.get("貸株数量"))
+
                 # 必須フィールドのチェック
                 if holding["code"] and holding["quantity"] is not None:
                     holdings.append(holding)
@@ -151,6 +157,65 @@ class HoldingsParser(BaseCSVParser):
                 "投資信託（口数/つみたてNISA預り）": "つみたてNISA",
             }
 
+            # ヘッダー行を探す
+            header_found = False
+            header_index = -1
+            for i, line in enumerate(lines):
+                if "証券コード" in line or "銘柄コード" in line:
+                    header_found = True
+                    header_index = i
+                    break
+
+            # ヘッダーが見つかった場合、通常のCSVとして処理
+            if header_found and header_index < len(lines) - 1:
+                # ヘッダー行以降をCSVとして解析
+                csv_reader = csv.DictReader(
+                    io.StringIO("\n".join(lines[header_index:]))
+                )
+
+                for row in csv_reader:
+                    # 合計行などをスキップ
+                    if any(
+                        key and ("合計" in key or "合計" in str(row.get(key, "")))
+                        for key in row
+                    ):
+                        continue
+
+                    # 銘柄コードを取得
+                    code = normalize_code(
+                        row.get("証券コード", row.get("銘柄コード", ""))
+                    )
+                    if not code:
+                        continue
+
+                    holding = {
+                        "code": code,
+                        "name": row.get("銘柄名", "").strip(),
+                        "account_type": current_account_type,
+                        "quantity": parse_number(
+                            row.get("株数", row.get("保有数量", ""))
+                        ),
+                        "average_price": parse_number(row.get("取得単価", "")),
+                        "current_price": parse_number(row.get("現在値", "")),
+                        "market_value": parse_number(row.get("評価額", "")),
+                        "profit_loss": parse_number(row.get("評価損益", "")),
+                        "profit_loss_ratio": parse_number(
+                            row.get("損益率(%)", row.get("評価損益率(%)", ""))
+                        ),
+                    }
+
+                    # 必須フィールドのチェック
+                    if holding["code"] and holding["quantity"] is not None:
+                        holdings.append(holding)
+                        logger.debug(
+                            f"保有銘柄解析（SaveFile形式）: {holding['code']} - "
+                            f"{holding['quantity']}株 ({current_account_type})"
+                        )
+
+                logger.info(f"保有銘柄CSV解析完了（SaveFile形式）: {len(holdings)}銘柄")
+                return holdings
+
+            # 旧形式のSaveFile（セクション分割形式）を処理
             # 各行を処理
             i = 0
             while i < len(lines):
@@ -170,7 +235,7 @@ class HoldingsParser(BaseCSVParser):
                 if line.startswith('"'):
                     # CSVとして解析
                     reader = csv.reader(io.StringIO(line))
-                    row = next(reader, None)
+                    row = next(reader, None)  # type: ignore[arg-type]
                     if row and len(row) >= 8:
                         # 投資信託セクションかどうか判定
                         is_fund = "投資信託" in current_section_name
@@ -338,19 +403,33 @@ class HoldingsParser(BaseCSVParser):
             else:
                 # 通常のパターン
                 for i, header in enumerate(headers):
-                    # 銘柄コードを探す（「銘柄(コード)」「銘柄コード」など）
-                    if ("銘柄" in header and "コード" in header) or header == "コード":
+                    # 銘柄コードを探す（「銘柄(コード)」「銘柄コード」「コード/ティッカー」など）
+                    if (
+                        ("銘柄" in header and "コード" in header)
+                        or header == "コード"
+                        or "コード/ティッカー" in header
+                    ):
                         col_map["code"] = i
                     # 銘柄名を探す（「銘柄(名称)」「銘柄名」など）
                     elif ("銘柄" in header and ("名" in header or "称" in header)) or (
-                        header == "銘柄" and "name" not in col_map
+                        header == "銘柄"
+                        and "name" not in col_map
+                        and "code"
+                        in col_map  # 既にcode列が見つかっていれば銘柄列は名前
                     ):
+                        col_map["name"] = i
+                    # 最初の「銘柄」列は通常は名前（BOM付きも考慮）
+                    elif (
+                        header == "銘柄" or header == "﻿銘柄"
+                    ) and "name" not in col_map:
                         col_map["name"] = i
                     elif "株数" in header or "保有数量" in header or "数量" in header:
                         col_map["quantity"] = i
+                    elif header == "現買":  # 詳細形式の数量列
+                        col_map["quantity"] = i
                     elif "取得" in header and "単価" in header:
                         col_map["average_price"] = i
-                    elif "現在値" in header:
+                    elif "現在値" in header and "基準日" not in header:
                         col_map["current_price"] = i
                     elif "評価額" in header:
                         col_map["market_value"] = i

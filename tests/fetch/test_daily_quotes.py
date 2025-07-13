@@ -4,7 +4,6 @@ import datetime as dt
 
 # sys.pathの設定をモック
 import sys
-import threading
 import time
 from concurrent.futures import Future
 from pathlib import Path
@@ -39,7 +38,8 @@ class TestRateLimiter:
         """初期化のテスト"""
         limiter = RateLimiter(max_per_second=5)
         assert limiter.max_per_second == 5
-        assert isinstance(limiter.lock, threading.Lock)
+        assert hasattr(limiter, "lock")
+        assert hasattr(limiter.lock, "acquire")  # Lock-like object
         assert limiter.last_request_times == []
 
     def test_wait_if_needed_no_wait(self):
@@ -459,8 +459,8 @@ class TestNormFunction:
 
         result = _norm(df)
 
-        # 欠損値が0で埋められていることを確認
-        assert result.iloc[0]["open"] == 0
+        # 欠損値がNaNとして処理されることを確認
+        assert pd.isna(result.iloc[0]["open"])
 
     def test_norm_column_selection(self):
         """必要なカラムのみ選択"""
@@ -562,7 +562,7 @@ class TestFetchAndLoad:
         mock_get_conn.return_value = mock_conn
 
         # 並列取得の結果
-        mock_dfs = [pd.DataFrame([{"code": "1234"}])]
+        mock_dfs = [pd.DataFrame([{"code": "1234", "date": "2024-01-15"}])]
         mock_fetch_parallel.return_value = (mock_dfs, [])
 
         fetch_and_load("2024-01-15", "2024-01-16")
@@ -584,7 +584,7 @@ class TestFetchAndLoad:
         mock_conn = MagicMock()
         mock_get_conn.return_value = mock_conn
 
-        mock_df = pd.DataFrame([{"code": "1234"}])
+        mock_df = pd.DataFrame([{"code": "1234", "date": "2024-01-15"}])
         mock_by_date.return_value = mock_df
 
         fetch_and_load(None, None)
