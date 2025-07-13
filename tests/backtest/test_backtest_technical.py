@@ -1,10 +1,14 @@
 """backtest.backtest_technicalのテスト"""
 
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+
+# プロジェクトのパスを追加
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from backtest.backtest_technical import (
     _result_paths,

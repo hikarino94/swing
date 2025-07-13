@@ -1,10 +1,15 @@
 """ui.blueprints.portfolio.holdingsのテスト"""
 
 import json
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from flask import Flask
+
+# プロジェクトのパスを追加
+sys.path.append(str(Path(__file__).resolve().parents[4]))
 
 from src.auth.models import User
 from src.ui.blueprints.portfolio.holdings import holdings_bp

@@ -1,5 +1,11 @@
 """portfolio.csv_parser.parsers.holdingsのテスト"""
 
+import sys
+from pathlib import Path
+
+# プロジェクトのパスを追加
+sys.path.append(str(Path(__file__).resolve().parents[5]))
+
 from src.portfolio.csv_parser.parsers.holdings import HoldingsParser
 
 
