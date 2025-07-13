@@ -760,7 +760,7 @@ class TestPortfolioServiceIntegration:
         ]
 
         # 保有銘柄の追加
-        service.repo.upsert_holding.return_value = (True, True)
+        service.repo.upsert_holding.return_value = (False, True)  # 新規作成
         updated, new = service.update_holdings_from_csv(123, csv_data)
         assert new == 1
 
