@@ -1,6 +1,5 @@
-"""Tests for backtest/backtest_technical.py"""
+"""backtest.backtest_technicalのテスト"""
 
-import sqlite3
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -8,410 +7,388 @@ import pandas as pd
 import pytest
 
 from backtest.backtest_technical import (
-    CAPITAL_DEFAULT,
-    HOLD_DAYS_DEFAULT,
-    MIN_PRICE_DEFAULT,
-    STOP_LOSS_PCT_DEFAULT,
-    _ascii_bar_chart,
     _result_paths,
     parse_args,
     run_backtest,
+    run_backtest_range,
     run_backtest_short,
-    show_results,
-    summarize,
-    to_excel,
 )
 
 
 class TestResultPaths:
-    """結果ファイルパス生成のテスト"""
+    """_result_paths関数のテスト"""
 
     @patch("backtest.backtest_technical.get_timestamped_output_path")
     def test_result_paths(self, mock_get_path):
-        """Excel/JSONパスの生成"""
-        mock_get_path.side_effect = [
-            Path("/tmp/backtest/technical_20240115_123456.xlsx"),
-            Path("/tmp/backtest/technical_20240115_123456.json"),
-        ]
+        """結果ファイルパスの生成"""
+        excel_path = Path("/output/backtest/test_20240115_123456.xlsx")
+        json_path = Path("/output/backtest/test_20240115_123456.json")
 
-        excel_path, json_path = _result_paths("technical")
+        mock_get_path.side_effect = [excel_path, json_path]
 
-        assert excel_path.suffix == ".xlsx"
-        assert json_path.suffix == ".json"
-        assert mock_get_path.call_count == 2
+        result_excel, result_json = _result_paths("test")
+
+        assert result_excel == excel_path
+        assert result_json == json_path
+
+        # 呼び出し引数の確認
+        calls = mock_get_path.call_args_list
+        assert calls[0][0] == ("backtest", "test", ".xlsx")
+        assert calls[1][0] == ("backtest", "test", ".json")
 
 
 class TestRunBacktest:
-    """ロングポジションのバックテストのテスト"""
+    """run_backtest関数のテスト"""
 
-    def test_run_backtest_basic(self):
-        """基本的なバックテスト実行"""
-        conn = MagicMock(spec=sqlite3.Connection)
+    def setup_method(self):
+        """共通のモックデータをセットアップ"""
+        self.conn = MagicMock()
+        self.as_of = "2024-01-15"
 
-        # 指標データのモック
-        indicators_df = pd.DataFrame(
-            {
-                "date": ["2024-01-15", "2024-01-16"],
-                "code": ["1234", "5678"],
-                "signals_count": [3, 4],
-            }
-        )
-
-        # 価格データのモック（各銘柄ごとに別々のDataFrameが返される）
-        prices_1234 = pd.DataFrame(
-            {
-                "date": pd.date_range("2024-01-15", periods=20),
-                "close": [1000 + i for i in range(20)],
-            }
-        )
-        prices_5678 = pd.DataFrame(
-            {
-                "date": pd.date_range("2024-01-16", periods=20),
-                "close": [2000 + i for i in range(20)],
-            }
-        )
-
-        with patch("backtest.backtest_technical.pd.read_sql") as mock_read_sql:
-            mock_read_sql.side_effect = [indicators_df, prices_1234, prices_5678]
-
-            trades = run_backtest(
-                conn,
-                as_of="2024-01-16",
-                capital=1_000_000,
-                hold_days=5,
-                stop_loss_pct=0.05,
-                min_price=300,
-            )
-
-            assert isinstance(trades, pd.DataFrame)
-            assert "code" in trades.columns
-            assert "entry_date" in trades.columns
-            assert "exit_date" in trades.columns
-            assert "side" in trades.columns
-            assert all(trades["side"] == "long")
-
-    def test_run_backtest_with_stop_loss(self):
-        """ストップロス発動のテスト"""
-        conn = MagicMock(spec=sqlite3.Connection)
-
-        indicators_df = pd.DataFrame(
-            {
-                "date": ["2024-01-15"],
-                "code": ["1234"],
-                "signals_count": [3],
-            }
-        )
-
-        # 価格が5%以上下落するデータ
-        prices_df = pd.DataFrame(
-            {
-                "date": pd.date_range("2024-01-15", periods=10),
-                "close": [1000, 990, 980, 940, 950, 960, 970, 980, 990, 1000],
-            }
-        )
-
-        with patch("backtest.backtest_technical.pd.read_sql") as mock_read_sql:
-            mock_read_sql.side_effect = [indicators_df, prices_df]
-
-            trades = run_backtest(
-                conn,
-                as_of="2024-01-15",
-                capital=1_000_000,
-                hold_days=10,
-                stop_loss_pct=0.05,
-                min_price=300,
-            )
-
-            if len(trades) > 0:
-                # ストップロスで早期に売却される
-                # pnl_pctが負の値（損失）になることを確認
-                assert trades.iloc[0]["pnl_pct"] < 0
-
-    def test_run_backtest_empty_signals(self):
+    def test_no_signals(self):
         """シグナルがない場合"""
-        conn = MagicMock(spec=sqlite3.Connection)
+        # 空のDataFrameを返す
+        with patch("pandas.read_sql", return_value=pd.DataFrame()):
+            result = run_backtest(self.conn, self.as_of)
 
-        # 空の指標データ
-        indicators_df = pd.DataFrame(columns=["date", "code", "signals_count"])
-        prices_df = pd.DataFrame(columns=["code", "date", "adj_close"])
+        assert result.empty
+        assert isinstance(result, pd.DataFrame)
 
-        with patch("backtest.backtest_technical.pd.read_sql") as mock_read_sql:
-            mock_read_sql.side_effect = [indicators_df, prices_df]
+    def test_successful_trade(self):
+        """成功した取引のテスト"""
+        # シグナルデータ
+        signals_df = pd.DataFrame([{"code": "1234"}])
 
-            trades = run_backtest(
-                conn,
-                as_of="2024-01-16",
-                capital=1_000_000,
+        # 価格データ
+        prices_df = pd.DataFrame(
+            [
+                {"date": pd.Timestamp("2024-01-15"), "close": 1000.0},
+                {"date": pd.Timestamp("2024-01-16"), "close": 1050.0},
+                {"date": pd.Timestamp("2024-01-17"), "close": 1100.0},
+                {"date": pd.Timestamp("2024-02-15"), "close": 1200.0},
+            ]
+        )
+
+        # 会社名データ
+        self.conn.execute.return_value.fetchone.return_value = ["テスト会社"]
+
+        with patch("pandas.read_sql") as mock_read_sql:
+            mock_read_sql.side_effect = [signals_df, prices_df]
+
+            result = run_backtest(
+                self.conn,
+                self.as_of,
+                capital=1000000,
+                hold_days=60,
+                stop_loss_pct=0.05,
+                min_price=300,
             )
 
-            assert len(trades) == 0
+        assert len(result) == 1
+        assert result.iloc[0]["code"] == "1234"
+        assert result.iloc[0]["name"] == "テスト会社"
+        assert result.iloc[0]["entry_price"] == 1000.0
+        assert result.iloc[0]["exit_price"] == 1200.0
+        assert result.iloc[0]["shares"] == 1000
+        assert result.iloc[0]["side"] == "long"
+        assert result.iloc[0]["pnl_pct"] == 20.0
+        assert result.iloc[0]["pnl_yen"] == 200000.0
+
+    def test_stop_loss_exit(self):
+        """損切りによる終了"""
+        signals_df = pd.DataFrame([{"code": "1234"}])
+
+        # 価格が下落して損切りラインに到達
+        prices_df = pd.DataFrame(
+            [
+                {"date": pd.Timestamp("2024-01-15"), "close": 1000.0},
+                {"date": pd.Timestamp("2024-01-16"), "close": 980.0},
+                {"date": pd.Timestamp("2024-01-17"), "close": 950.0},  # 5%下落
+                {"date": pd.Timestamp("2024-01-18"), "close": 900.0},
+            ]
+        )
+
+        self.conn.execute.return_value.fetchone.return_value = None
+
+        with patch("pandas.read_sql") as mock_read_sql:
+            mock_read_sql.side_effect = [signals_df, prices_df]
+
+            result = run_backtest(
+                self.conn, self.as_of, capital=1000000, stop_loss_pct=0.05
+            )
+
+        assert len(result) == 1
+        assert result.iloc[0]["exit_price"] == 950.0
+        assert result.iloc[0]["pnl_pct"] == -5.0
+        assert result.iloc[0]["holding_days"] == 2
+
+    def test_skip_conditions(self):
+        """スキップ条件のテスト"""
+        signals_df = pd.DataFrame(
+            [
+                {"code": "1234"},  # 価格データなし
+                {"code": "5678"},  # 最低価格未満
+                {"code": "9012"},  # エントリー日の価格なし
+                {"code": "3456"},  # 正常
+            ]
+        )
+
+        # 各銘柄の価格データ
+        no_data = pd.DataFrame()
+        low_price = pd.DataFrame(
+            [{"date": pd.Timestamp("2024-01-15"), "close": 100.0}]  # min_price=300未満
+        )
+        no_entry_date = pd.DataFrame(
+            [{"date": pd.Timestamp("2024-01-16"), "close": 1000.0}]  # 15日のデータなし
+        )
+        normal_price = pd.DataFrame(
+            [
+                {"date": pd.Timestamp("2024-01-15"), "close": 1000.0},
+                {"date": pd.Timestamp("2024-02-15"), "close": 1100.0},
+            ]
+        )
+
+        self.conn.execute.return_value.fetchone.return_value = None
+
+        with patch("pandas.read_sql") as mock_read_sql:
+            mock_read_sql.side_effect = [
+                signals_df,
+                no_data,
+                low_price,
+                no_entry_date,
+                normal_price,
+            ]
+
+            result = run_backtest(self.conn, self.as_of, min_price=300)
+
+        # 正常な1件のみが処理される
+        assert len(result) == 1
+        assert result.iloc[0]["code"] == "3456"
+
+    def test_exception_handling(self):
+        """例外処理のテスト"""
+        signals_df = pd.DataFrame([{"code": "1234"}])
+
+        with patch("pandas.read_sql") as mock_read_sql:
+            # 価格データ取得時に例外発生
+            mock_read_sql.side_effect = [signals_df, Exception("DB Error")]
+
+            result = run_backtest(self.conn, self.as_of)
+
+        # エラーが発生してもスキップして続行
+        assert result.empty
 
 
 class TestRunBacktestShort:
-    """ショートポジションのバックテストのテスト"""
+    """run_backtest_short関数のテスト"""
 
-    def test_run_backtest_short_basic(self):
-        """基本的なショートバックテスト"""
-        conn = MagicMock(spec=sqlite3.Connection)
+    def setup_method(self):
+        """共通のモックデータをセットアップ"""
+        self.conn = MagicMock()
+        self.as_of = "2024-01-15"
 
-        # ショートシグナルのモック
-        indicators_df = pd.DataFrame(
-            {
-                "date": ["2024-01-15"],
-                "code": ["1234"],
-                "signals_short_count": [4],
-                "signals_short_first": [1],
-                "oversold": [0],
-            }
-        )
+    def test_successful_short_trade(self):
+        """成功した空売り取引"""
+        signals_df = pd.DataFrame([{"code": "1234"}])
 
-        # 価格データ（下落トレンド）
+        # 価格が下落（空売りで利益）
         prices_df = pd.DataFrame(
-            {
-                "code": ["1234"] * 10,
-                "date": pd.date_range("2024-01-15", periods=10),
-                "adj_close": [1000 - i * 10 for i in range(10)],  # 下落
-            }
+            [
+                {"date": pd.Timestamp("2024-01-15"), "close": 1000.0},
+                {"date": pd.Timestamp("2024-01-16"), "close": 950.0},
+                {"date": pd.Timestamp("2024-02-15"), "close": 800.0},
+            ]
         )
 
-        with patch("backtest.backtest_technical.pd.read_sql") as mock_read_sql:
-            mock_read_sql.side_effect = [indicators_df, prices_df]
+        self.conn.execute.return_value.fetchone.return_value = ["テスト会社"]
 
-            trades = run_backtest_short(
-                conn,
-                as_of="2024-01-15",
-                capital=1_000_000,
-                hold_days=5,
-                stop_loss_pct=0.05,
-                min_price=300,
+        with patch("pandas.read_sql") as mock_read_sql:
+            mock_read_sql.side_effect = [signals_df, prices_df]
+
+            result = run_backtest_short(
+                self.conn, self.as_of, capital=1000000, hold_days=60
             )
 
-            assert isinstance(trades, pd.DataFrame)
-            if len(trades) > 0:
-                assert all(trades["side"] == "short")
-                # ショートポジションなので価格下落で利益
-                assert trades.iloc[0]["pl_pct"] > 0
+        assert len(result) == 1
+        assert result.iloc[0]["side"] == "short"
+        assert result.iloc[0]["entry_price"] == 1000.0
+        assert result.iloc[0]["exit_price"] == 800.0
+        # 空売りの利益計算（エントリー価格 - 出口価格）
+        assert result.iloc[0]["pnl_pct"] == 20.0
+        assert result.iloc[0]["pnl_yen"] == 200000.0
 
-    def test_run_backtest_short_stop_loss(self):
-        """ショートポジションのストップロス"""
-        conn = MagicMock(spec=sqlite3.Connection)
+    def test_short_stop_loss(self):
+        """空売りの損切り（価格上昇）"""
+        signals_df = pd.DataFrame([{"code": "1234"}])
 
-        indicators_df = pd.DataFrame(
-            {
-                "date": ["2024-01-15"],
-                "code": ["1234"],
-                "signals_short_count": [4],
-                "signals_short_first": [1],
-                "oversold": [0],
-            }
-        )
-
-        # 価格が上昇するデータ（ショートには不利）
+        # 価格が上昇（空売りで損失）
         prices_df = pd.DataFrame(
-            {
-                "code": ["1234"] * 10,
-                "date": pd.date_range("2024-01-15", periods=10),
-                "adj_close": [1000 + i * 60 for i in range(10)],  # 上昇
-            }
+            [
+                {"date": pd.Timestamp("2024-01-15"), "close": 1000.0},
+                {"date": pd.Timestamp("2024-01-16"), "close": 1030.0},
+                {"date": pd.Timestamp("2024-01-17"), "close": 1050.0},  # 5%上昇で損切り
+            ]
         )
 
-        with patch("backtest.backtest_technical.pd.read_sql") as mock_read_sql:
-            mock_read_sql.side_effect = [indicators_df, prices_df]
+        self.conn.execute.return_value.fetchone.return_value = None
 
-            trades = run_backtest_short(
-                conn,
-                as_of="2024-01-15",
-                capital=1_000_000,
-                hold_days=10,
-                stop_loss_pct=0.05,
-            )
+        with patch("pandas.read_sql") as mock_read_sql:
+            mock_read_sql.side_effect = [signals_df, prices_df]
 
-            if len(trades) > 0:
-                # ストップロスで損失確定
-                assert trades.iloc[0]["pnl_pct"] < 0
+            result = run_backtest_short(self.conn, self.as_of, stop_loss_pct=0.05)
+
+        assert len(result) == 1
+        assert result.iloc[0]["exit_price"] == 1050.0
+        assert result.iloc[0]["pnl_pct"] == -5.0
+        assert result.iloc[0]["holding_days"] == 2
 
 
-class TestSummarize:
-    """サマリー生成のテスト"""
+class TestRunBacktestRange:
+    """run_backtest_range関数のテスト"""
 
-    def test_summarize_mixed_positions(self):
-        """ロング・ショート混在のサマリー"""
-        trades = pd.DataFrame(
-            {
-                "pnl_yen": [10000, -5000, 20000, -3000],
-                "pnl_pct": [0.10, -0.05, 0.20, -0.03],
-                "side": ["long", "long", "short", "short"],
-            }
+    @patch("backtest.backtest_technical.run_backtest")
+    @patch("backtest.backtest_technical.run_backtest_short")
+    @patch("backtest.backtest_technical.pd.ExcelWriter")
+    @patch("builtins.open", create=True)
+    def test_run_backtest_range_success(
+        self, mock_open, mock_excel_writer, mock_short, mock_long
+    ):
+        """複数日のバックテスト実行"""
+        conn = MagicMock()
+        start = "2024-01-01"
+        end = "2024-01-03"
+
+        # 各日の取引結果
+        day1_long = pd.DataFrame([{"code": "1234", "pnl_yen": 10000, "side": "long"}])
+        day1_short = pd.DataFrame([{"code": "5678", "pnl_yen": 5000, "side": "short"}])
+        day2_long = pd.DataFrame([{"code": "9012", "pnl_yen": -3000, "side": "long"}])
+        day2_short = pd.DataFrame()  # 空
+
+        # 3日間のデータを準備
+        mock_long.side_effect = [day1_long, day2_long, pd.DataFrame()]  # 3日目は空
+        mock_short.side_effect = [day1_short, day2_short, pd.DataFrame()]
+
+        # pandas.concatをモックして結果を検証
+        expected_result = pd.DataFrame(
+            [
+                {"code": "1234", "pnl_yen": 10000, "pnl_pct": 10.0, "side": "long"},
+                {"code": "5678", "pnl_yen": 5000, "pnl_pct": 5.0, "side": "short"},
+                {"code": "9012", "pnl_yen": -3000, "pnl_pct": -3.0, "side": "long"},
+            ]
         )
 
-        summary = summarize(trades)
+        with patch("pandas.concat", return_value=expected_result) as mock_concat:
+            # 関数を実行（void関数）
+            run_backtest_range(conn, start, end)
 
-        assert isinstance(summary, pd.DataFrame)
-        assert "metric" in summary.columns
-        assert "value" in summary.columns
-        assert "total_profit" in summary["metric"].values
-        assert "win_rate" in summary["metric"].values
-        assert "trades" in summary["metric"].values
+            # concatが呼ばれたことを確認
+            mock_concat.assert_called_once()
 
-    def test_summarize_long_only(self):
-        """ロングのみのサマリー"""
-        trades = pd.DataFrame(
-            {
-                "pnl_yen": [10000, -5000, 20000],
-                "pnl_pct": [0.10, -0.05, 0.20],
-                "side": ["long", "long", "long"],
-            }
-        )
+            # バックテスト関数が適切に呼ばれたことを確認
+            assert mock_long.call_count == 3  # 3日間
+            assert mock_short.call_count == 3
 
-        summary = summarize(trades)
+    @patch("backtest.backtest_technical.run_backtest")
+    @patch("backtest.backtest_technical.run_backtest_short")
+    @patch("backtest.backtest_technical.logger")
+    def test_run_backtest_range_no_trades(self, mock_logger, mock_short, mock_long):
+        """取引がない場合"""
+        conn = MagicMock()
+        start = "2024-01-01"
+        end = "2024-01-01"
 
-        # total_profitの確認
-        total_profit_row = summary[summary["metric"] == "total_profit"]
-        assert total_profit_row["value"].values[0] == 25000
+        # 空のDataFrameを返す
+        mock_long.return_value = pd.DataFrame()
+        mock_short.return_value = pd.DataFrame()
 
-    def test_summarize_empty(self):
-        """空のトレード"""
-        trades = pd.DataFrame(columns=["pnl_yen", "pnl_pct", "side"])
+        # 関数を実行
+        run_backtest_range(conn, start, end)
 
-        summary = summarize(trades)
+        # ログで「No trades」が出力されることを確認
+        mock_logger.info.assert_any_call("No trades in the specified period.")
 
-        # 値の確認
-        total_profit_row = summary[summary["metric"] == "total_profit"]
-        assert total_profit_row["value"].values[0] == 0
-        trades_row = summary[summary["metric"] == "trades"]
-        assert trades_row["value"].values[0] == 0
+    @patch("backtest.backtest_technical.run_backtest")
+    @patch("backtest.backtest_technical.run_backtest_short")
+    def test_run_backtest_range_all_empty(self, mock_short, mock_long):
+        """全ての日で取引なし"""
+        conn = MagicMock()
+        start = "2024-01-01"
+        end = "2024-01-02"
 
+        mock_long.return_value = pd.DataFrame()
+        mock_short.return_value = pd.DataFrame()
 
-class TestAsciiBarChart:
-    """ASCIIバーチャートのテスト"""
+        # 関数を実行（void関数）
+        run_backtest_range(conn, start, end)
 
-    def test_ascii_bar_chart_mixed(self):
-        """正負混在のバーチャート"""
-        values = [100, -50, 200, -150, 75]
-
-        chart = _ascii_bar_chart(values, width=20)
-
-        assert isinstance(chart, str)
-        lines = chart.strip().split("\n")
-        assert len(lines) == 5
-        assert "+" in chart
-        assert "-" in chart
-
-    def test_ascii_bar_chart_single_value(self):
-        """単一値のバーチャート"""
-        chart = _ascii_bar_chart([100], width=20)
-        assert "#" in chart
-
-
-class TestShowResults:
-    """結果表示のテスト"""
-
-    @patch("builtins.print")
-    def test_show_results_with_trades(self, mock_print):
-        """トレードありの結果表示"""
-        trades = pd.DataFrame(
-            {
-                "code": ["1234", "5678"],
-                "side": ["long", "short"],
-                "entry_date": ["2024-01-15", "2024-01-16"],
-                "exit_date": ["2024-01-22", "2024-01-23"],
-                "pnl_yen": [10000, -5000],
-                "pnl_pct": [0.10, -0.05],
-            }
-        )
-
-        summary = pd.DataFrame(
-            {"metric": ["trades", "total_profit", "win_rate"], "value": [2, 5000, 0.5]}
-        )
-
-        show_results(trades, summary)
-
-        # 複数回printが呼ばれることを確認
-        assert mock_print.call_count >= 4
-
-
-class TestToExcel:
-    """Excel出力のテスト"""
-
-    def test_to_excel_with_chart(self, tmp_path):
-        """チャート付きExcel出力"""
-        trades = pd.DataFrame(
-            {
-                "code": ["1234", "5678"],
-                "pnl_yen": [10000, -5000],
-            }
-        )
-
-        summary = pd.DataFrame({"metric": ["total_profit"], "value": [5000]})
-
-        output_path = tmp_path / "test.xlsx"
-        to_excel(trades, summary, output_path)
-
-        # ファイルが作成されたことを確認
-        assert output_path.exists()
+        # バックテスト関数が2日分呼ばれたことを確認
+        assert mock_long.call_count == 2
+        assert mock_short.call_count == 2
 
 
 class TestParseArgs:
-    """引数解析のテスト"""
+    """parse_args関数のテスト"""
 
-    def test_parse_args_default(self):
-        """デフォルト引数"""
-        args = parse_args(["--start", "2024-01-01"])
-
-        assert args.capital == CAPITAL_DEFAULT
-        assert args.hold_days == HOLD_DAYS_DEFAULT
-        assert args.stop_loss == STOP_LOSS_PCT_DEFAULT
-        assert args.min_price == MIN_PRICE_DEFAULT
-        assert not args.show
-        assert args.start == "2024-01-01"
-        assert args.end is None
-
-    def test_parse_args_custom(self):
-        """カスタム引数"""
+    def test_parse_args_with_all_options(self):
+        """全オプション指定"""
         args = parse_args(
             [
+                "--start",
+                "2024-01-01",
+                "--end",
+                "2024-01-31",
                 "--capital",
                 "2000000",
                 "--hold-days",
                 "30",
                 "--stop-loss",
-                "0.10",
+                "0.1",
                 "--min-price",
                 "500",
-                "--start",
-                "2024-01-01",
-                "--end",
-                "2024-12-31",
                 "--show",
             ]
         )
 
+        assert args.start == "2024-01-01"
+        assert args.end == "2024-01-31"
         assert args.capital == 2000000
         assert args.hold_days == 30
-        assert args.stop_loss == 0.10
+        assert args.stop_loss == 0.1
         assert args.min_price == 500
-        assert args.start == "2024-01-01"
-        assert args.end == "2024-12-31"
-        assert args.show
+        assert args.show is True
 
+    def test_parse_args_minimal(self):
+        """最小限のオプション"""
+        args = parse_args(["--start", "2024-01-15"])
 
-class TestMain:
-    """main関数のテスト"""
+        assert args.start == "2024-01-15"
+        assert args.end is None
+        assert args.capital == 1000000  # デフォルト
+        assert args.hold_days == 60  # デフォルト
+        assert args.stop_loss == 0.05  # デフォルト
+        assert args.min_price == 300  # デフォルト
+        assert args.show is False  # デフォルト
 
-    @pytest.mark.skip(reason="run_backtest_range関数が未実装")
-    @patch("backtest.backtest_technical.sqlite3.connect")
-    @patch("backtest.backtest_technical.parse_args")
-    def test_main_success(
-        self,
-        mock_parse_args,
-        mock_connect,
-    ):
-        """正常なmain関数実行"""
-        pass
+    def test_parse_args_with_paths(self):
+        """ファイルパス指定"""
+        args = parse_args(
+            [
+                "--start",
+                "2024-01-01",
+                "--outfile",
+                "/tmp/test.xlsx",
+                "--json",
+                "/tmp/test.json",
+                "--db",
+                "/tmp/test.db",
+            ]
+        )
 
-    @pytest.mark.skip(reason="run_backtest_range関数が未実装")
-    @patch("backtest.backtest_technical.sqlite3.connect")
-    @patch("backtest.backtest_technical.parse_args")
-    def test_main_no_trades(self, mock_parse_args, mock_connect):
-        """トレードがない場合"""
-        pass
+        assert str(args.outfile) == "/tmp/test.xlsx"
+        assert str(args.json) == "/tmp/test.json"
+        assert args.db == "/tmp/test.db"
+
+    def test_parse_args_invalid(self):
+        """必須パラメータなしでエラー"""
+        with pytest.raises(SystemExit):
+            parse_args([])  # --startが必須
