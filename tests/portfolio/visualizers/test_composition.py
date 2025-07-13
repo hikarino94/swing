@@ -436,8 +436,8 @@ class TestCompositionVisualizerIntegration:
         visualizer = CompositionVisualizer(user_id=123)
         fig = visualizer._create_stock_composition_chart(df, 180000)
 
-        # 会社名がNoneでも空文字として扱われる
-        assert len(fig.data[0].labels) == 2
+        # groupbyでcompany_nameがNoneの行は除外される
+        assert len(fig.data[0].labels) == 1
         # ラベルにコードが含まれることを確認
         assert "1234" in fig.data[0].labels[0]
-        assert "5678" in fig.data[0].labels[1]
+        assert "会社A" in fig.data[0].labels[0]
