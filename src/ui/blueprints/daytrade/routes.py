@@ -1,0 +1,165 @@
+"""
+デイトレード記録管理のルーティング
+"""
+
+from datetime import datetime
+from typing import cast
+
+from flask import Blueprint, jsonify, render_template
+from flask import request as flask_request
+
+from src.auth import login_required
+from src.types.flask_types import RequestWithUser
+from src.ui.common import validate_csrf_token
+from src.utils.logging_config import get_logger
+
+from .services import DaytradeService
+
+logger = get_logger("daytrade_routes")
+
+daytrade_bp = Blueprint("daytrade", __name__, url_prefix="/daytrade")
+
+# 型付きrequest
+request: RequestWithUser = cast(RequestWithUser, flask_request)
+
+
+@daytrade_bp.route("/")
+@login_required
+def index():
+    """デイトレード管理画面のメインページ"""
+    return render_template("daytrade/index.html")
+
+
+@daytrade_bp.route("/calendar/<year>/<month>", methods=["GET"])
+@login_required
+def calendar(year: str, month: str):
+    """指定月のカレンダーデータを取得"""
+    try:
+        year_int = int(year)
+        month_int = int(month)
+
+        if not (1 <= month_int <= 12):
+            return jsonify({"error": "Invalid month"}), 400
+
+        service = DaytradeService(request.current_user.id)
+        calendar_data = service.get_calendar_data(year_int, month_int)
+
+        return jsonify(calendar_data)
+    except ValueError:
+        return jsonify({"error": "Invalid year or month"}), 400
+    except Exception as e:
+        logger.error(f"カレンダーデータ取得エラー: {e}")
+        return jsonify({"error": "カレンダーデータの取得に失敗しました"}), 500
+
+
+@daytrade_bp.route("/import/futures", methods=["POST"])
+@login_required
+def import_futures():
+    """先物取引データのインポート"""
+    if not validate_csrf_token(request):
+        return jsonify({"error": "Invalid CSRF token"}), 403
+
+    if "file" not in request.files:
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+
+    try:
+        service = DaytradeService(request.current_user.id)
+        result = service.import_futures_csv(file)
+
+        message = f"{result['imported']}件のデータをインポートしました"
+        if result["skipped"] > 0:
+            message += f" ({result['skipped']}件はスキップ)"
+        if result["errors"]:
+            message += f" (エラー: {len(result['errors'])}件)"
+
+        return jsonify({"success": True, "message": message, "details": result})
+    except Exception as e:
+        logger.error(f"先物データインポートエラー: {e}", exc_info=True)
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": f"インポートエラー: {str(e)}",
+                    "details": {
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                }
+            ),
+            500,
+        )
+
+
+@daytrade_bp.route("/import/stocks", methods=["POST"])
+@login_required
+def import_stocks():
+    """株式取引データのインポート"""
+    if not validate_csrf_token(request):
+        return jsonify({"error": "Invalid CSRF token"}), 403
+
+    if "file" not in request.files:
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+
+    try:
+        service = DaytradeService(request.current_user.id)
+        result = service.import_stocks_csv(file)
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"{result['imported']}件のデータをインポートしました",
+                "details": result,
+            }
+        )
+    except Exception as e:
+        logger.error(f"株式データインポートエラー: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@daytrade_bp.route("/summary/<year>/<month>", methods=["GET"])
+@login_required
+def monthly_summary(year: str, month: str):
+    """月別サマリーデータを取得"""
+    try:
+        year_int = int(year)
+        month_int = int(month)
+
+        if not (1 <= month_int <= 12):
+            return jsonify({"error": "Invalid month"}), 400
+
+        service = DaytradeService(request.current_user.id)
+        summary = service.get_monthly_summary(year_int, month_int)
+
+        return jsonify(summary)
+    except ValueError:
+        return jsonify({"error": "Invalid year or month"}), 400
+    except Exception as e:
+        logger.error(f"月別サマリー取得エラー: {e}")
+        return jsonify({"error": "月別サマリーの取得に失敗しました"}), 500
+
+
+@daytrade_bp.route("/details/<date>", methods=["GET"])
+@login_required
+def daily_details(date: str):
+    """指定日の取引詳細を取得"""
+    try:
+        # 日付形式の検証
+        datetime.strptime(date, "%Y-%m-%d")
+
+        service = DaytradeService(request.current_user.id)
+        details = service.get_daily_details(date)
+
+        return jsonify(details)
+    except ValueError:
+        return jsonify({"error": "Invalid date format"}), 400
+    except Exception as e:
+        logger.error(f"日別詳細取得エラー: {e}")
+        return jsonify({"error": "日別詳細の取得に失敗しました"}), 500

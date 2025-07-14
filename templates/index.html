@@ -21,6 +21,7 @@
                 <option value="screening" x-show="!isPortfolioOnly">🔍 スクリーニング</option>
                 <option value="backtest" x-show="!isPortfolioOnly">📈 バックテスト</option>
                 <option value="portfolio" x-show="isLoggedIn">💼 ポートフォリオ</option>
+                <option value="daytrade" x-show="isLoggedIn">📅 デイトレード</option>
                 <option value="utilities" x-show="!isPortfolioOnly">🛠️ ユーティリティ</option>
                 <option value="results" x-show="!isPortfolioOnly">📁 結果閲覧</option>
                 <option value="settings" x-show="!isPortfolioOnly">⚙️ 設定</option>
@@ -79,6 +80,13 @@
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'portfolio' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 💼 ポートフォリオ
+            </button>
+            <button x-show="isLoggedIn"
+                    @click="checkTabChange('daytrade')"
+                    :class="{'tab-active': activeTab === 'daytrade'}"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                    :class="activeTab === 'daytrade' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                📅 デイトレード
             </button>
         </nav>
     </div>
@@ -1634,6 +1642,11 @@
             </div>
         </div>
     </div>
+        <!-- デイトレードタブ（ログイン時のみ表示） -->
+        <div x-show="activeTab === 'daytrade' && isLoggedIn" class="space-y-6">
+            {% include 'daytrade/index.html' %}
+        </div>
+    </div>
 </div>
 
 <script>
@@ -1665,7 +1678,8 @@ function swingApp() {
             screening: false,
             backtest: false,
             utilities: false,
-            portfolio: false
+            portfolio: false,
+            daytrade: false
         },
 
         // データ取得設定
@@ -1798,6 +1812,19 @@ function swingApp() {
             performancePeriod: 'all',
             includeHoldings: false
         },
+
+        // デイトレード設定
+        daytrade: {
+            currentYear: new Date().getFullYear(),
+            currentMonth: new Date().getMonth() + 1,
+            calendarDays: [],
+            monthlySummary: null,
+            showDetailsModal: false,
+            selectedDate: null,
+            dayDetails: null,
+            compactMode: false
+        },
+        csrfToken: '{{ csrf_token() }}',
 
         // メソッド
         checkTabChange(newTab) {
@@ -3047,6 +3074,204 @@ function swingApp() {
                 this.loadHoldings();
                 this.loadTransactions();
             }
+
+            // タブ変更の監視
+            this.$watch('activeTab', (newTab) => {
+                console.log('Tab changed to:', newTab, 'isLoggedIn:', this.isLoggedIn);
+                if (newTab === 'daytrade' && this.isLoggedIn) {
+                    console.log('Loading daytrade calendar...');
+                    this.loadDaytradeCalendar();
+                }
+            });
+        },
+
+        // デイトレード関連メソッド
+
+        async loadDaytradeCalendar() {
+            console.log('loadDaytradeCalendar called');
+            try {
+                const url = `/daytrade/calendar/${this.daytrade.currentYear}/${this.daytrade.currentMonth}`;
+                console.log('Fetching:', url);
+                const response = await fetch(url);
+                console.log('Response status:', response.status);
+                const data = await response.json();
+                console.log('Calendar data:', data);
+
+                // カレンダーの日付を生成
+                const firstDay = new Date(data.year, data.month - 1, 1);
+                const lastDay = new Date(data.year, data.month, 0);
+                const startPadding = firstDay.getDay();
+
+                this.daytrade.calendarDays = [];
+
+                // 前月の空白
+                for (let i = 0; i < startPadding; i++) {
+                    this.daytrade.calendarDays.push({});
+                }
+
+                // 当月の日付
+                data.days.forEach(day => {
+                    this.daytrade.calendarDays.push(day);
+                });
+
+                // 次月の空白
+                const endPadding = 42 - this.daytrade.calendarDays.length;
+                for (let i = 0; i < endPadding; i++) {
+                    this.daytrade.calendarDays.push({});
+                }
+
+                // 月間サマリーの取得
+                this.loadMonthlySummary();
+            } catch (e) {
+                console.error('Failed to load calendar:', e);
+                showNotification('error', 'カレンダーの読み込みに失敗しました: ' + e.message);
+            }
+        },
+
+        async loadMonthlySummary() {
+            try {
+                const response = await fetch(`/daytrade/summary/${this.daytrade.currentYear}/${this.daytrade.currentMonth}`);
+                const data = await response.json();
+                this.daytrade.monthlySummary = data;
+            } catch (e) {
+                console.error('Failed to load monthly summary:', e);
+            }
+        },
+
+        previousMonth() {
+            this.daytrade.currentMonth--;
+            if (this.daytrade.currentMonth < 1) {
+                this.daytrade.currentMonth = 12;
+                this.daytrade.currentYear--;
+            }
+            this.loadDaytradeCalendar();
+        },
+
+        nextMonth() {
+            this.daytrade.currentMonth++;
+            if (this.daytrade.currentMonth > 12) {
+                this.daytrade.currentMonth = 1;
+                this.daytrade.currentYear++;
+            }
+            this.loadDaytradeCalendar();
+        },
+
+        async showDayDetails(date) {
+            try {
+                const response = await fetch(`/daytrade/details/${date}`);
+                const data = await response.json();
+                this.daytrade.selectedDate = date;
+                this.daytrade.dayDetails = data;
+                this.daytrade.showDetailsModal = true;
+            } catch (e) {
+                console.error('Failed to load day details:', e);
+            }
+        },
+
+        async importFuturesCSV() {
+            console.log('importFuturesCSV called');
+            console.log('refs:', this.$refs);
+
+            const fileInput = this.$refs.futuresFile;
+            if (!fileInput) {
+                console.error('futuresFile ref not found');
+                showNotification('error', 'ファイル入力が見つかりません');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            if (!file) {
+                showNotification('error', 'ファイルを選択してください');
+                return;
+            }
+            console.log('File selected:', file.name);
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('csrf_token', this.csrfToken);
+
+            this.setProcessing(true, '先物データをインポート中...');
+
+            try {
+                const response = await fetch('/daytrade/import/futures', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('success', result.message);
+                    this.loadDaytradeCalendar();
+                    this.$refs.futuresFile.value = '';
+                } else {
+                    showNotification('error', result.error || 'インポートに失敗しました');
+                }
+            } catch (e) {
+                console.error('Import error:', e);
+                showNotification('error', 'インポート中にエラーが発生しました');
+            } finally {
+                this.setProcessing(false);
+            }
+        },
+
+        async importStocksCSV() {
+            const file = this.$refs.stocksFile.files[0];
+            if (!file) {
+                showNotification('error', 'ファイルを選択してください');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('csrf_token', this.csrfToken);
+
+            this.setProcessing(true, '株式データをインポート中...');
+
+            try {
+                const response = await fetch('/daytrade/import/stocks', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('success', result.message);
+                    this.loadDaytradeCalendar();
+                    this.$refs.stocksFile.value = '';
+                } else {
+                    showNotification('error', result.error || 'インポートに失敗しました');
+                }
+            } catch (e) {
+                console.error('Import error:', e);
+                showNotification('error', 'インポート中にエラーが発生しました');
+            } finally {
+                this.setProcessing(false);
+            }
+        },
+
+        formatCurrency(value, compact = false) {
+            if (!value) return '¥0';
+            if (compact && Math.abs(value) >= 10000) {
+                return '¥' + (value / 10000).toFixed(1) + '万';
+            }
+            return new Intl.NumberFormat('ja-JP', {
+                style: 'currency',
+                currency: 'JPY',
+                minimumFractionDigits: 0
+            }).format(value);
+        },
+
+        formatNumber(value) {
+            if (!value) return '0';
+            return new Intl.NumberFormat('ja-JP').format(value);
+        },
+
+        // カレンダー用の数値フォーマット（数字のみ）
+        formatCalendarProfit(value) {
+            if (!value || value === 0) return '';
+            // 正の数は+記号付き、負の数はそのまま
+            const sign = value > 0 ? '+' : '';
+            return sign + Math.round(value).toLocaleString('ja-JP');
         }
     }
 }

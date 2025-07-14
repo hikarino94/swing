@@ -410,6 +410,66 @@ CREATE INDEX IF NOT EXISTS idx_fund_transactions_user_id ON fund_transactions(us
 CREATE INDEX IF NOT EXISTS idx_fund_transactions_fund_id ON fund_transactions(fund_id);
 CREATE INDEX IF NOT EXISTS idx_fund_transactions_date ON fund_transactions(transaction_date);
 
+-- daytrade_futures -------------------------------------------------------
+-- 先物デイトレード記録（取引日ベースで決済損益を管理）
+CREATE TABLE IF NOT EXISTS daytrade_futures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    trade_date TEXT NOT NULL,  -- 取引日 YYYY-MM-DD
+    trade_number TEXT NOT NULL,  -- 約定番号
+    trade_datetime TEXT NOT NULL,  -- 約定日時
+    market TEXT,  -- 市場
+    symbol TEXT NOT NULL,  -- 銘柄
+    trade_type TEXT NOT NULL,  -- 取引（決済買/決済売）
+    price REAL NOT NULL,  -- 約定価格
+    quantity INTEGER NOT NULL,  -- 約定数量
+    commission REAL DEFAULT 0,  -- 手数料
+    tax REAL DEFAULT 0,  -- 消費税
+    settlement_amount REAL NOT NULL,  -- 約定金額
+    delivery_amount REAL,  -- 受渡金額
+    delivery_date TEXT,  -- 受渡日
+    open_date TEXT,  -- 新規建日
+    open_price REAL,  -- 新規建単価
+    open_commission REAL,  -- 新規建手数料
+    open_tax REAL,  -- 新規建消費税
+    profit_loss REAL NOT NULL,  -- 決済損益
+    sq_date TEXT,  -- SQ日
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_daytrade_futures_user_id ON daytrade_futures(user_id);
+CREATE INDEX IF NOT EXISTS idx_daytrade_futures_trade_date ON daytrade_futures(trade_date);
+CREATE INDEX IF NOT EXISTS idx_daytrade_futures_symbol ON daytrade_futures(symbol);
+CREATE INDEX IF NOT EXISTS idx_daytrade_futures_user_date ON daytrade_futures(user_id, trade_date);
+
+-- daytrade_stocks -------------------------------------------------------
+-- 株式デイトレード記録（約定日ベースで受渡金額・決済損益を管理）
+CREATE TABLE IF NOT EXISTS daytrade_stocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    code TEXT NOT NULL,  -- 銘柄コード
+    name TEXT NOT NULL,  -- 銘柄名
+    market TEXT,  -- 市場
+    trade_type TEXT NOT NULL,  -- 取引区分（信用新規買/信用返済売等）
+    term TEXT,  -- 期限（６ヵ月/日計り/無期限）
+    custody_type TEXT,  -- 預り区分（特定/一般）
+    trade_date TEXT NOT NULL,  -- 約定日 YYYY-MM-DD
+    delivery_date TEXT,  -- 受渡日
+    quantity INTEGER NOT NULL,  -- 株数
+    average_price REAL NOT NULL,  -- 平均約定単価
+    commission_tax REAL,  -- 手数料・諸経費等
+    capital_gains_tax REAL,  -- 課税額・譲渡益税
+    settlement_amount REAL,  -- 受渡金額・決済損益
+    day_trade_amount REAL,  -- 受渡金額(日計り分)
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_user_id ON daytrade_stocks(user_id);
+CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_trade_date ON daytrade_stocks(trade_date);
+CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_code ON daytrade_stocks(code);
+CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_user_date ON daytrade_stocks(user_id, trade_date);
+CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_user_code_date ON daytrade_stocks(user_id, code, trade_date);
+
 
 """
 
