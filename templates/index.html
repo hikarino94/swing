@@ -1822,7 +1822,8 @@ function swingApp() {
             showDetailsModal: false,
             selectedDate: null,
             dayDetails: null,
-            compactMode: false
+            compactMode: false,
+            showImportForm: false
         },
         csrfToken: '{{ csrf_token() }}',
 
@@ -3249,6 +3250,44 @@ function swingApp() {
             }
         },
 
+        async takeDaytradeScreenshot() {
+            this.setProcessing(true, 'スクリーンショットを作成中...');
+
+            try {
+                // スクリーンショット対象エリアを取得
+                const element = document.getElementById('daytrade-screenshot-area');
+
+                // html2canvasでスクリーンショットを作成
+                const canvas = await html2canvas(element, {
+                    backgroundColor: '#ffffff',
+                    scale: 2, // 高解像度
+                    logging: false,
+                    useCORS: true,
+                    windowHeight: element.scrollHeight
+                });
+
+                // canvasを画像として保存
+                canvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    const date = new Date();
+                    const filename = `daytrade_${this.daytrade.currentYear}年${this.daytrade.currentMonth}月_${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}.png`;
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showNotification('success', 'スクリーンショットを保存しました');
+                });
+            } catch (error) {
+                console.error('Screenshot error:', error);
+                showNotification('error', 'スクリーンショットの作成に失敗しました');
+            } finally {
+                this.setProcessing(false);
+            }
+        },
+
         formatCurrency(value, compact = false) {
             if (!value) return '¥0';
             if (compact && Math.abs(value) >= 10000) {
@@ -3272,7 +3311,8 @@ function swingApp() {
             // 正の数は+記号付き、負の数はそのまま
             const sign = value > 0 ? '+' : '';
             return sign + Math.round(value).toLocaleString('ja-JP');
-        }
+        },
+
     }
 }
 

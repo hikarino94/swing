@@ -50,6 +50,14 @@
                     </svg>
                     <span x-text="daytrade.compactMode ? 'フル表示' : 'コンパクト'"></span>
                 </button>
+                <button @click="takeDaytradeScreenshot()"
+                        class="px-3 py-1 text-sm bg-green-100 hover:bg-green-200 text-green-700 rounded-lg flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <span>スクリーンショット</span>
+                </button>
             </div>
 
             <button @click="nextMonth()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center">
@@ -61,8 +69,10 @@
         </div>
     </div>
 
-    <!-- コンパクトモード：サマリーとカレンダーを横並び -->
-    <div x-show="daytrade.compactMode" class="grid grid-cols-12 gap-4">
+    <!-- スクリーンショット対象エリア -->
+    <div id="daytrade-screenshot-area">
+        <!-- コンパクトモード：サマリーとカレンダーを横並び -->
+        <div x-show="daytrade.compactMode" class="grid grid-cols-12 gap-4">
         <!-- 左側：サマリー情報（4列分） -->
         <div class="col-span-4 space-y-4" x-show="daytrade.monthlySummary">
             <!-- 総合サマリー（コンパクト） -->
@@ -110,6 +120,82 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 詳細統計（コンパクト） -->
+            <div class="bg-white shadow-sm rounded-lg p-4">
+                <h4 class="text-sm font-semibold mb-2">詳細統計</h4>
+                <div class="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                        <div class="text-gray-600 mb-1">先物</div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <span>取引日数:</span>
+                                <span x-text="daytrade.monthlySummary?.futures?.trading_days || 0"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>総取引数:</span>
+                                <span x-text="daytrade.monthlySummary?.futures?.total_trades || 0"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>勝ち/負け:</span>
+                                <span x-text="`${daytrade.monthlySummary?.futures?.win_count || 0}勝/${daytrade.monthlySummary?.futures?.loss_count || 0}敗`"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>最大日次利益:</span>
+                                <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_daily_profit || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>最大日次損失:</span>
+                                <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_daily_loss || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>平均利益:</span>
+                                <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.avg_win || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>平均損失:</span>
+                                <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.avg_loss || 0)"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-gray-600 mb-1">株式</div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <span>取引日数:</span>
+                                <span x-text="daytrade.monthlySummary?.stocks?.trading_days || 0"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>総取引数:</span>
+                                <span x-text="daytrade.monthlySummary?.stocks?.total_trades || 0"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>勝ち/負け:</span>
+                                <span x-text="`${daytrade.monthlySummary?.stocks?.win_count || 0}勝/${daytrade.monthlySummary?.stocks?.loss_count || 0}敗`"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>最大日次利益:</span>
+                                <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_daily_profit || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>最大日次損失:</span>
+                                <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_daily_loss || 0)"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="border-t pt-2 mt-2 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">総取引日数:</span>
+                        <span x-text="Math.max(daytrade.monthlySummary?.futures?.trading_days || 0, daytrade.monthlySummary?.stocks?.trading_days || 0)"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">総取引回数:</span>
+                        <span x-text="(daytrade.monthlySummary?.futures?.total_trades || 0) + (daytrade.monthlySummary?.stocks?.total_trades || 0)"></span>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- 右側：カレンダー（8列分） -->
@@ -357,9 +443,31 @@
         </div>
     </div>
 
-    <!-- CSVインポート -->
-    <div class="bg-white shadow-sm rounded-lg p-6">
-        <h3 class="text-lg font-semibold mb-4">CSVファイルのインポート</h3>
+    </div>
+    <!-- スクリーンショット対象エリア終了 -->
+
+    <!-- CSVインポートボタン -->
+    <div x-show="!daytrade.showImportForm" class="mt-6">
+        <button @click="daytrade.showImportForm = true"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+            </svg>
+            CSVファイルをインポート
+        </button>
+    </div>
+
+    <!-- CSVインポート (ボタンクリックで表示) -->
+    <div x-show="daytrade.showImportForm" class="bg-white shadow-sm rounded-lg p-6 mt-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">CSVファイルのインポート</h3>
+            <button @click="daytrade.showImportForm = false"
+                    class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- 先物CSV -->
             <div class="border rounded-lg p-4">
