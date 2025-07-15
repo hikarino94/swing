@@ -3313,6 +3313,29 @@ function swingApp() {
             return sign + Math.round(value).toLocaleString('ja-JP');
         },
 
+        // スマホ用のコンパクトな数値フォーマット
+        formatCompactProfit(value) {
+            if (!value || value === 0) return '';
+
+            const absValue = Math.abs(value);
+            const sign = value > 0 ? '+' : '-';
+
+            // 1万以上は「万」単位で表示
+            if (absValue >= 10000) {
+                const manValue = Math.round(absValue / 10000);
+                return `${sign}${manValue}万`;
+            }
+            // 1000以上は「千」単位で表示
+            else if (absValue >= 1000) {
+                const senValue = Math.round(absValue / 1000);
+                return `${sign}${senValue}千`;
+            }
+            // それ以外はそのまま
+            else {
+                return `${sign}${absValue}`;
+            }
+        },
+
     }
 }
 
