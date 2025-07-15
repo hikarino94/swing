@@ -21,7 +21,6 @@ from src.ui.blueprints import (
     backtest_bp,
     daytrade_bp,
     fetch_bp,
-    portfolio_bp,
     results_bp,
     screening_bp,
     utils_bp,
@@ -118,7 +117,6 @@ app.register_blueprint(screening_bp)
 app.register_blueprint(backtest_bp)
 app.register_blueprint(utils_bp)
 app.register_blueprint(results_bp)
-app.register_blueprint(portfolio_bp)
 app.register_blueprint(daytrade_bp)
 
 
@@ -158,16 +156,7 @@ def index():
         session.clear()
         return redirect(url_for("auth.login"))
 
-    # ポートフォリオ専用ユーザーの場合は権限をチェック
-    if user.role == "portfolio_only":
-        # ポートフォリオタブのみ表示するようにユーザー情報を渡す
-        return render_template(
-            "index.html", user=user, portfolio_only=True, selected_tab="portfolio"
-        )
-
-    return render_template(
-        "index.html", user=user, portfolio_only=False, selected_tab=selected_tab
-    )
+    return render_template("index.html", user=user, selected_tab=selected_tab)
 
 
 @app.route("/screening")

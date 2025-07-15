@@ -6,7 +6,6 @@ from .auth import auth_bp
 from .backtest import backtest_bp
 from .daytrade import daytrade_bp
 from .fetch import fetch_bp
-from .portfolio import portfolio_bp
 from .results import results_bp
 from .screening import screening_bp
 from .utils import utils_bp
@@ -18,6 +17,5 @@ __all__ = [
     "backtest_bp",
     "utils_bp",
     "results_bp",
-    "portfolio_bp",
     "daytrade_bp",
 ]
