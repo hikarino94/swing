@@ -167,3 +167,116 @@ def daily_details(date: str):
     except Exception as e:
         logger.error(f"日別詳細取得エラー: {e}")
         return jsonify({"error": "日別詳細の取得に失敗しました"}), 500
+
+
+@daytrade_bp.route("/cumulative/<start_date>/<end_date>", methods=["GET"])
+@login_required
+def cumulative_profit(start_date: str, end_date: str):
+    """指定期間の累積損益データを取得"""
+    try:
+        # 日付形式の検証
+        datetime.strptime(start_date, "%Y-%m-%d")
+        datetime.strptime(end_date, "%Y-%m-%d")
+
+        service = DaytradeService(request.current_user.id)
+        cumulative_data = service.get_cumulative_profit_data(start_date, end_date)
+
+        return jsonify(cumulative_data)
+    except ValueError:
+        return jsonify({"error": "Invalid date format"}), 400
+    except Exception as e:
+        logger.error(f"累積損益データ取得エラー: {e}")
+        return jsonify({"error": "累積損益データの取得に失敗しました"}), 500
+
+
+@daytrade_bp.route("/trades", methods=["GET"])
+@login_required
+def trade_list():
+    """取引履歴一覧を取得"""
+    try:
+        # クエリパラメータから期間を取得
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        page = int(request.args.get("page", 1))
+        per_page = int(request.args.get("per_page", 50))
+
+        service = DaytradeService(request.current_user.id)
+        trades = service.get_trade_list(start_date, end_date, page, per_page)
+
+        return jsonify(trades)
+    except Exception as e:
+        logger.error(f"取引履歴取得エラー: {e}")
+        return jsonify({"error": "取引履歴の取得に失敗しました"}), 500
+
+
+@daytrade_bp.route("/trade", methods=["POST"])
+@login_required
+def create_trade():
+    """取引を手動登録"""
+    if not validate_csrf_token(request):
+        return jsonify({"error": "Invalid CSRF token"}), 403
+
+    try:
+        service = DaytradeService(request.current_user.id)
+        result = service.create_trade(request.json)
+
+        return jsonify({"success": True, "trade_id": result["id"]})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"取引登録エラー: {e}")
+        return jsonify({"error": "取引の登録に失敗しました"}), 500
+
+
+@daytrade_bp.route("/trade/<int:trade_id>", methods=["PUT"])
+@login_required
+def update_trade(trade_id: int):
+    """取引を編集"""
+    if not validate_csrf_token(request):
+        return jsonify({"error": "Invalid CSRF token"}), 403
+
+    try:
+        service = DaytradeService(request.current_user.id)
+        service.update_trade(trade_id, request.json)
+
+        return jsonify({"success": True})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"取引更新エラー: {e}")
+        return jsonify({"error": "取引の更新に失敗しました"}), 500
+
+
+@daytrade_bp.route("/trade/<int:trade_id>", methods=["DELETE"])
+@login_required
+def delete_trade(trade_id: int):
+    """取引を削除"""
+    if not validate_csrf_token(request):
+        return jsonify({"error": "Invalid CSRF token"}), 403
+
+    try:
+        service = DaytradeService(request.current_user.id)
+        service.delete_trade(trade_id)
+
+        return jsonify({"success": True})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"取引削除エラー: {e}")
+        return jsonify({"error": "取引の削除に失敗しました"}), 500
+
+
+@daytrade_bp.route("/monthly", methods=["GET"])
+@login_required
+def monthly_profit():
+    """月別損益データを取得"""
+    try:
+        year = int(request.args.get("year", datetime.now().year))
+
+        service = DaytradeService(request.current_user.id)
+        monthly_data = service.get_monthly_profit_data(year)
+
+        return jsonify(monthly_data)
+    except Exception as e:
+        logger.error(f"月別損益データ取得エラー: {e}")
+        return jsonify({"error": "月別損益データの取得に失敗しました"}), 500

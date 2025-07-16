@@ -811,7 +811,43 @@ function swingApp() {
             selectedDate: null,
             dayDetails: null,
             showImportForm: false,
-            compactMode: false
+            compactMode: false,
+            // 累積グラフ
+            chartPeriod: 'year',
+            customStartDate: '',
+            customEndDate: '',
+            cumulativeChart: null,
+            // 月別損益
+            monthlyYear: new Date().getFullYear(),
+            yearOptions: [],
+            monthlyData: [],
+            yearlyTotal: null,
+            // 取引履歴
+            showTradeList: false,
+            tradeList: [],
+            tradePage: 1,
+            tradeTotal: 0,
+            tradeTotalPages: 1,
+            tradeListStartDate: '',
+            tradeListEndDate: '',
+            // 取引登録・編集
+            showTradeForm: false,
+            editingTrade: null,
+            tradeForm: {
+                trade_category: '',
+                trade_date: '',
+                // 先物
+                symbol: '',
+                trade_type: '',
+                price: '',
+                quantity: '',
+                settlement_amount: '',
+                profit_loss: '',
+                // 株式
+                code: '',
+                name: '',
+                average_price: ''
+            }
         },
 
         // CSRFトークン
@@ -1323,6 +1359,262 @@ function swingApp() {
             }
         },
 
+        // 累積グラフの読み込み
+        async loadCumulativeChart() {
+            const now = new Date();
+            let startDate, endDate;
+
+            // 期間に応じて日付を設定
+            switch (this.daytrade.chartPeriod) {
+                case 'year':
+                    startDate = `${now.getFullYear()}-01-01`;
+                    endDate = now.toISOString().split('T')[0];
+                    break;
+                case 'month':
+                    startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+                    endDate = now.toISOString().split('T')[0];
+                    break;
+                case '3months':
+                    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+                    startDate = threeMonthsAgo.toISOString().split('T')[0];
+                    endDate = now.toISOString().split('T')[0];
+                    break;
+                case '6months':
+                    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+                    startDate = sixMonthsAgo.toISOString().split('T')[0];
+                    endDate = now.toISOString().split('T')[0];
+                    break;
+                case 'custom':
+                    startDate = this.daytrade.customStartDate;
+                    endDate = this.daytrade.customEndDate;
+                    if (!startDate || !endDate) return;
+                    break;
+            }
+
+            console.log('累積グラフ読み込み:', { startDate, endDate });
+
+            try {
+                const response = await fetch(`/api/daytrade/cumulative/${startDate}/${endDate}`);
+                const data = await response.json();
+
+                console.log('累積グラフレスポンス:', response.status, data);
+
+                if (response.ok) {
+                    if (data.data && data.data.length > 0) {
+                        this.renderCumulativeChart(data);
+                    } else {
+                        console.log('データがありません');
+                    }
+                } else {
+                    showNotification('error', data.error || '累積グラフの読み込みに失敗しました');
+                }
+            } catch (error) {
+                console.error('累積グラフ読み込みエラー:', error);
+                showNotification('error', '累積グラフの読み込みに失敗しました');
+            }
+        },
+
+        // 累積グラフの描画
+        renderCumulativeChart(data) {
+            const canvas = document.getElementById('cumulativeChart');
+            if (!canvas) {
+                console.error('Canvas要素が見つかりません: cumulativeChart');
+                return;
+            }
+
+            const ctx = canvas.getContext('2d');
+
+            // 既存のチャートを破棄
+            if (this.daytrade.cumulativeChart) {
+                this.daytrade.cumulativeChart.destroy();
+            }
+
+            this.daytrade.cumulativeChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.data.map(d => d.date),
+                    datasets: [
+                        {
+                            label: '合計',
+                            data: data.data.map(d => d.total_cumulative),
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.1,
+                            fill: true
+                        },
+                        {
+                            label: '先物',
+                            data: data.data.map(d => d.futures_cumulative),
+                            borderColor: 'rgb(54, 162, 235)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: false
+                        },
+                        {
+                            label: '株式',
+                            data: data.data.map(d => d.stocks_cumulative),
+                            borderColor: 'rgb(255, 99, 132)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `累積損益 (${data.start_date} ~ ${data.end_date})`
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toLocaleString() + '円';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString() + '円';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        // 月別損益の読み込み
+        async loadMonthlyProfit() {
+            console.log('月別損益読み込み開始:', this.daytrade.monthlyYear);
+            try {
+                const response = await fetch(`/api/daytrade/monthly?year=${this.daytrade.monthlyYear}`);
+                const data = await response.json();
+
+                console.log('月別損益レスポンス:', response.status, data);
+
+                if (response.ok) {
+                    this.daytrade.monthlyData = data.months;
+                    this.daytrade.yearlyTotal = data.yearly_total;
+                } else {
+                    showNotification('error', data.error || '月別損益の読み込みに失敗しました');
+                }
+            } catch (error) {
+                console.error('月別損益読み込みエラー:', error);
+                showNotification('error', '月別損益の読み込みに失敗しました');
+            }
+        },
+
+        // 取引履歴の表示切り替え
+        toggleTradeList() {
+            this.daytrade.showTradeList = !this.daytrade.showTradeList;
+            if (this.daytrade.showTradeList && this.daytrade.tradeList.length === 0) {
+                this.loadTradeList();
+            }
+        },
+
+        // 取引履歴の読み込み
+        async loadTradeList(page = 1) {
+            try {
+                const params = new URLSearchParams({
+                    page: page,
+                    per_page: 50
+                });
+                if (this.daytrade.tradeListStartDate) {
+                    params.append('start_date', this.daytrade.tradeListStartDate);
+                }
+                if (this.daytrade.tradeListEndDate) {
+                    params.append('end_date', this.daytrade.tradeListEndDate);
+                }
+
+                const response = await fetch(`/api/daytrade/trades?${params}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    this.daytrade.tradeList = data.trades;
+                    this.daytrade.tradePage = data.page;
+                    this.daytrade.tradeTotal = data.total;
+                    this.daytrade.tradeTotalPages = data.total_pages;
+                } else {
+                    showNotification('error', data.error || '取引履歴の読み込みに失敗しました');
+                }
+            } catch (error) {
+                console.error('取引履歴読み込みエラー:', error);
+                showNotification('error', '取引履歴の読み込みに失敗しました');
+            }
+        },
+
+        // 取引の編集
+        editTrade(trade) {
+            this.daytrade.editingTrade = trade;
+            this.daytrade.tradeForm = {
+                trade_category: trade.trade_category,
+                trade_date: trade.trade_date,
+                // 先物
+                symbol: trade.name || '',
+                trade_type: trade.trade_type || '',
+                price: trade.price || '',
+                quantity: trade.quantity || '',
+                settlement_amount: trade.settlement_amount || '',
+                profit_loss: trade.profit_loss || '',
+                // 株式
+                code: trade.code || '',
+                name: trade.name || '',
+                average_price: trade.price || ''
+            };
+            this.daytrade.showTradeForm = true;
+        },
+
+        // 取引の保存
+        async saveTrade() {
+            try {
+                const method = this.daytrade.editingTrade ? 'PUT' : 'POST';
+                const url = this.daytrade.editingTrade
+                    ? `/api/daytrade/trade/${this.daytrade.editingTrade.id}`
+                    : '/api/daytrade/trade';
+
+                const response = await callAPI(url, method, this.daytrade.tradeForm);
+
+                if (response.success) {
+                    showNotification('success', this.daytrade.editingTrade ? '取引を更新しました' : '取引を登録しました');
+                    this.daytrade.showTradeForm = false;
+                    this.loadTradeList(this.daytrade.tradePage);
+                    // カレンダーも更新
+                    this.loadCalendarData();
+                }
+            } catch (error) {
+                console.error('取引保存エラー:', error);
+                showNotification('error', '取引の保存に失敗しました');
+            }
+        },
+
+        // 取引の削除
+        async deleteTrade(tradeId, category) {
+            if (!confirm('この取引を削除してもよろしいですか？')) return;
+
+            try {
+                const response = await callAPI(`/api/daytrade/trade/${tradeId}`, 'DELETE', {});
+
+                if (response.success) {
+                    showNotification('success', '取引を削除しました');
+                    this.loadTradeList(this.daytrade.tradePage);
+                    // カレンダーも更新
+                    this.loadCalendarData();
+                }
+            } catch (error) {
+                console.error('取引削除エラー:', error);
+                showNotification('error', '取引の削除に失敗しました');
+            }
+        },
+
         // 初期化
         init() {
             // デフォルトの日付を設定
@@ -1342,12 +1634,33 @@ function swingApp() {
             // デイトレードタブが選択されている場合、カレンダーデータを読み込む
             if (this.activeTab === 'daytrade') {
                 this.loadCalendarData();
+                // 累積グラフと月別損益の初期化
+                setTimeout(() => {
+                    this.loadCumulativeChart();
+                    this.loadMonthlyProfit();
+                }, 500);
+                // 年オプションの設定
+                const currentYear = new Date().getFullYear();
+                for (let i = currentYear; i >= currentYear - 5; i--) {
+                    this.daytrade.yearOptions.push(i);
+                }
             }
 
             // タブ変更時のイベントリスナーを追加
             this.$watch('activeTab', (newTab) => {
                 if (newTab === 'daytrade') {
                     this.loadCalendarData();
+                    // DOM更新を待ってからグラフを描画
+                    this.$nextTick(() => {
+                        setTimeout(() => {
+                            if (!this.daytrade.cumulativeChart) {
+                                this.loadCumulativeChart();
+                            }
+                            if (this.daytrade.monthlyData.length === 0) {
+                                this.loadMonthlyProfit();
+                            }
+                        }, 100);
+                    });
                 }
             });
 

@@ -615,3 +615,430 @@ class DaytradeService:
             stocks_trades = [dict(row) for row in cursor.fetchall()]
 
             return {"date": date, "futures": futures_trades, "stocks": stocks_trades}
+
+    def get_cumulative_profit_data(
+        self, start_date: str, end_date: str
+    ) -> dict[str, Any]:
+        """指定期間の累積損益データを取得"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+
+            # 日別の損益データを取得
+            cursor.execute(
+                """
+                SELECT
+                    d.date,
+                    COALESCE(f.daily_profit, 0) as futures_profit,
+                    COALESCE(s.daily_profit, 0) as stocks_profit,
+                    COALESCE(s.day_trade_profit, 0) as stocks_day_trade
+                FROM (
+                    SELECT DISTINCT date FROM (
+                        SELECT trade_date as date FROM daytrade_futures
+                        WHERE user_id = ? AND trade_date BETWEEN ? AND ?
+                        UNION
+                        SELECT trade_date as date FROM daytrade_stocks
+                        WHERE user_id = ? AND trade_date BETWEEN ? AND ?
+                    )
+                ) d
+                LEFT JOIN (
+                    SELECT trade_date, SUM(profit_loss) as daily_profit
+                    FROM daytrade_futures
+                    WHERE user_id = ? AND trade_date BETWEEN ? AND ?
+                    GROUP BY trade_date
+                ) f ON d.date = f.trade_date
+                LEFT JOIN (
+                    SELECT
+                        trade_date,
+                        SUM(COALESCE(capital_gains_tax, 0) +
+                            COALESCE(settlement_amount, 0)) as daily_profit,
+                        SUM(COALESCE(day_trade_amount, 0)) as day_trade_profit
+                    FROM daytrade_stocks
+                    WHERE user_id = ? AND trade_date BETWEEN ? AND ?
+                      AND trade_type LIKE '%返済%'
+                    GROUP BY trade_date
+                ) s ON d.date = s.trade_date
+                ORDER BY d.date
+            """,
+                (
+                    self.user_id,
+                    start_date,
+                    end_date,
+                    self.user_id,
+                    start_date,
+                    end_date,
+                    self.user_id,
+                    start_date,
+                    end_date,
+                    self.user_id,
+                    start_date,
+                    end_date,
+                ),
+            )
+
+            daily_data = cursor.fetchall()
+
+            # 累積計算
+            cumulative_data = []
+            futures_cumulative = 0
+            stocks_cumulative = 0
+            total_cumulative = 0
+
+            for date, futures_profit, stocks_profit, stocks_day_trade in daily_data:
+                # 株式の合計損益
+                stocks_total = stocks_profit + stocks_day_trade
+
+                # 累積更新
+                futures_cumulative += futures_profit
+                stocks_cumulative += stocks_total
+                total_cumulative += futures_profit + stocks_total
+
+                cumulative_data.append(
+                    {
+                        "date": date,
+                        "futures_daily": futures_profit,
+                        "stocks_daily": stocks_total,
+                        "total_daily": futures_profit + stocks_total,
+                        "futures_cumulative": futures_cumulative,
+                        "stocks_cumulative": stocks_cumulative,
+                        "total_cumulative": total_cumulative,
+                    }
+                )
+
+            return {
+                "start_date": start_date,
+                "end_date": end_date,
+                "data": cumulative_data,
+                "summary": {
+                    "futures_total": futures_cumulative,
+                    "stocks_total": stocks_cumulative,
+                    "total": total_cumulative,
+                },
+            }
+
+    def get_trade_list(
+        self,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        page: int = 1,
+        per_page: int = 50,
+    ) -> dict[str, Any]:
+        """取引履歴一覧を取得"""
+        offset = (page - 1) * per_page
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # 条件設定
+            where_clause = "WHERE user_id = ?"
+            params: list[Any] = [self.user_id]
+
+            if start_date:
+                where_clause += " AND trade_date >= ?"
+                params.append(start_date)
+            if end_date:
+                where_clause += " AND trade_date <= ?"
+                params.append(end_date)
+
+            # 総件数を取得
+            cursor.execute(
+                f"""
+                SELECT COUNT(*) FROM (
+                    SELECT id FROM daytrade_futures {where_clause}
+                    UNION ALL
+                    SELECT id FROM daytrade_stocks {where_clause}
+                ) t
+            """,
+                params * 2,
+            )
+            total_count = cursor.fetchone()[0]
+
+            # 取引データを取得
+            cursor.execute(
+                f"""
+                SELECT * FROM (
+                    SELECT
+                        'futures' as trade_category,
+                        id,
+                        trade_date,
+                        trade_datetime as datetime,
+                        symbol as name,
+                        trade_type,
+                        price,
+                        quantity,
+                        profit_loss,
+                        NULL as settlement_amount,
+                        NULL as code
+                    FROM daytrade_futures
+                    {where_clause}
+
+                    UNION ALL
+
+                    SELECT
+                        'stocks' as trade_category,
+                        id,
+                        trade_date,
+                        trade_date || ' 00:00:00' as datetime,
+                        name,
+                        trade_type,
+                        average_price as price,
+                        quantity,
+                        NULL as profit_loss,
+                        settlement_amount,
+                        code
+                    FROM daytrade_stocks
+                    {where_clause}
+                ) t
+                ORDER BY trade_date DESC, datetime DESC
+                LIMIT ? OFFSET ?
+            """,
+                params * 2 + [per_page, offset],
+            )
+
+            trades = [dict(row) for row in cursor.fetchall()]
+
+            return {
+                "trades": trades,
+                "total": total_count,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": (total_count + per_page - 1) // per_page,
+            }
+
+    def create_trade(self, data: dict[str, Any]) -> dict[str, Any]:
+        """取引を手動登録"""
+        trade_type = data.get("trade_category")
+        if trade_type not in ["futures", "stocks"]:
+            raise ValueError("Invalid trade category")
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+
+            if trade_type == "futures":
+                # 先物取引の登録
+                cursor.execute(
+                    """
+                    INSERT INTO daytrade_futures (
+                        user_id, trade_date, trade_number, trade_datetime,
+                        market, symbol, trade_type, price, quantity,
+                        commission, tax, settlement_amount, delivery_amount,
+                        delivery_date, profit_loss
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        self.user_id,
+                        data["trade_date"],
+                        data.get("trade_number", ""),
+                        data.get("trade_datetime", data["trade_date"] + " 00:00:00"),
+                        data.get("market", ""),
+                        data["symbol"],
+                        data["trade_type"],
+                        float(data["price"]),
+                        int(data["quantity"]),
+                        float(data.get("commission", 0)),
+                        float(data.get("tax", 0)),
+                        float(data["settlement_amount"]),
+                        float(data.get("delivery_amount", 0)),
+                        data.get("delivery_date"),
+                        float(data["profit_loss"]),
+                    ),
+                )
+            else:
+                # 株式取引の登録
+                cursor.execute(
+                    """
+                    INSERT INTO daytrade_stocks (
+                        user_id, code, name, market, trade_type, term,
+                        custody_type, trade_date, delivery_date, quantity,
+                        average_price, commission_tax, capital_gains_tax,
+                        settlement_amount, day_trade_amount
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        self.user_id,
+                        data["code"],
+                        data["name"],
+                        data.get("market", ""),
+                        data["trade_type"],
+                        data.get("term", ""),
+                        data.get("custody_type", ""),
+                        data["trade_date"],
+                        data.get("delivery_date"),
+                        int(data["quantity"]),
+                        float(data["average_price"]),
+                        float(data.get("commission_tax", 0)),
+                        float(data.get("capital_gains_tax", 0)),
+                        float(data.get("settlement_amount", 0)),
+                        float(data.get("day_trade_amount", 0)),
+                    ),
+                )
+
+            conn.commit()
+            return {"id": cursor.lastrowid}
+
+    def update_trade(self, trade_id: int, data: dict[str, Any]) -> None:
+        """取引を編集"""
+        trade_type = data.get("trade_category")
+        if trade_type not in ["futures", "stocks"]:
+            raise ValueError("Invalid trade category")
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+
+            if trade_type == "futures":
+                cursor.execute(
+                    """
+                    UPDATE daytrade_futures SET
+                        trade_date = ?, trade_datetime = ?, symbol = ?,
+                        trade_type = ?, price = ?, quantity = ?,
+                        commission = ?, tax = ?, settlement_amount = ?,
+                        delivery_amount = ?, delivery_date = ?, profit_loss = ?
+                    WHERE id = ? AND user_id = ?
+                """,
+                    (
+                        data["trade_date"],
+                        data.get("trade_datetime", data["trade_date"] + " 00:00:00"),
+                        data["symbol"],
+                        data["trade_type"],
+                        float(data["price"]),
+                        int(data["quantity"]),
+                        float(data.get("commission", 0)),
+                        float(data.get("tax", 0)),
+                        float(data["settlement_amount"]),
+                        float(data.get("delivery_amount", 0)),
+                        data.get("delivery_date"),
+                        float(data["profit_loss"]),
+                        trade_id,
+                        self.user_id,
+                    ),
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE daytrade_stocks SET
+                        code = ?, name = ?, trade_type = ?,
+                        trade_date = ?, delivery_date = ?, quantity = ?,
+                        average_price = ?, commission_tax = ?,
+                        capital_gains_tax = ?, settlement_amount = ?,
+                        day_trade_amount = ?
+                    WHERE id = ? AND user_id = ?
+                """,
+                    (
+                        data["code"],
+                        data["name"],
+                        data["trade_type"],
+                        data["trade_date"],
+                        data.get("delivery_date"),
+                        int(data["quantity"]),
+                        float(data["average_price"]),
+                        float(data.get("commission_tax", 0)),
+                        float(data.get("capital_gains_tax", 0)),
+                        float(data.get("settlement_amount", 0)),
+                        float(data.get("day_trade_amount", 0)),
+                        trade_id,
+                        self.user_id,
+                    ),
+                )
+
+            if cursor.rowcount == 0:
+                raise ValueError("Trade not found or unauthorized")
+
+            conn.commit()
+
+    def delete_trade(self, trade_id: int) -> None:
+        """取引を削除"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+
+            # 先物から削除試行
+            cursor.execute(
+                "DELETE FROM daytrade_futures WHERE id = ? AND user_id = ?",
+                (trade_id, self.user_id),
+            )
+
+            if cursor.rowcount == 0:
+                # 株式から削除試行
+                cursor.execute(
+                    "DELETE FROM daytrade_stocks WHERE id = ? AND user_id = ?",
+                    (trade_id, self.user_id),
+                )
+
+                if cursor.rowcount == 0:
+                    raise ValueError("Trade not found or unauthorized")
+
+            conn.commit()
+
+    def get_monthly_profit_data(self, year: int) -> dict[str, Any]:
+        """年間の月別損益データを取得"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+
+            monthly_data = []
+
+            for month in range(1, 13):
+                start_date = f"{year:04d}-{month:02d}-01"
+                if month == 12:
+                    end_date = f"{year:04d}-12-31"
+                else:
+                    end_date = f"{year:04d}-{month+1:02d}-01"
+
+                # 先物の月間損益
+                cursor.execute(
+                    """
+                    SELECT
+                        COALESCE(SUM(profit_loss), 0) as total_profit,
+                        COUNT(DISTINCT trade_date) as trading_days,
+                        COUNT(*) as total_trades
+                    FROM daytrade_futures
+                    WHERE user_id = ? AND trade_date >= ? AND trade_date < ?
+                """,
+                    (self.user_id, start_date, end_date),
+                )
+                futures_data = cursor.fetchone()
+
+                # 株式の月間損益
+                cursor.execute(
+                    """
+                    SELECT
+                        COALESCE(SUM(COALESCE(capital_gains_tax, 0) +
+                                     COALESCE(settlement_amount, 0)), 0) as total_profit,
+                        COALESCE(SUM(COALESCE(day_trade_amount, 0)), 0) as day_trade_profit,
+                        COUNT(DISTINCT trade_date) as trading_days,
+                        COUNT(*) as total_trades
+                    FROM daytrade_stocks
+                    WHERE user_id = ? AND trade_date >= ? AND trade_date < ?
+                      AND trade_type LIKE '%返済%'
+                """,
+                    (self.user_id, start_date, end_date),
+                )
+                stocks_data = cursor.fetchone()
+
+                futures_profit = futures_data[0] if futures_data else 0
+                stocks_profit = (stocks_data[0] + stocks_data[1]) if stocks_data else 0
+
+                monthly_data.append(
+                    {
+                        "month": month,
+                        "futures_profit": futures_profit,
+                        "stocks_profit": stocks_profit,
+                        "total_profit": futures_profit + stocks_profit,
+                        "futures_days": futures_data[1] if futures_data else 0,
+                        "stocks_days": stocks_data[2] if stocks_data else 0,
+                        "futures_trades": futures_data[2] if futures_data else 0,
+                        "stocks_trades": stocks_data[3] if stocks_data else 0,
+                    }
+                )
+
+            # 年間合計
+            total_futures = sum(m["futures_profit"] for m in monthly_data)
+            total_stocks = sum(m["stocks_profit"] for m in monthly_data)
+
+            return {
+                "year": year,
+                "months": monthly_data,
+                "yearly_total": {
+                    "futures": total_futures,
+                    "stocks": total_stocks,
+                    "total": total_futures + total_stocks,
+                },
+            }
