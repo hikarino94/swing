@@ -265,3 +265,44 @@ def search_stocks():
     except Exception as e:
         logger.error(f"銘柄検索エラー: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+@holdings_bp.route("/analysis", methods=["GET"])
+@login_required
+def get_portfolio_analysis():
+    """ポートフォリオ分析データを取得"""
+    try:
+        user = request.current_user
+        account_name = request.args.get("account_name")
+
+        # 保有銘柄を取得
+        holdings = get_holdings(user_id=user.id, account_name=account_name)
+
+        if not holdings:
+            return jsonify(
+                {
+                    "success": True,
+                    "analysis": {
+                        "total_value": 0,
+                        "total_profit_loss": 0,
+                        "total_profit_loss_ratio": 0,
+                        "sector17_breakdown": [],
+                        "sector33_breakdown": [],
+                        "performance_distribution": [],
+                        "top_gainers": [],
+                        "top_losers": [],
+                        "holdings_by_value": [],
+                    },
+                }
+            )
+
+        # 分析データを計算
+        from src.portfolio.analysis import calculate_portfolio_analysis
+
+        analysis = calculate_portfolio_analysis(holdings)
+
+        return jsonify({"success": True, "analysis": analysis})
+
+    except Exception as e:
+        logger.error(f"ポートフォリオ分析エラー: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500

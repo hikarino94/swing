@@ -44,6 +44,9 @@ def get_holdings(
                 SELECT
                     h.code,
                     li.company_name as name,
+                    li.sector17_name as sector17,
+                    li.sector33_name as sector33,
+                    li.market_name as market,
                     SUM(CASE WHEN h.stock_type = '現物' THEN h.quantity ELSE 0 END) as spot_quantity,
                     SUM(CASE WHEN h.stock_type = '信用' AND h.trade_position = '買建' THEN h.quantity ELSE 0 END) as margin_buy_quantity,
                     SUM(CASE WHEN h.stock_type = '信用' AND h.trade_position = '売建' THEN h.quantity ELSE 0 END) as margin_sell_quantity,
@@ -96,7 +99,7 @@ def get_holdings(
                 query += " AND h.account_name = ?"
                 params.append(account_name)
 
-            query += " GROUP BY h.code, li.company_name, lp.current_price"
+            query += " GROUP BY h.code, li.company_name, li.sector17_name, li.sector33_name, li.market_name, lp.current_price"
 
         else:
             # 通常の一覧取得
@@ -111,6 +114,9 @@ def get_holdings(
                 SELECT
                     h.*,
                     li.company_name as name,
+                    li.sector17_name as sector17,
+                    li.sector33_name as sector33,
+                    li.market_name as market,
                     lp.current_price as latest_price,
                     -- 評価額の計算（最新株価 × 数量）
                     CASE

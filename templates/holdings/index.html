@@ -15,6 +15,25 @@
             </div>
         </div>
 
+        <!-- タブナビゲーション -->
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="-mb-px flex space-x-8">
+                <button @click="activeTab = 'holdings'"
+                        :class="activeTab === 'holdings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                    📋 保有銘柄一覧
+                </button>
+                <button @click="activeTab = 'analysis'; loadAnalysis()"
+                        :class="activeTab === 'analysis' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                    📊 ポートフォリオ分析
+                </button>
+            </nav>
+        </div>
+
+        <!-- 保有銘柄一覧タブ -->
+        <div x-show="activeTab === 'holdings'" x-transition>
+
         <!-- フィルター設定 -->
         <div class="mb-4 space-y-4">
             <!-- 口座選択と表示切替 -->
@@ -192,6 +211,184 @@
             </div>
             <div x-show="holdings.length > 0 && filteredHoldings.length === 0" class="text-center py-8 text-gray-500">
                 フィルター条件に一致する銘柄がありません
+            </div>
+        </div>
+        </div>
+
+        <!-- ポートフォリオ分析タブ -->
+        <div x-show="activeTab === 'analysis'" x-transition>
+            <div x-show="analysisLoading" class="text-center py-8">
+                <div class="spinner mx-auto mb-4"></div>
+                <p class="text-gray-600">分析データを読み込んでいます...</p>
+            </div>
+
+            <div x-show="!analysisLoading && analysisData">
+                <!-- 概要統計 -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-600">総評価額</div>
+                        <div class="text-xl font-bold" x-text="formatPrice(analysisData.total_value)"></div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-600">評価損益</div>
+                        <div class="text-xl font-bold"
+                             :class="analysisData.total_profit_loss >= 0 ? 'text-green-600' : 'text-red-600'"
+                             x-text="formatPrice(analysisData.total_profit_loss)"></div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-600">損益率</div>
+                        <div class="text-xl font-bold"
+                             :class="analysisData.total_profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'"
+                             x-text="formatPercentage(analysisData.total_profit_loss_ratio)"></div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-600">保有銘柄数</div>
+                        <div class="text-xl font-bold" x-text="analysisData.total_holdings + '銘柄'"></div>
+                    </div>
+                </div>
+
+                <!-- セクター別構成（単独行） -->
+                <div class="bg-gray-50 rounded-lg p-4 mb-6 relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">セクター別構成</h3>
+                        <div class="flex items-center space-x-2">
+                            <button @click="sectorType = '17'"
+                                    :class="sectorType === '17' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'"
+                                    class="px-3 py-1 rounded text-sm font-medium transition-colors">
+                                17業種
+                            </button>
+                            <button @click="sectorType = '33'"
+                                    :class="sectorType === '33' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'"
+                                    class="px-3 py-1 rounded text-sm font-medium transition-colors">
+                                33業種
+                            </button>
+                            <button @click="screenshotChart('sectorChart')"
+                                    class="ml-4 px-3 py-1 bg-gray-600 text-white rounded text-sm font-medium hover:bg-gray-700 transition-colors">
+                                📷 画像保存
+                            </button>
+                        </div>
+                    </div>
+                    <div class="h-80 flex justify-center">
+                        <canvas id="sectorChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 銘柄別年間配当額（単独行） -->
+                <div class="bg-gray-50 rounded-lg p-4 mb-6 relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">銘柄別年間配当額</h3>
+                        <button @click="screenshotChart('dividendAmountChart')"
+                                class="px-3 py-1 bg-gray-600 text-white rounded text-sm font-medium hover:bg-gray-700 transition-colors">
+                            📷 画像保存
+                        </button>
+                    </div>
+                    <div class="h-80 flex justify-center">
+                        <canvas id="dividendAmountChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 市場別構成とパフォーマンス分布（並列） -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- 市場別円グラフ -->
+                    <div class="bg-gray-50 rounded-lg p-4 relative">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold">市場別構成</h3>
+                            <button @click="screenshotChart('marketChart')"
+                                    class="px-3 py-1 bg-gray-600 text-white rounded text-sm font-medium hover:bg-gray-700 transition-colors">
+                                📷 画像保存
+                            </button>
+                        </div>
+                        <div class="h-80 flex justify-center">
+                            <canvas id="marketChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- パフォーマンス分布 -->
+                    <div class="bg-gray-50 rounded-lg p-4 relative">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold">パフォーマンス分布</h3>
+                            <button @click="screenshotChart('performanceChart')"
+                                    class="px-3 py-1 bg-gray-600 text-white rounded text-sm font-medium hover:bg-gray-700 transition-colors">
+                                📷 画像保存
+                            </button>
+                        </div>
+                        <div class="h-64">
+                            <canvas id="performanceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 損益率ヒートマップ（単独行） -->
+                <div class="bg-gray-50 rounded-lg p-4 mb-6 relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">損益率ヒートマップ</h3>
+                        <button @click="screenshotHeatmap()"
+                                class="px-3 py-1 bg-gray-600 text-white rounded text-sm font-medium hover:bg-gray-700 transition-colors">
+                            📷 画像保存
+                        </button>
+                    </div>
+                    <div id="heatmapContainer" class="h-64 overflow-auto"></div>
+                </div>
+
+
+                <!-- 上位・下位銘柄 -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- 上位銘柄 -->
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h3 class="text-lg font-semibold mb-4 text-green-600">📈 利益上位銘柄</h3>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-2">銘柄</th>
+                                    <th class="text-right py-2">評価損益</th>
+                                    <th class="text-right py-2">損益率</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="stock in analysisData.top_gainers" :key="stock.code">
+                                    <tr class="border-b">
+                                        <td class="py-2">
+                                            <span x-text="stock.code" class="font-mono"></span>
+                                            <span x-text="stock.name" class="text-xs text-gray-600 block"></span>
+                                        </td>
+                                        <td class="text-right py-2 text-green-600" x-text="formatPrice(stock.profit_loss)"></td>
+                                        <td class="text-right py-2 text-green-600" x-text="formatPercentage(stock.profit_loss_ratio)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 下位銘柄 -->
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h3 class="text-lg font-semibold mb-4 text-red-600">📉 損失上位銘柄</h3>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-2">銘柄</th>
+                                    <th class="text-right py-2">評価損益</th>
+                                    <th class="text-right py-2">損益率</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="stock in analysisData.top_losers" :key="stock.code">
+                                    <tr class="border-b">
+                                        <td class="py-2">
+                                            <span x-text="stock.code" class="font-mono"></span>
+                                            <span x-text="stock.name" class="text-xs text-gray-600 block"></span>
+                                        </td>
+                                        <td class="text-right py-2 text-red-600" x-text="formatPrice(stock.profit_loss)"></td>
+                                        <td class="text-right py-2 text-red-600" x-text="formatPercentage(stock.profit_loss_ratio)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="!analysisLoading && !analysisData" class="text-center py-8 text-gray-500">
+                分析データがありません
             </div>
         </div>
     </div>
@@ -414,6 +611,10 @@ window.holdingsManager = function() {
         showEditModal: false,
         stockSearch: '',
         searchResults: [],
+        activeTab: 'holdings',
+        analysisData: null,
+        analysisLoading: false,
+        sectorType: '17',
         filters: {
             accountType: '',
             stockType: '',
@@ -439,6 +640,13 @@ window.holdingsManager = function() {
         init() {
             this.loadAccounts();
             this.loadHoldings();
+
+            // セクタータイプが変更されたらチャートを再描画
+            this.$watch('sectorType', () => {
+                if (this.analysisData && this.activeTab === 'analysis') {
+                    this.renderSectorChart();
+                }
+            });
         },
 
         async loadAccounts() {
@@ -854,6 +1062,702 @@ window.holdingsManager = function() {
         formatPercentage(value) {
             if (value === null || value === undefined) return '-';
             return this.formatNumber(value, 2) + '%';
+        },
+
+        async loadAnalysis() {
+            if (this.analysisLoading || (this.analysisData && this.selectedAccount === this.lastAnalyzedAccount)) {
+                return;
+            }
+
+            this.analysisLoading = true;
+            try {
+                const params = new URLSearchParams();
+                if (this.selectedAccount) {
+                    params.append('account_name', this.selectedAccount);
+                }
+
+                const csrfToken = window.csrf_token ? window.csrf_token() : '{{ csrf_token() }}';
+                const response = await fetch(`/api/holdings/analysis?${params}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.analysisData = data.analysis;
+                    this.lastAnalyzedAccount = this.selectedAccount;
+
+                    // チャートを描画
+                    this.$nextTick(() => {
+                        this.renderCharts();
+                    });
+                } else {
+                    console.error('Failed to load analysis:', data);
+                    alert(data.message || '分析データの取得に失敗しました');
+                }
+            } catch (error) {
+                console.error('Error loading analysis:', error);
+                alert('エラーが発生しました: ' + error.message);
+            } finally {
+                this.analysisLoading = false;
+            }
+        },
+
+        renderCharts() {
+            if (!this.analysisData) return;
+
+            // セクター別円グラフ
+            this.renderSectorChart();
+
+            // 市場別円グラフ
+            this.renderMarketChart();
+
+            // 年間配当額分布
+            this.renderDividendAmountChart();
+
+            // パフォーマンス分布チャート
+            this.renderPerformanceChart();
+
+            // ヒートマップ
+            this.renderHeatmap();
+        },
+
+        renderSectorChart() {
+            const ctx = document.getElementById('sectorChart');
+            if (!ctx) return;
+
+            // 既存のチャートがあれば破棄
+            if (this.sectorChartInstance) {
+                this.sectorChartInstance.destroy();
+            }
+
+            const sectorData = this.sectorType === '17'
+                ? this.analysisData.sector17_breakdown
+                : this.analysisData.sector33_breakdown;
+
+            this.sectorChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: sectorData.map(s => s.sector),
+                    datasets: [{
+                        data: sectorData.map(s => s.value),
+                        backgroundColor: [
+                            '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+                            '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
+                            '#06B6D4', '#A855F7', '#EAB308', '#DC2626', '#0EA5E9',
+                            '#D946EF', '#22C55E', '#F43F5E', '#0891B2', '#9333EA',
+                            '#16A34A', '#E11D48', '#0284C7', '#7C3AED', '#15803D',
+                            '#BE123C', '#0369A1', '#6D28D9', '#166534', '#9F1239',
+                            '#0C4A6E', '#5B21B6', '#14532D', '#881337', '#082F49'
+                        ],
+                        borderWidth: 1,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    aspectRatio: 1.5,
+                    layout: {
+                        padding: {
+                            left: 50,
+                            right: 250,
+                            top: 20,
+                            bottom: 20
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            align: 'center',
+                            labels: {
+                                padding: 10,
+                                font: {
+                                    size: 12
+                                },
+                                boxWidth: 15,
+                                boxHeight: 15,
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        return data.labels.map((label, i) => {
+                                            const meta = chart.getDatasetMeta(0);
+                                            const style = meta.controller.getStyle(i);
+                                            const value = data.datasets[0].data[i];
+                                            const ratio = sectorData[i].ratio;
+
+                                            // ラベルが長すぎる場合は省略
+                                            let displayLabel = label;
+                                            if (label.length > 15) {
+                                                displayLabel = label.substring(0, 12) + '...';
+                                            }
+
+                                            return {
+                                                text: `${displayLabel} (${ratio.toFixed(1)}%)`,
+                                                fillStyle: style.backgroundColor,
+                                                strokeStyle: style.borderColor,
+                                                lineWidth: style.borderWidth,
+                                                hidden: isNaN(value) || meta.data[i].hidden,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const sector = sectorData[context.dataIndex];
+                                    return [
+                                        `${sector.sector}: ¥${sector.value.toLocaleString()}`,
+                                        `構成比: ${sector.ratio.toFixed(1)}%`,
+                                        `銘柄数: ${sector.count}`
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        renderMarketChart() {
+            const ctx = document.getElementById('marketChart');
+            if (!ctx) return;
+
+            // 既存のチャートがあれば破棄
+            if (this.marketChartInstance) {
+                this.marketChartInstance.destroy();
+            }
+
+            const marketData = this.analysisData.market_breakdown;
+
+            this.marketChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: marketData.map(m => m.market),
+                    datasets: [{
+                        data: marketData.map(m => m.value),
+                        backgroundColor: [
+                            '#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981',
+                            '#14B8A6', '#3B82F6', '#EF4444', '#F97316', '#84CC16'
+                        ],
+                        borderWidth: 1,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    aspectRatio: 1.5,
+                    layout: {
+                        padding: {
+                            left: 20,
+                            right: 200,
+                            top: 20,
+                            bottom: 20
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            align: 'center',
+                            labels: {
+                                padding: 10,
+                                font: {
+                                    size: 12
+                                },
+                                boxWidth: 15,
+                                boxHeight: 15,
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        return data.labels.map((label, i) => {
+                                            const meta = chart.getDatasetMeta(0);
+                                            const style = meta.controller.getStyle(i);
+                                            const value = data.datasets[0].data[i];
+                                            const ratio = marketData[i].ratio;
+
+                                            return {
+                                                text: `${label} (${ratio.toFixed(1)}%)`,
+                                                fillStyle: style.backgroundColor,
+                                                strokeStyle: style.borderColor,
+                                                lineWidth: style.borderWidth,
+                                                hidden: isNaN(value) || meta.data[i].hidden,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const market = marketData[context.dataIndex];
+                                    return [
+                                        `${market.market}: ¥${market.value.toLocaleString()}`,
+                                        `構成比: ${market.ratio.toFixed(1)}%`,
+                                        `銘柄数: ${market.count}`
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        renderDividendAmountChart() {
+            const ctx = document.getElementById('dividendAmountChart');
+            if (!ctx) return;
+
+            // 既存のチャートがあれば破棄
+            if (this.dividendAmountChartInstance) {
+                this.dividendAmountChartInstance.destroy();
+            }
+
+            const dividendByStock = this.analysisData.dividend_by_stock;
+
+            // データがない場合の処理
+            if (!dividendByStock || dividendByStock.length === 0) {
+                ctx.getContext('2d').font = '16px sans-serif';
+                ctx.getContext('2d').textAlign = 'center';
+                ctx.getContext('2d').fillText('配当データがありません', ctx.width / 2, ctx.height / 2);
+                return;
+            }
+
+            // 上位10銘柄に絞る（その他も含める）
+            let displayData = [];
+            let othersAmount = 0;
+            let othersCount = 0;
+
+            for (let i = 0; i < dividendByStock.length; i++) {
+                if (i < 10) {
+                    displayData.push(dividendByStock[i]);
+                } else {
+                    othersAmount += dividendByStock[i].annual_dividend;
+                    othersCount++;
+                }
+            }
+
+            if (othersCount > 0) {
+                displayData.push({
+                    name: `その他（${othersCount}銘柄）`,
+                    annual_dividend: othersAmount,
+                    ratio: (othersAmount / this.analysisData.total_dividend_amount * 100)
+                });
+            }
+
+            this.dividendAmountChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: displayData.map(d => d.name || d.code),
+                    datasets: [{
+                        data: displayData.map(d => d.annual_dividend),
+                        backgroundColor: [
+                            '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+                            '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
+                            '#94A3B8'  // その他用の色
+                        ],
+                        borderWidth: 1,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    aspectRatio: 1.5,
+                    layout: {
+                        padding: {
+                            left: 50,
+                            right: 250,
+                            top: 20,
+                            bottom: 20
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            align: 'center',
+                            labels: {
+                                padding: 10,
+                                font: {
+                                    size: 12
+                                },
+                                boxWidth: 15,
+                                boxHeight: 15,
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        return data.labels.map((label, i) => {
+                                            const meta = chart.getDatasetMeta(0);
+                                            const style = meta.controller.getStyle(i);
+                                            const value = data.datasets[0].data[i];
+                                            const ratio = displayData[i].ratio ||
+                                                (value / chart.config.data.datasets[0].data.reduce((a, b) => a + b, 0) * 100);
+
+                                            // ラベルが長すぎる場合は省略
+                                            let displayLabel = label;
+                                            if (label.length > 12) {
+                                                displayLabel = label.substring(0, 10) + '...';
+                                            }
+
+                                            return {
+                                                text: `${displayLabel} (${ratio.toFixed(1)}%)`,
+                                                fillStyle: style.backgroundColor,
+                                                strokeStyle: style.borderColor,
+                                                lineWidth: style.borderWidth,
+                                                hidden: isNaN(value) || meta.data[i].hidden,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const stock = displayData[context.dataIndex];
+                                    const result = [
+                                        `年間配当額: ¥${Math.round(stock.annual_dividend).toLocaleString()}`
+                                    ];
+
+                                    if (stock.dividend_yield) {
+                                        result.push(`配当利回り: ${stock.dividend_yield.toFixed(2)}%`);
+                                    }
+                                    if (stock.market_value) {
+                                        result.push(`評価額: ¥${stock.market_value.toLocaleString()}`);
+                                    }
+
+                                    return result;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        renderPerformanceChart() {
+            const ctx = document.getElementById('performanceChart');
+            if (!ctx) return;
+
+            // 既存のチャートがあれば破棄
+            if (this.performanceChartInstance) {
+                this.performanceChartInstance.destroy();
+            }
+
+            const perfData = this.analysisData.performance_distribution;
+
+            // 色の設定（損失が大きいほど濃い赤、利益が大きいほど濃い緑）
+            const getColor = (range) => {
+                if (range.includes('-50%以下')) return '#7F1D1D';  // 最も濃い赤
+                if (range.includes('-50%～-20%')) return '#B91C1C';
+                if (range.includes('-20%～-10%')) return '#DC2626';
+                if (range.includes('-10%～0%')) return '#EF4444';
+                if (range.includes('0%～10%')) return '#10B981';
+                if (range.includes('10%～20%')) return '#059669';
+                if (range.includes('20%～50%')) return '#047857';
+                if (range.includes('50%以上')) return '#064E3B';  // 最も濃い緑
+                return '#6B7280';
+            };
+
+            this.performanceChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: perfData.map(p => p.range),
+                    datasets: [{
+                        label: '銘柄数',
+                        data: perfData.map(p => p.count),
+                        backgroundColor: perfData.map(p => getColor(p.range)),
+                        borderColor: perfData.map(p => getColor(p.range)),
+                        borderWidth: 1
+                    }, {
+                        label: '評価額（百万円）',
+                        data: perfData.map(p => p.value / 1000000),
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 2,
+                        type: 'line',
+                        yAxisID: 'y1',
+                        tension: 0.2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '銘柄数'
+                            },
+                            ticks: {
+                                stepSize: 1
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '評価額（百万円）'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                afterTitle: function(context) {
+                                    const perf = perfData[context[0].dataIndex];
+                                    return `構成比: ${perf.ratio.toFixed(1)}%`;
+                                },
+                                label: function(context) {
+                                    if (context.dataset.label === '銘柄数') {
+                                        return `銘柄数: ${context.parsed.y}`;
+                                    } else {
+                                        return `評価額: ¥${(context.parsed.y * 1000000).toLocaleString()}`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        renderHeatmap() {
+            const container = document.getElementById('heatmapContainer');
+            if (!container) return;
+
+            // 保有銘柄を損益率でソート
+            const sortedHoldings = [...this.holdings].sort((a, b) => b.profit_loss_ratio - a.profit_loss_ratio);
+
+            // ヒートマップのHTML生成
+            let html = '<div class="grid grid-cols-10 gap-1 p-2">';
+
+            sortedHoldings.forEach(holding => {
+                const ratio = holding.profit_loss_ratio || 0;
+                let bgColor = '';
+                let textColor = 'text-white';
+
+                if (ratio >= 20) {
+                    bgColor = 'bg-green-600';
+                } else if (ratio >= 10) {
+                    bgColor = 'bg-green-500';
+                } else if (ratio >= 5) {
+                    bgColor = 'bg-green-400';
+                } else if (ratio >= 0) {
+                    bgColor = 'bg-green-300';
+                    textColor = 'text-gray-800';
+                } else if (ratio >= -5) {
+                    bgColor = 'bg-red-300';
+                    textColor = 'text-gray-800';
+                } else if (ratio >= -10) {
+                    bgColor = 'bg-red-400';
+                } else if (ratio >= -20) {
+                    bgColor = 'bg-red-500';
+                } else {
+                    bgColor = 'bg-red-600';
+                }
+
+                html += `
+                    <div class="${bgColor} ${textColor} rounded p-2 text-xs text-center cursor-pointer hover:opacity-80"
+                         title="${holding.code} ${holding.name}\n損益率: ${ratio.toFixed(2)}%\n評価額: ¥${holding.market_value.toLocaleString()}">
+                        <div class="font-mono">${holding.code}</div>
+                        <div class="font-bold">${ratio.toFixed(1)}%</div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+
+            // 凡例
+            html += `
+                <div class="mt-4 flex justify-center items-center text-xs">
+                    <span class="mr-2">損失</span>
+                    <div class="flex">
+                        <div class="w-6 h-6 bg-red-600"></div>
+                        <div class="w-6 h-6 bg-red-500"></div>
+                        <div class="w-6 h-6 bg-red-400"></div>
+                        <div class="w-6 h-6 bg-red-300"></div>
+                        <div class="w-6 h-6 bg-green-300"></div>
+                        <div class="w-6 h-6 bg-green-400"></div>
+                        <div class="w-6 h-6 bg-green-500"></div>
+                        <div class="w-6 h-6 bg-green-600"></div>
+                    </div>
+                    <span class="ml-2">利益</span>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        },
+
+        screenshotChart(chartId) {
+            const canvas = document.getElementById(chartId);
+            if (!canvas) {
+                alert('チャートが見つかりません');
+                return;
+            }
+
+            // 新しいcanvasを作成して、白背景を追加
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // 白背景を描画
+            tempCtx.fillStyle = 'white';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+            // 元のチャートを描画
+            tempCtx.drawImage(canvas, 0, 0);
+
+            // ダウンロード
+            tempCanvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+
+                // ファイル名を設定
+                const date = new Date().toISOString().slice(0, 10);
+                let filename = '';
+                switch(chartId) {
+                    case 'sectorChart':
+                        filename = `セクター別構成_${this.sectorType}業種_${date}.png`;
+                        break;
+                    case 'dividendAmountChart':
+                        filename = `銘柄別年間配当額_${date}.png`;
+                        break;
+                    case 'marketChart':
+                        filename = `市場別構成_${date}.png`;
+                        break;
+                    case 'performanceChart':
+                        filename = `パフォーマンス分布_${date}.png`;
+                        break;
+                    default:
+                        filename = `チャート_${date}.png`;
+                }
+
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        },
+
+        screenshotHeatmap() {
+            const container = document.getElementById('heatmapContainer');
+            if (!container) {
+                alert('ヒートマップが見つかりません');
+                return;
+            }
+
+            // html2canvasライブラリを動的に読み込み
+            if (typeof html2canvas === 'undefined') {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+                script.onload = () => {
+                    this.captureHeatmap();
+                };
+                document.head.appendChild(script);
+            } else {
+                this.captureHeatmap();
+            }
+        },
+
+        captureHeatmap() {
+            // キャプチャ用の一時的なコンテナを作成
+            const tempContainer = document.createElement('div');
+            tempContainer.style.cssText = `
+                position: fixed;
+                top: -9999px;
+                left: -9999px;
+                background: white;
+                padding: 40px;
+                width: 1600px;
+                z-index: -1;
+            `;
+            document.body.appendChild(tempContainer);
+
+            // ヒートマップのコンテンツをクローン
+            const heatmapContainer = document.querySelector('#heatmapContainer');
+            const titleElement = document.querySelector('#heatmapContainer').closest('.bg-gray-50').querySelector('h3');
+
+            // タイトルをクローン（ボタンは除外）
+            const titleClone = document.createElement('h3');
+            titleClone.className = 'text-lg font-semibold mb-4';
+            titleClone.textContent = '損益率ヒートマップ';
+            tempContainer.appendChild(titleClone);
+
+            // ヒートマップコンテンツをクローン
+            const contentClone = heatmapContainer.cloneNode(true);
+            contentClone.style.cssText = 'height: auto; overflow: visible;';
+            tempContainer.appendChild(contentClone);
+
+            // 少し待ってからキャプチャ
+            setTimeout(() => {
+                const options = {
+                    scale: 3, // より高解像度
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    width: 1600,
+                    height: tempContainer.scrollHeight,
+                    windowWidth: 1600,
+                    windowHeight: tempContainer.scrollHeight
+                };
+
+                html2canvas(tempContainer, options).then(canvas => {
+                    // 一時コンテナを削除
+                    document.body.removeChild(tempContainer);
+
+                    canvas.toBlob((blob) => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+
+                        const date = new Date().toISOString().slice(0, 10);
+                        a.download = `損益率ヒートマップ_${date}.png`;
+
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }, 'image/png');
+                }).catch(error => {
+                    // エラー時も一時コンテナを削除
+                    document.body.removeChild(tempContainer);
+                    console.error('ヒートマップのキャプチャに失敗しました:', error);
+                    alert('画像の保存に失敗しました');
+                });
+            }, 100);
         }
     };
 }
