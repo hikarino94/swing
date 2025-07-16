@@ -17,14 +17,14 @@
             <select x-model="activeTab"
                     @change="checkTabChange($event.target.value)"
                     class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                <option value="data" x-show="true">📊 データ取得</option>
-                <option value="screening" x-show="true">🔍 スクリーニング</option>
-                <option value="backtest" x-show="true">📈 バックテスト</option>
-                <option value="daytrade" x-show="isLoggedIn">📅 デイトレード</option>
-                <option value="holdings" x-show="isLoggedIn">💼 保有銘柄</option>
-                <option value="utilities" x-show="true">🛠️ ユーティリティ</option>
-                <option value="results" x-show="true">📁 結果閲覧</option>
-                <option value="settings" x-show="true">⚙️ 設定</option>
+                <option value="data">📊 データ取得</option>
+                <option value="screening">🔍 スクリーニング</option>
+                <option value="backtest">📈 バックテスト</option>
+                <option value="daytrade">📅 デイトレード</option>
+                <option value="holdings">💼 保有銘柄</option>
+                <option value="utilities">🛠️ ユーティリティ</option>
+                <option value="results">📁 結果閲覧</option>
+                <option value="settings">⚙️ 設定</option>
             </select>
         </div>
     </div>
@@ -32,62 +32,58 @@
     <!-- デスクトップ用タブナビゲーション -->
     <div class="hidden sm:block border-b border-gray-200">
         <nav class="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
-            <button x-show="true"
-                    @click="checkTabChange('data')"
+            <button @click="checkTabChange('data')"
                     :class="{'tab-active': activeTab === 'data'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'data' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 📊 データ取得
             </button>
-            <button x-show="true"
-                    @click="checkTabChange('screening')"
+            <button @click="checkTabChange('screening')"
                     :class="{'tab-active': activeTab === 'screening'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'screening' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 🔍 スクリーニング
             </button>
-            <button x-show="true"
-                    @click="checkTabChange('backtest')"
+            <button @click="checkTabChange('backtest')"
                     :class="{'tab-active': activeTab === 'backtest'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'backtest' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 📈 バックテスト
             </button>
-            <button x-show="true"
-                    @click="checkTabChange('utilities')"
+            <button @click="checkTabChange('utilities')"
                     :class="{'tab-active': activeTab === 'utilities'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'utilities' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 🛠️ ユーティリティ
             </button>
-            <button x-show="true"
-                    @click="checkTabChange('results')"
+            <button @click="checkTabChange('results')"
                     :class="{'tab-active': activeTab === 'results'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'results' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 📁 結果閲覧
             </button>
-            <button x-show="true"
-                    @click="checkTabChange('settings')"
+            <button @click="checkTabChange('settings')"
                     :class="{'tab-active': activeTab === 'settings'}"
                     class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                     :class="activeTab === 'settings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                 ⚙️ 設定
             </button>
-            <button x-show="isLoggedIn"
-                    @click="checkTabChange('daytrade')"
-                    :class="{'tab-active': activeTab === 'daytrade'}"
-                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
-                    :class="activeTab === 'daytrade' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                📅 デイトレード
-            </button>
-            <button x-show="isLoggedIn"
-                    @click="checkTabChange('holdings')"
-                    :class="{'tab-active': activeTab === 'holdings'}"
-                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
-                    :class="activeTab === 'holdings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                💼 保有銘柄
-            </button>
+            <template x-if="isLoggedIn">
+                <button @click="checkTabChange('daytrade')"
+                        :class="{'tab-active': activeTab === 'daytrade'}"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                        :class="activeTab === 'daytrade' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                    📅 デイトレード
+                </button>
+            </template>
+            <template x-if="isLoggedIn">
+                <button @click="checkTabChange('holdings')"
+                        :class="{'tab-active': activeTab === 'holdings'}"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                        :class="activeTab === 'holdings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                    💼 保有銘柄
+                </button>
+            </template>
         </nav>
     </div>
 
