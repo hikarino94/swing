@@ -17,7 +17,7 @@ from .services import DaytradeService
 
 logger = get_logger("daytrade_routes")
 
-daytrade_bp = Blueprint("daytrade", __name__, url_prefix="/daytrade")
+daytrade_bp = Blueprint("daytrade", __name__, url_prefix="/api/daytrade")
 
 # 型付きrequest
 request: RequestWithUser = cast(RequestWithUser, flask_request)
@@ -43,8 +43,12 @@ def calendar(year: str, month: str):
 
         service = DaytradeService(request.current_user.id)
         calendar_data = service.get_calendar_data(year_int, month_int)
+        monthly_summary = service.get_monthly_summary(year_int, month_int)
 
-        return jsonify(calendar_data)
+        # フロントエンドが期待する形式に変換
+        return jsonify(
+            {"calendar_days": calendar_data["days"], "monthly_summary": monthly_summary}
+        )
     except ValueError:
         return jsonify({"error": "Invalid year or month"}), 400
     except Exception as e:

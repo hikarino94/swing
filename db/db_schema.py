@@ -334,6 +334,40 @@ CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_code ON daytrade_stocks(code);
 CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_user_date ON daytrade_stocks(user_id, trade_date);
 CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_user_code_date ON daytrade_stocks(user_id, code, trade_date);
 
+-- holdings -------------------------------------------------------
+-- 保有銘柄管理（現物・信用取引対応）
+CREATE TABLE IF NOT EXISTS holdings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    code TEXT NOT NULL,
+    account_name TEXT NOT NULL DEFAULT 'default',
+    account_type TEXT NOT NULL DEFAULT '特定',  -- 特定/一般/NISA/旧NISA
+    stock_type TEXT DEFAULT '現物',  -- 現物/信用
+    trade_position TEXT,  -- 買建/売建（信用の場合）
+    margin_term TEXT,  -- 6ヵ月/無期限（信用の場合）
+    quantity INTEGER NOT NULL,
+    average_price REAL NOT NULL,
+    current_price REAL,
+    market_value REAL,
+    profit_loss REAL,
+    profit_loss_ratio REAL,
+    expected_per REAL,
+    actual_pbr REAL,
+    dividend_yield REAL,
+    expected_eps REAL,
+    actual_bps REAL,
+    expected_dividend REAL,
+    lending_type TEXT,
+    acquisition_date TEXT,
+    updated_at TEXT DEFAULT (datetime('now')),
+    deleted_at TEXT DEFAULT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, code, account_name, account_type, stock_type, trade_position)
+);
+CREATE INDEX IF NOT EXISTS idx_holdings_user_id ON holdings(user_id);
+CREATE INDEX IF NOT EXISTS idx_holdings_code ON holdings(code);
+CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_name);
+
 
 """
 
@@ -396,8 +430,12 @@ def init_schema(db_path: str | Path) -> None:
                     code TEXT NOT NULL,
                     account_name TEXT NOT NULL DEFAULT 'default',
                     account_type TEXT NOT NULL DEFAULT '特定',
+                    stock_type TEXT DEFAULT '現物',  -- 現物/信用
+                    trade_position TEXT,  -- 買建/売建（信用の場合）
+                    margin_term TEXT,  -- 6ヵ月/無期限（信用の場合）
                     quantity INTEGER NOT NULL,
                     average_price REAL NOT NULL,
+                    current_price REAL,  -- 現在値
                     market_value REAL,
                     profit_loss REAL,
                     profit_loss_ratio REAL,
@@ -408,10 +446,11 @@ def init_schema(db_path: str | Path) -> None:
                     actual_bps REAL,
                     expected_dividend REAL,
                     lending_type TEXT,
+                    acquisition_date TEXT,  -- 取得日
                     updated_at TEXT DEFAULT (datetime('now')),
                     deleted_at TEXT DEFAULT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    UNIQUE(user_id, code, account_name, account_type)
+                    UNIQUE(user_id, code, account_name, account_type, stock_type, trade_position)
                 )
             """
             )
@@ -423,31 +462,107 @@ def init_schema(db_path: str | Path) -> None:
                 "CREATE INDEX idx_holdings_account ON holdings(account_name)"
             )
 
-            # データを復元（account_typeがない古いデータの場合は'特定'を設定）
+            # データを復元（古いデータの場合はデフォルト値を設定）
             for row in backup_data:
-                if len(row) == 18:  # 古い形式（account_typeなし）
+                if len(row) == 18:  # 最も古い形式（account_typeなし）
                     # id, user_id, code, account_name, quantity, ...
                     cursor.execute(
                         """
                         INSERT INTO holdings (id, user_id, code, account_name, account_type,
-                                            quantity, average_price, market_value, profit_loss,
+                                            stock_type, trade_position, margin_term, quantity,
+                                            average_price, current_price, market_value, profit_loss,
                                             profit_loss_ratio, expected_per, actual_pbr,
                                             dividend_yield, expected_eps, actual_bps,
-                                            expected_dividend, lending_type, updated_at)
-                        VALUES (?, ?, ?, ?, '特定', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                            expected_dividend, lending_type, acquisition_date, updated_at)
+                        VALUES (?, ?, ?, ?, '特定', '現物', NULL, NULL, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
                     """,
-                        row,
+                        (
+                            row[0],
+                            row[1],
+                            row[2],
+                            row[3],
+                            row[4],
+                            row[5],
+                            row[6],
+                            row[7],
+                            row[8],
+                            row[9],
+                            row[10],
+                            row[11],
+                            row[12],
+                            row[13],
+                            row[14],
+                            row[15],
+                            row[16],
+                            row[17],
+                        ),
                     )
-                else:  # 新しい形式（account_typeあり）
+                elif len(row) == 19:  # 古い形式（account_typeあり、新カラムなし）
                     cursor.execute(
                         """
-                        INSERT INTO holdings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO holdings (id, user_id, code, account_name, account_type,
+                                            stock_type, trade_position, margin_term, quantity,
+                                            average_price, current_price, market_value, profit_loss,
+                                            profit_loss_ratio, expected_per, actual_pbr,
+                                            dividend_yield, expected_eps, actual_bps,
+                                            expected_dividend, lending_type, acquisition_date, updated_at, deleted_at)
+                        VALUES (?, ?, ?, ?, ?, '現物', NULL, NULL, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+                    """,
+                        (
+                            row[0],
+                            row[1],
+                            row[2],
+                            row[3],
+                            row[4],
+                            row[5],
+                            row[6],
+                            row[7],
+                            row[8],
+                            row[9],
+                            row[10],
+                            row[11],
+                            row[12],
+                            row[13],
+                            row[14],
+                            row[15],
+                            row[16],
+                            row[17],
+                            row[18],
+                        ),
+                    )
+                else:  # 最新形式（全カラムあり）
+                    cursor.execute(
+                        """
+                        INSERT INTO holdings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                         row,
                     )
 
             conn.commit()
             logger.info("holdingsテーブルの再作成とデータ復元が完了しました")
+
+        # 保有銘柄管理テーブルの新しいカラム追加（信用取引対応）
+        try:
+            cursor.execute("SELECT stock_type FROM holdings LIMIT 1")
+        except sqlite3.OperationalError:
+            # カラムが存在しない場合は追加
+            cursor.execute(
+                "ALTER TABLE holdings ADD COLUMN stock_type TEXT DEFAULT '現物'"
+            )  # 現物/信用
+            cursor.execute(
+                "ALTER TABLE holdings ADD COLUMN trade_position TEXT"
+            )  # 買建/売建（信用の場合）
+            cursor.execute(
+                "ALTER TABLE holdings ADD COLUMN margin_term TEXT"
+            )  # 6ヵ月/無期限（信用の場合）
+            cursor.execute(
+                "ALTER TABLE holdings ADD COLUMN current_price REAL"
+            )  # 現在値
+            cursor.execute(
+                "ALTER TABLE holdings ADD COLUMN acquisition_date TEXT"
+            )  # 取得日
+            conn.commit()
+            logger.info("holdingsテーブルに信用取引関連カラムを追加しました")
 
 
 def main() -> None:  # pragma: no cover

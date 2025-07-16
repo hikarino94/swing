@@ -186,6 +186,18 @@
                 }
 
                 const response = await fetch(`/api${endpoint}`, options);
+
+                // レスポンスがJSONかチェック
+                const contentType = response.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    const text = await response.text();
+                    console.error('非JSONレスポンス:', text);
+                    return {
+                        success: false,
+                        error: 'サーバーからJSONでないレスポンスが返されました。APIエラーの可能性があります。'
+                    };
+                }
+
                 const result = await response.json();
 
                 if (!silent) {

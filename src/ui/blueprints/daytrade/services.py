@@ -25,21 +25,68 @@ class DaytradeService:
     def import_futures_csv(self, file) -> dict[str, Any]:
         """先物取引CSVのインポート"""
         try:
-            # Shift-JISでデコード
-            content = file.read().decode("shift-jis")
+            # まずバイナリとして読み込む
+            content_bytes = file.read()
+
+            # エンコーディングを自動検出
+            try:
+                # UTF-8 with BOMを試す
+                if content_bytes.startswith(b"\xef\xbb\xbf"):
+                    content = content_bytes.decode("utf-8-sig")
+                else:
+                    # Shift-JISを試す
+                    content = content_bytes.decode("shift-jis")
+            except UnicodeDecodeError:
+                # UTF-8を試す
+                try:
+                    content = content_bytes.decode("utf-8")
+                except UnicodeDecodeError:
+                    # CP932を試す
+                    content = content_bytes.decode("cp932")
+
             lines = content.split("\n")
 
-            # 最初の5行をスキップして、6行目からCSVとして読み込む
+            # デバッグ：最初の10行を出力
+            logger.info("CSVファイルの最初の10行:")
+            for i, line in enumerate(lines[:10]):
+                logger.info(f"行{i}: {line[:100]}...")  # 最初の100文字のみ
+
+            # CSVヘッダーを探す（最初の10行以内）
             header_line = None
-            data_lines = []
-            for i, line in enumerate(lines):
-                if i == 5:  # 6行目（0ベースなので5）がヘッダー
+            data_start_index = 0
+
+            # ヘッダー行を探す（特定のキーワードを含む行）
+            header_keywords = ["約定番号", "取引日", "銘柄", "取引", "約定価格"]
+            for i, line in enumerate(lines[:15]):  # 最初の15行を検索
+                # 複数のキーワードが含まれているか確認
+                keyword_count = sum(1 for keyword in header_keywords if keyword in line)
+                if keyword_count >= 3:  # 3つ以上のキーワードが含まれていればヘッダー
                     header_line = line
-                elif i > 5 and line.strip():  # 7行目以降のデータ
-                    data_lines.append(line)
+                    data_start_index = i + 1
+                    logger.info(
+                        f"ヘッダー行が{i}行目で見つかりました（{keyword_count}個のキーワード）"
+                    )
+                    break
 
             if not header_line:
-                raise ValueError("CSVヘッダーが見つかりません")
+                # ヘッダーが見つからない場合、5行目を試す（従来の方法）
+                if len(lines) > 5:
+                    header_line = lines[5]
+                    data_start_index = 6
+                    logger.info("デフォルトで5行目をヘッダーとして使用")
+                else:
+                    # ファイルの内容をログに出力してエラーを報告
+                    logger.error(f"CSVファイルの行数: {len(lines)}")
+                    logger.error("期待されるキーワード: " + ", ".join(header_keywords))
+                    raise ValueError(
+                        f"CSVヘッダーが見つかりません。ファイルに{len(lines)}行しかありません。"
+                    )
+
+            # データ行を収集
+            data_lines = []
+            for i in range(data_start_index, len(lines)):
+                if lines[i].strip():
+                    data_lines.append(lines[i])
 
             # ヘッダーとデータを結合してCSVとして読み込む
             csv_content = header_line + "\n" + "\n".join(data_lines)
@@ -58,15 +105,40 @@ class DaytradeService:
                         if imported_count == 0 and skipped_count == 0:
                             logger.info(f"CSVカラム: {list(row.keys())}")
 
-                        # 取引区分をチェック（CSVヘッダーに取引区分がない可能性を考慮）
-                        # このCSVは既に決済データのみなのでチェック不要かもしれない
+                        # 取引区分をチェック（決済取引のみインポート）
+                        trade_type = row.get("取引", "")
+                        if "決済" not in trade_type:
+                            skipped_count += 1
+                            continue
 
-                        # 取引日の取得と変換
+                        # 約定日時から取引日を取得（日付部分のみ）
+                        trade_datetime = row["約定日時"]
+                        # 日付部分を抽出（YYYY/MM/DD HH:MM:SS形式から）
                         trade_date = datetime.strptime(
-                            row["取引日"], "%Y/%m/%d"
+                            trade_datetime.split(" ")[0], "%Y/%m/%d"
                         ).strftime("%Y-%m-%d")
 
-                        # データの挿入
+                        # 決済損益の処理（+記号を除去）
+                        profit_loss_str = row.get("決済損益", "0")
+                        if profit_loss_str.startswith("+"):
+                            profit_loss_str = profit_loss_str[1:]
+                        profit_loss = (
+                            float(profit_loss_str.replace(",", ""))
+                            if profit_loss_str != "--"
+                            else 0
+                        )
+
+                        # 受渡金額の処理
+                        delivery_amount_str = row.get("受渡金額", "0")
+                        if delivery_amount_str.startswith("+"):
+                            delivery_amount_str = delivery_amount_str[1:]
+                        delivery_amount = (
+                            float(delivery_amount_str.replace(",", ""))
+                            if delivery_amount_str != "--"
+                            else 0
+                        )
+
+                        # データの挿入（利用可能なカラムのみ使用）
                         cursor.execute(
                             """
                             INSERT INTO daytrade_futures (
@@ -85,12 +157,12 @@ class DaytradeService:
                                 row.get("市場", ""),
                                 row["銘柄"],
                                 row["取引"],
-                                float(row["約定価格"].replace(",", "")),
+                                float(row["約定単価"].replace(",", "")),
                                 int(row["約定数量"]),
                                 float(row.get("手数料", "0").replace(",", "")),
-                                float(row.get("消費税", "0").replace(",", "")),
+                                0,  # 消費税（CSVにない）
                                 float(row["約定金額"].replace(",", "")),
-                                float(row.get("受渡金額", "0").replace(",", "")),
+                                delivery_amount,
                                 (
                                     datetime.strptime(
                                         row["受渡日"], "%Y/%m/%d"
@@ -98,17 +170,11 @@ class DaytradeService:
                                     if row.get("受渡日") and row["受渡日"].strip()
                                     else None
                                 ),
-                                (
-                                    datetime.strptime(
-                                        row["新規建日"], "%Y/%m/%d"
-                                    ).strftime("%Y-%m-%d")
-                                    if row.get("新規建日") and row["新規建日"].strip()
-                                    else None
-                                ),
-                                float(row.get("新規建単価", "0").replace(",", "")),
-                                float(row.get("新規建手数料", "0").replace(",", "")),
-                                float(row.get("新規建消費税", "0").replace(",", "")),
-                                float(row["決済損益"].replace(",", "")),
+                                None,  # 新規建日（CSVにない）
+                                0,  # 新規建単価（CSVにない）
+                                0,  # 新規建手数料（CSVにない）
+                                0,  # 新規建消費税（CSVにない）
+                                profit_loss,
                                 row.get("SQ日", "").strip() if row.get("SQ日") else "",
                             ),
                         )
@@ -139,8 +205,25 @@ class DaytradeService:
     def import_stocks_csv(self, file) -> dict[str, Any]:
         """株式取引CSVのインポート"""
         try:
-            # UTF-8でデコード（BOM付きの場合も考慮）
-            content = file.read().decode("utf-8-sig")
+            # まずバイナリとして読み込む
+            content_bytes = file.read()
+
+            # エンコーディングを自動検出
+            try:
+                # UTF-8 with BOMを試す
+                if content_bytes.startswith(b"\xef\xbb\xbf"):
+                    content = content_bytes.decode("utf-8-sig")
+                else:
+                    # UTF-8を試す
+                    content = content_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                # Shift-JISを試す
+                try:
+                    content = content_bytes.decode("shift-jis")
+                except UnicodeDecodeError:
+                    # CP932を試す
+                    content = content_bytes.decode("cp932")
+
             lines = content.strip().split("\n")
 
             # ヘッダー行を取得
@@ -239,6 +322,11 @@ class DaytradeService:
         last_day = monthrange(year, month)[1]
         end_date = f"{year:04d}-{month:02d}-{last_day:02d}"
 
+        # 月の最初の日の曜日を取得（0=月曜日, 6=日曜日）
+        first_weekday = datetime(year, month, 1).weekday()
+        # 日曜日始まりに変換（0=日曜日, 6=土曜日）
+        first_weekday = (first_weekday + 1) % 7
+
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
 
@@ -276,7 +364,24 @@ class DaytradeService:
             }
 
             # カレンダーデータの構築
-            calendar_days = []
+            calendar_days: list[dict[str, Any]] = []
+
+            # 月の最初の日の前の空白セルを追加
+            for _ in range(first_weekday):
+                calendar_days.append(
+                    {
+                        "date": None,
+                        "day": None,
+                        "futures_profit": 0,
+                        "stocks_profit": 0,
+                        "stocks_settlement": 0,
+                        "stocks_day_trade": 0,
+                        "total_profit": 0,
+                        "has_trades": False,
+                    }
+                )
+
+            # 実際の日付データを追加
             for day in range(1, last_day + 1):
                 date_str = f"{year:04d}-{month:02d}-{day:02d}"
 

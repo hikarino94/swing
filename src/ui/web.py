@@ -21,6 +21,7 @@ from src.ui.blueprints import (
     backtest_bp,
     daytrade_bp,
     fetch_bp,
+    holdings_bp,
     results_bp,
     screening_bp,
     utils_bp,
@@ -102,11 +103,35 @@ def init_database():
 init_database()
 
 
-# チャンク転送エンコーディングを有効化
+# チャンク転送エンコーディングを有効化とセキュリティヘッダーの追加
 @app.after_request
 def after_request(response):
     # 小さなチャンクサイズでレスポンスを送信
     response.direct_passthrough = False
+
+    # Content Security Policy (CSP) ヘッダーの設定
+    # Plotly.jsなどの外部ライブラリが動的コード生成を行う可能性があるため、'unsafe-eval'を許可
+    csp_policy = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+        "https://cdn.tailwindcss.com "
+        "https://unpkg.com "
+        "https://cdn.jsdelivr.net "
+        "https://cdn.plot.ly; "
+        "style-src 'self' 'unsafe-inline' "
+        "https://cdn.jsdelivr.net; "
+        "font-src 'self' data:; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self';"
+    )
+    response.headers["Content-Security-Policy"] = csp_policy
+
+    # その他のセキュリティヘッダー
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
     return response
 
 
@@ -118,6 +143,7 @@ app.register_blueprint(backtest_bp)
 app.register_blueprint(utils_bp)
 app.register_blueprint(results_bp)
 app.register_blueprint(daytrade_bp)
+app.register_blueprint(holdings_bp)
 
 
 # メインページルート

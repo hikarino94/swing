@@ -1,0 +1,878 @@
+<!-- 保有銘柄管理 -->
+<div x-data="holdingsManager()">
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-bold text-gray-900">保有銘柄管理</h2>
+            <div class="flex space-x-2">
+                <button @click="showImportModal = true"
+                        class="btn btn-primary">
+                    📥 CSVインポート
+                </button>
+                <button @click="showAddModal = true"
+                        class="btn btn-secondary">
+                    ➕ 手動追加
+                </button>
+            </div>
+        </div>
+
+        <!-- フィルター設定 -->
+        <div class="mb-4 space-y-4">
+            <!-- 口座選択と表示切替 -->
+            <div class="flex flex-col sm:flex-row gap-4">
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">口座選択</label>
+                    <select x-model="selectedAccount"
+                            @change="loadHoldings()"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">全口座</option>
+                        <template x-for="account in accounts" :key="account">
+                            <option :value="account" x-text="account"></option>
+                        </template>
+                    </select>
+                </div>
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">預かり区分</label>
+                    <select x-model="filters.accountType"
+                            @change="applyFilters()"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">全て</option>
+                        <option value="特定">特定</option>
+                        <option value="一般">一般</option>
+                        <option value="NISA">NISA</option>
+                        <option value="旧NISA">旧NISA</option>
+                    </select>
+                </div>
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">現物/信用</label>
+                    <select x-model="filters.stockType"
+                            @change="applyFilters()"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">全て</option>
+                        <option value="現物">現物</option>
+                        <option value="信用">信用</option>
+                    </select>
+                </div>
+                <div class="flex-1" x-show="filters.stockType === '信用'">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">建区分</label>
+                    <select x-model="filters.tradePosition"
+                            @change="applyFilters()"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">全て</option>
+                        <option value="買建">買建</option>
+                        <option value="売建">売建</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex items-center">
+                <label class="flex items-center">
+                    <input type="checkbox" x-model="aggregateView"
+                           @change="loadHoldings()"
+                           class="rounded text-blue-600 focus:ring-blue-500">
+                    <span class="ml-2 text-sm text-gray-700">複数口座・預かり区分を合算表示</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- 一括削除ボタンと表示件数 -->
+        <div x-show="holdings.length > 0" class="mb-4 flex justify-between items-center">
+            <button @click="confirmBulkDelete()"
+                    class="btn btn-danger">
+                🗑️ 一括削除
+            </button>
+            <div class="text-sm text-gray-600">
+                <span x-text="filteredHoldings.length"></span>件
+                <span x-show="filteredHoldings.length !== holdings.length">
+                    （全<span x-text="holdings.length"></span>件中）
+                </span>
+            </div>
+        </div>
+
+        <!-- 保有銘柄一覧 -->
+        <div class="overflow-auto max-h-[calc(100vh-300px)]">
+            <table class="w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50 sticky top-0">
+                    <tr>
+                        <th @click="sortBy('code')" class="sortable-header whitespace-nowrap" :class="sortColumn === 'code' ? 'sorted' : ''">
+                            コード
+                        </th>
+                        <th @click="sortBy('name')" class="sortable-header whitespace-nowrap" :class="sortColumn === 'name' ? 'sorted' : ''">
+                            銘柄名
+                        </th>
+                        <th x-show="!aggregateView" @click="sortBy('account_name')" class="sortable-header whitespace-nowrap" :class="sortColumn === 'account_name' ? 'sorted' : ''">
+                            口座
+                        </th>
+                        <th x-show="!aggregateView" @click="sortBy('account_type')" class="sortable-header whitespace-nowrap" :class="sortColumn === 'account_type' ? 'sorted' : ''">
+                            区分
+                        </th>
+                        <th x-show="!aggregateView" @click="sortBy('quantity')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'quantity' ? 'sorted' : ''">
+                            数量
+                        </th>
+                        <th x-show="aggregateView" @click="sortBy('total_quantity')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'total_quantity' ? 'sorted' : ''">
+                            合計
+                        </th>
+                        <th @click="sortBy('average_price')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'average_price' ? 'sorted' : ''">
+                            取得
+                        </th>
+                        <th @click="sortBy('current_price')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'current_price' ? 'sorted' : ''">
+                            現在
+                        </th>
+                        <th @click="sortBy('market_value')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'market_value' ? 'sorted' : ''">
+                            評価額
+                        </th>
+                        <th @click="sortBy('profit_loss')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'profit_loss' ? 'sorted' : ''">
+                            損益
+                        </th>
+                        <th @click="sortBy('profit_loss_ratio')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'profit_loss_ratio' ? 'sorted' : ''">
+                            率
+                        </th>
+                        <th x-show="!aggregateView" class="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            操作
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="holding in sortedHoldings" :key="holding.id || holding.code">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-2 py-1 whitespace-nowrap font-mono" x-text="holding.code"></td>
+                            <td class="px-2 py-1 truncate max-w-[150px]" :title="holding.name" x-text="holding.name"></td>
+                            <td x-show="!aggregateView" class="px-2 py-1 whitespace-nowrap" x-text="holding.account_name"></td>
+                            <td x-show="!aggregateView" class="px-2 py-1 whitespace-nowrap">
+                                <span x-text="holding.account_type"></span>
+                                <span x-show="holding.stock_type === '信用'" class="text-xs text-gray-500" x-text="`(${holding.stock_type}${holding.trade_position ? '/' + holding.trade_position : ''})`"></span>
+                            </td>
+                            <td class="px-2 py-1 text-right tabular-nums">
+                                <div x-show="!aggregateView" x-text="formatNumber(holding.quantity)"></div>
+                                <div x-show="aggregateView">
+                                    <div x-text="formatNumber(holding.total_quantity || holding.quantity)" class="font-semibold"></div>
+                                    <div class="text-xs text-gray-500 space-y-0">
+                                        <div x-show="holding.spot_quantity > 0">現物: <span x-text="formatNumber(holding.spot_quantity)"></span></div>
+                                        <div x-show="holding.margin_buy_quantity > 0">買建: <span x-text="formatNumber(holding.margin_buy_quantity)"></span></div>
+                                        <div x-show="holding.margin_sell_quantity > 0">売建: <span x-text="formatNumber(holding.margin_sell_quantity)"></span></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-2 py-1 text-right tabular-nums" x-text="formatNumber(holding.average_price)"></td>
+                            <td class="px-2 py-1 text-right tabular-nums font-semibold" x-text="formatNumber(holding.current_price)"></td>
+                            <td class="px-2 py-1 text-right tabular-nums" x-text="formatNumber(holding.market_value)"></td>
+                            <td class="px-2 py-1 text-right tabular-nums font-semibold"
+                                :class="holding.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'">
+                                <span x-text="formatNumber(holding.profit_loss)"></span>
+                            </td>
+                            <td class="px-2 py-1 text-right tabular-nums"
+                                :class="holding.profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'">
+                                <span x-text="formatPercentage(holding.profit_loss_ratio)"></span>
+                            </td>
+                            <td x-show="!aggregateView" class="px-2 py-1 text-center">
+                                <button @click="editHolding(holding)" class="text-blue-600 hover:text-blue-900 text-xs">編集</button>
+                                <button @click="deleteHolding(holding)" class="text-red-600 hover:text-red-900 text-xs ml-1">削除</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+                <tfoot x-show="holdings.length > 0" class="bg-gray-50 sticky bottom-0">
+                    <tr class="font-semibold">
+                        <td colspan="2" class="px-2 py-1">合計</td>
+                        <td x-show="!aggregateView" colspan="2"></td>
+                        <td x-show="!aggregateView"></td>
+                        <td x-show="aggregateView"></td>
+                        <td colspan="2"></td>
+                        <td class="px-2 py-1 text-right tabular-nums" x-text="formatNumber(totals.market_value)"></td>
+                        <td class="px-2 py-1 text-right tabular-nums"
+                            :class="totals.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'"
+                            x-text="formatNumber(totals.profit_loss)"></td>
+                        <td class="px-2 py-1 text-right tabular-nums"
+                            :class="totals.profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'"
+                            x-text="formatPercentage(totals.profit_loss_ratio)"></td>
+                        <td x-show="!aggregateView"></td>
+                    </tr>
+                </tfoot>
+            </table>
+            <div x-show="holdings.length === 0" class="text-center py-8 text-gray-500">
+                保有銘柄がありません
+            </div>
+            <div x-show="holdings.length > 0 && filteredHoldings.length === 0" class="text-center py-8 text-gray-500">
+                フィルター条件に一致する銘柄がありません
+            </div>
+        </div>
+    </div>
+
+    <!-- CSVインポートモーダル -->
+    <div x-show="showImportModal"
+         class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">CSVインポート</h3>
+
+            <form @submit.prevent="importCSV()">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">口座名</label>
+                        <input type="text" x-model="importData.account_name" required
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">CSVタイプ</label>
+                        <select x-model="importData.csv_type" required
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="spot">現物</option>
+                            <option value="margin">信用</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">CSVファイル</label>
+                        <input type="file" @change="importData.file = $event.target.files[0]"
+                               accept=".csv" required
+                               class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" @click="showImportModal = false"
+                            class="btn btn-secondary">
+                        キャンセル
+                    </button>
+                    <button type="submit"
+                            class="btn btn-primary">
+                        インポート
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 手動追加モーダル -->
+    <div x-show="showAddModal"
+         class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">保有銘柄追加</h3>
+
+            <form @submit.prevent="addHolding()">
+                <div class="space-y-4">
+                    <!-- 銘柄検索 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">銘柄検索</label>
+                        <input type="text" x-model="stockSearch"
+                               @input="searchStocks()"
+                               placeholder="銘柄コードまたは銘柄名"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+
+                        <div x-show="searchResults.length > 0"
+                             class="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md">
+                            <template x-for="stock in searchResults" :key="stock.code">
+                                <div @click="selectStock(stock)"
+                                     class="px-3 py-2 hover:bg-gray-100 cursor-pointer">
+                                    <span x-text="stock.code" class="font-mono"></span> -
+                                    <span x-text="stock.company_name"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- 基本情報 -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">銘柄コード</label>
+                            <input type="text" x-model="addData.code" required readonly
+                                   class="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">口座名</label>
+                            <input type="text" x-model="addData.account_name" required
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">預かり区分</label>
+                            <select x-model="addData.account_type" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="特定">特定</option>
+                                <option value="一般">一般</option>
+                                <option value="NISA">NISA</option>
+                                <option value="旧NISA">旧NISA</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">現物/信用</label>
+                            <select x-model="addData.stock_type" required
+                                    @change="addData.trade_position = ''; addData.margin_term = ''"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="現物">現物</option>
+                                <option value="信用">信用</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 信用取引の場合の追加項目 -->
+                    <div x-show="addData.stock_type === '信用'" class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">建区分</label>
+                            <select x-model="addData.trade_position" :required="addData.stock_type === '信用'"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="">選択してください</option>
+                                <option value="買建">買建</option>
+                                <option value="売建">売建</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">期限</label>
+                            <select x-model="addData.margin_term" :required="addData.stock_type === '信用'"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="">選択してください</option>
+                                <option value="6ヵ月">6ヵ月</option>
+                                <option value="無期限">無期限</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 数量と価格 -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">数量</label>
+                            <input type="number" x-model="addData.quantity" required min="1"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">取得単価</label>
+                            <input type="number" x-model="addData.average_price" required min="0" step="0.01"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" @click="showAddModal = false; resetAddData()"
+                            class="btn btn-secondary">
+                        キャンセル
+                    </button>
+                    <button type="submit"
+                            class="btn btn-primary">
+                        追加
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 編集モーダル -->
+    <div x-show="showEditModal"
+         class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">保有銘柄編集</h3>
+
+            <form @submit.prevent="updateHolding()">
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">数量</label>
+                            <input type="number" x-model="editData.quantity" required min="1"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">取得単価</label>
+                            <input type="number" x-model="editData.average_price" required min="0" step="0.01"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" @click="showEditModal = false"
+                            class="btn btn-secondary">
+                        キャンセル
+                    </button>
+                    <button type="submit"
+                            class="btn btn-primary">
+                        更新
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+window.holdingsManager = function() {
+    return {
+        holdings: [],
+        filteredHoldings: [],
+        accounts: [],
+        selectedAccount: '',
+        aggregateView: false,
+        sortColumn: 'code',
+        sortDirection: 'asc',
+        showImportModal: false,
+        showAddModal: false,
+        showEditModal: false,
+        stockSearch: '',
+        searchResults: [],
+        filters: {
+            accountType: '',
+            stockType: '',
+            tradePosition: ''
+        },
+        importData: {
+            account_name: '',
+            csv_type: 'spot',
+            file: null
+        },
+        addData: {
+            code: '',
+            account_name: '',
+            account_type: '特定',
+            stock_type: '現物',
+            trade_position: '',
+            margin_term: '',
+            quantity: 100,
+            average_price: 0
+        },
+        editData: {},
+
+        init() {
+            this.loadAccounts();
+            this.loadHoldings();
+        },
+
+        async loadAccounts() {
+            try {
+                const csrfToken = window.csrf_token ? window.csrf_token() : '{{ csrf_token() }}';
+                const response = await fetch('/api/holdings/accounts', {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.accounts = data.accounts;
+                    console.log('Loaded accounts:', this.accounts);
+                } else {
+                    console.error('Failed to load accounts:', data);
+                }
+            } catch (error) {
+                console.error('Error loading accounts:', error);
+            }
+        },
+
+        async loadHoldings() {
+            console.log('loadHoldings called');
+            try {
+                const params = new URLSearchParams();
+                if (this.selectedAccount) {
+                    params.append('account_name', this.selectedAccount);
+                }
+                if (this.aggregateView) {
+                    params.append('aggregate', 'true');
+                }
+
+                const csrfToken = window.csrf_token ? window.csrf_token() : '{{ csrf_token() }}';
+                console.log('CSRF token for list:', csrfToken);
+                const response = await fetch(`/api/holdings/list?${params}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.holdings = data.holdings;
+                    console.log('Holdings loaded:', this.holdings.length);
+                    this.applyFilters();
+                } else {
+                    console.error('Failed to load holdings:', data);
+                    alert(data.message || '保有銘柄の取得に失敗しました');
+                }
+            } catch (error) {
+                console.error('Error loading holdings:', error);
+                alert('エラーが発生しました: ' + error.message);
+            }
+        },
+
+        async importCSV() {
+            console.log('importCSV called');
+            if (!this.importData.file) {
+                alert('ファイルを選択してください');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('account_name', this.importData.account_name);
+            formData.append('csv_type', this.importData.csv_type);
+            formData.append('file', this.importData.file);
+            const csrfToken = window.csrf_token ? window.csrf_token() : '{{ csrf_token() }}';
+            console.log('CSRF token:', csrfToken);
+            formData.append('csrf_token', csrfToken);
+
+            try {
+                const response = await fetch('/api/holdings/import', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    this.showImportModal = false;
+                    this.importData = {
+                        account_name: '',
+                        csv_type: 'spot',
+                        file: null
+                    };
+                    this.loadHoldings();
+                    this.loadAccounts();
+                } else {
+                    alert(data.message || 'インポートに失敗しました');
+                }
+            } catch (error) {
+                console.error('Error importing CSV:', error);
+                alert('エラーが発生しました: ' + error.message);
+            }
+        },
+
+        async searchStocks() {
+            console.log('searchStocks called:', this.stockSearch);
+            if (this.stockSearch.length < 1) {
+                this.searchResults = [];
+                return;
+            }
+
+            try {
+                const csrfToken = window.csrf_token ? window.csrf_token() : '{{ csrf_token() }}';
+                const response = await fetch(`/api/holdings/search?keyword=${encodeURIComponent(this.stockSearch)}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.searchResults = data.stocks;
+                    console.log('Search results:', this.searchResults);
+                } else {
+                    this.searchResults = [];
+                    console.error('Search failed:', data);
+                }
+            } catch (error) {
+                console.error('Error searching stocks:', error);
+                this.searchResults = [];
+                alert('銘柄検索エラー: ' + error.message);
+            }
+        },
+
+        selectStock(stock) {
+            this.addData.code = stock.code;
+            this.stockSearch = `${stock.code} - ${stock.company_name}`;
+            this.searchResults = [];
+        },
+
+        async addHolding() {
+            try {
+                const response = await fetch('/api/holdings/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        ...this.addData,
+                        csrf_token: window.csrf_token()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.$dispatch('show-alert', {
+                        type: 'success',
+                        message: data.message
+                    });
+                    this.showAddModal = false;
+                    this.resetAddData();
+                    this.loadHoldings();
+                    this.loadAccounts();
+                } else {
+                    this.$dispatch('show-alert', {
+                        type: 'error',
+                        message: data.message || '追加に失敗しました'
+                    });
+                }
+            } catch (error) {
+                console.error('Error adding holding:', error);
+                this.$dispatch('show-alert', {
+                    type: 'error',
+                    message: 'エラーが発生しました'
+                });
+            }
+        },
+
+        editHolding(holding) {
+            this.editData = {
+                id: holding.id,
+                quantity: holding.quantity,
+                average_price: holding.average_price
+            };
+            this.showEditModal = true;
+        },
+
+        async updateHolding() {
+            try {
+                const response = await fetch(`/api/holdings/update/${this.editData.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        ...this.editData,
+                        csrf_token: window.csrf_token()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.$dispatch('show-alert', {
+                        type: 'success',
+                        message: data.message
+                    });
+                    this.showEditModal = false;
+                    this.loadHoldings();
+                } else {
+                    this.$dispatch('show-alert', {
+                        type: 'error',
+                        message: data.message || '更新に失敗しました'
+                    });
+                }
+            } catch (error) {
+                console.error('Error updating holding:', error);
+                this.$dispatch('show-alert', {
+                    type: 'error',
+                    message: 'エラーが発生しました'
+                });
+            }
+        },
+
+        async deleteHolding(holding) {
+            if (!confirm(`${holding.code} ${holding.name} を削除してよろしいですか？`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/holdings/delete/${holding.id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        csrf_token: window.csrf_token()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.$dispatch('show-alert', {
+                        type: 'success',
+                        message: data.message
+                    });
+                    this.loadHoldings();
+                } else {
+                    this.$dispatch('show-alert', {
+                        type: 'error',
+                        message: data.message || '削除に失敗しました'
+                    });
+                }
+            } catch (error) {
+                console.error('Error deleting holding:', error);
+                this.$dispatch('show-alert', {
+                    type: 'error',
+                    message: 'エラーが発生しました'
+                });
+            }
+        },
+
+        confirmBulkDelete() {
+            const message = this.selectedAccount
+                ? `口座「${this.selectedAccount}」の全銘柄を削除してよろしいですか？`
+                : '全口座の全銘柄を削除してよろしいですか？';
+
+            if (!confirm(message)) {
+                return;
+            }
+
+            this.bulkDelete();
+        },
+
+        async bulkDelete() {
+            try {
+                const response = await fetch('/api/holdings/bulk_delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        account_name: this.selectedAccount,
+                        csrf_token: window.csrf_token()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.$dispatch('show-alert', {
+                        type: 'success',
+                        message: data.message
+                    });
+                    this.loadHoldings();
+                    this.loadAccounts();
+                } else {
+                    this.$dispatch('show-alert', {
+                        type: 'error',
+                        message: data.message || '削除に失敗しました'
+                    });
+                }
+            } catch (error) {
+                console.error('Error bulk deleting:', error);
+                this.$dispatch('show-alert', {
+                    type: 'error',
+                    message: 'エラーが発生しました'
+                });
+            }
+        },
+
+        applyFilters() {
+            this.filteredHoldings = this.holdings.filter(h => {
+                // 預かり区分フィルター
+                if (this.filters.accountType && h.account_type !== this.filters.accountType) {
+                    return false;
+                }
+
+                // 現物/信用フィルター
+                if (this.filters.stockType && h.stock_type !== this.filters.stockType) {
+                    return false;
+                }
+
+                // 建区分フィルター（信用の場合のみ）
+                if (this.filters.tradePosition && h.trade_position !== this.filters.tradePosition) {
+                    return false;
+                }
+
+                return true;
+            });
+
+            console.log(`Filtered: ${this.filteredHoldings.length} / ${this.holdings.length} holdings`);
+        },
+
+        resetAddData() {
+            this.addData = {
+                code: '',
+                account_name: '',
+                account_type: '特定',
+                stock_type: '現物',
+                trade_position: '',
+                margin_term: '',
+                quantity: 100,
+                average_price: 0
+            };
+            this.stockSearch = '';
+            this.searchResults = [];
+        },
+
+        sortBy(column) {
+            if (this.sortColumn === column) {
+                this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortColumn = column;
+                this.sortDirection = 'asc';
+            }
+        },
+
+        get sortedHoldings() {
+            return [...this.filteredHoldings].sort((a, b) => {
+                const aVal = a[this.sortColumn];
+                const bVal = b[this.sortColumn];
+
+                if (aVal === null || aVal === undefined) return 1;
+                if (bVal === null || bVal === undefined) return -1;
+
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    return this.sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                } else {
+                    const result = String(aVal).localeCompare(String(bVal));
+                    return this.sortDirection === 'asc' ? result : -result;
+                }
+            });
+        },
+
+        get totals() {
+            const total = this.filteredHoldings.reduce((acc, h) => {
+                acc.market_value += h.market_value || 0;
+                acc.profit_loss += h.profit_loss || 0;
+                return acc;
+            }, { market_value: 0, profit_loss: 0 });
+
+            total.profit_loss_ratio = total.market_value > 0
+                ? (total.profit_loss / (total.market_value - total.profit_loss)) * 100
+                : 0;
+
+            return total;
+        },
+
+        formatNumber(value, decimals = 0) {
+            if (value === null || value === undefined) return '-';
+            return new Intl.NumberFormat('ja-JP', {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            }).format(value);
+        },
+
+        formatPrice(value) {
+            if (value === null || value === undefined) return '-';
+            return '¥' + this.formatNumber(value);
+        },
+
+        formatPercentage(value) {
+            if (value === null || value === undefined) return '-';
+            return this.formatNumber(value, 2) + '%';
+        }
+    };
+}
+</script>
+
+<style>
+.sortable-header {
+    @apply px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none transition-colors;
+}
+.sortable-header.sorted {
+    @apply bg-blue-50 text-blue-700 font-semibold;
+}
+.sortable-header.sorted:hover {
+    @apply bg-blue-100;
+}
+.sortable-header > div {
+    @apply flex items-center;
+}
+.sortable-header.text-right > div {
+    @apply justify-end;
+}
+</style>
