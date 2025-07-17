@@ -1,6 +1,4 @@
 <!-- 保有銘柄管理 -->
-<!-- Chart.jsライブラリ -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <div x-data="holdingsManager()" x-cloak>
     <div class="bg-white shadow rounded-lg p-3 sm:p-6">
         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6 space-y-3 sm:space-y-0">
@@ -273,13 +271,14 @@
         </div>
 
         <!-- ポートフォリオ分析タブ -->
-        <div x-show="activeTab === 'analysis'" x-transition>
+        <template x-if="activeTab === 'analysis'">
+        <div>
             <div x-show="analysisLoading" class="text-center py-8">
                 <div class="spinner mx-auto mb-4"></div>
                 <p class="text-gray-600">分析データを読み込んでいます...</p>
             </div>
 
-            <div x-show="!analysisLoading && analysisData" x-init="$watch('analysisData', () => { if (analysisData) { $nextTick(() => renderCharts()); } })">
+            <div x-show="!analysisLoading && analysisData" x-init="if (analysisData) { $nextTick(() => { setTimeout(() => renderCharts(), 500); }); }">
                 <!-- 概要統計 -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                     <div class="bg-gray-50 rounded-lg p-4">
@@ -452,6 +451,7 @@
                 分析データがありません
             </div>
         </div>
+        </template>
     </div>
 
     <!-- CSVインポートモーダル -->
@@ -701,6 +701,13 @@ window.holdingsManager = function() {
         init() {
             this.loadAccounts();
             this.loadHoldings();
+
+            // Chart.jsが確実に読み込まれるのを待つ
+            if (typeof Chart === 'undefined') {
+                window.addEventListener('load', () => {
+                    console.log('Window loaded, Chart.js available:', typeof Chart !== 'undefined');
+                });
+            }
 
             // セクタータイプが変更されたらチャートを再描画
             this.$watch('sectorType', () => {
@@ -1201,6 +1208,14 @@ window.holdingsManager = function() {
 
         renderCharts() {
             console.log('renderCharts called', this.analysisData);
+
+            // Chart.jsが読み込まれているか確認
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js is not loaded yet, retrying...');
+                setTimeout(() => this.renderCharts(), 500);
+                return;
+            }
+
             if (!this.analysisData) {
                 console.error('No analysis data available');
                 return;
@@ -1261,6 +1276,8 @@ window.holdingsManager = function() {
 
         renderSectorChart() {
             console.log('renderSectorChart called');
+            console.log('Chart.js loaded?', typeof Chart !== 'undefined');
+
             const ctx = document.getElementById('sectorChart');
             if (!ctx) {
                 console.error('sectorChart element not found');

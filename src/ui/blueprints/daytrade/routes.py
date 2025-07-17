@@ -45,14 +45,28 @@ def calendar(year: str, month: str):
         calendar_data = service.get_calendar_data(year_int, month_int)
         monthly_summary = service.get_monthly_summary(year_int, month_int)
 
+        # デバッグログ
+        logger.info(
+            f"calendar_data keys: {calendar_data.keys() if calendar_data else 'None'}"
+        )
+        logger.info(
+            f"monthly_summary keys: {monthly_summary.keys() if monthly_summary else 'None'}"
+        )
+
         # フロントエンドが期待する形式に変換
         return jsonify(
-            {"calendar_days": calendar_data["days"], "monthly_summary": monthly_summary}
+            {
+                "calendar_days": calendar_data.get("days", []) if calendar_data else [],
+                "monthly_summary": monthly_summary or {},
+            }
         )
     except ValueError:
         return jsonify({"error": "Invalid year or month"}), 400
     except Exception as e:
+        import traceback
+
         logger.error(f"カレンダーデータ取得エラー: {e}")
+        logger.error(f"スタックトレース:\n{traceback.format_exc()}")
         return jsonify({"error": "カレンダーデータの取得に失敗しました"}), 500
 
 

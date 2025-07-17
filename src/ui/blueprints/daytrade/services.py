@@ -570,7 +570,7 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            futures_data = {row[0]: row[1] for row in cursor.fetchall()}
+            futures_data = {row[0]: (row[1] or 0) for row in cursor.fetchall()}
 
             # 株式の日別損益（信用返済、現物売却、配当金を含む）
             cursor.execute(
@@ -588,7 +588,7 @@ class DaytradeService:
             )
 
             stocks_data = {
-                row[0]: {"settlement": row[1], "day_trade": row[2]}
+                row[0]: {"settlement": (row[1] or 0), "day_trade": (row[2] or 0)}
                 for row in cursor.fetchall()
             }
 
@@ -614,13 +614,30 @@ class DaytradeService:
             for day in range(1, last_day + 1):
                 date_str = f"{year:04d}-{month:02d}-{day:02d}"
 
-                futures_profit = futures_data.get(date_str, 0)
-                stocks_total = stocks_data.get(date_str, {}).get("settlement", 0)
-                stocks_day_trade = stocks_data.get(date_str, {}).get("day_trade", 0)
+                try:
+                    futures_profit = futures_data.get(date_str, 0) or 0
+                    stocks_dict = stocks_data.get(date_str, {})
+                    stocks_total = (
+                        stocks_dict.get("settlement", 0) if stocks_dict else 0
+                    ) or 0
+                    stocks_day_trade = (
+                        stocks_dict.get("day_trade", 0) if stocks_dict else 0
+                    ) or 0
 
-                # 株式の合計損益（税金・決済損益の合計 + 日計り分）※手数料は除外
-                stocks_profit = (stocks_total or 0) + (stocks_day_trade or 0)
-                total_profit = futures_profit + stocks_profit
+                    # 株式の合計損益（税金・決済損益の合計 + 日計り分）※手数料は除外
+                    stocks_profit = stocks_total + stocks_day_trade
+                    total_profit = futures_profit + stocks_profit
+                except Exception as e:
+                    logger.error(
+                        f"Error in calendar day calculation for {date_str}: {e}"
+                    )
+                    logger.error(
+                        f"futures_data.get({date_str}): {futures_data.get(date_str)}"
+                    )
+                    logger.error(
+                        f"stocks_data.get({date_str}): {stocks_data.get(date_str)}"
+                    )
+                    raise
 
                 calendar_days.append(
                     {
@@ -663,7 +680,7 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            futures_stats = cursor.fetchone()
+            futures_stats = cursor.fetchone() or (0, 0, 0, 0, 0, 0, 0)
 
             # 株式の月間統計
             cursor.execute(
@@ -686,7 +703,7 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            stocks_stats = cursor.fetchone()
+            stocks_stats = cursor.fetchone() or (0, 0, 0, 0, 0, 0, 0)
 
             # 配当金の統計を取得
             cursor.execute(
@@ -701,7 +718,7 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            dividend_stats = cursor.fetchone()
+            dividend_stats = cursor.fetchone() or (0, 0)
 
             # 現物取引の統計を取得
             cursor.execute(
@@ -718,7 +735,7 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            spot_stats = cursor.fetchone()
+            spot_stats = cursor.fetchone() or (0, 0, 0, 0)
 
             # 日別の損益データを取得して追加統計を計算
             cursor.execute(
@@ -734,7 +751,7 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            futures_daily = cursor.fetchall()
+            futures_daily = cursor.fetchall() or []
 
             # 先物の追加統計計算
             futures_max_profit = 0
@@ -744,6 +761,7 @@ class DaytradeService:
             futures_peak = 0
 
             for _date, profit in futures_daily:
+                profit = profit or 0
                 futures_cumulative += profit
                 if profit > futures_max_profit:
                     futures_max_profit = profit
@@ -773,7 +791,7 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            stocks_daily = cursor.fetchall()
+            stocks_daily = cursor.fetchall() or []
 
             # 株式の追加統計計算
             stocks_max_profit = 0
@@ -783,6 +801,7 @@ class DaytradeService:
             stocks_peak = 0
 
             for _date, profit in stocks_daily:
+                profit = profit or 0
                 stocks_cumulative += profit
                 if profit > stocks_max_profit:
                     stocks_max_profit = profit
@@ -808,21 +827,25 @@ class DaytradeService:
                     "win_count": futures_stats[5] or 0,
                     "loss_count": futures_stats[6] or 0,
                     "win_rate": (
-                        (futures_stats[5] / (futures_stats[5] + futures_stats[6]) * 100)
-                        if (futures_stats[5] + futures_stats[6]) > 0
+                        (
+                            (futures_stats[5] or 0)
+                            / ((futures_stats[5] or 0) + (futures_stats[6] or 0))
+                            * 100
+                        )
+                        if ((futures_stats[5] or 0) + (futures_stats[6] or 0)) > 0
                         else 0
                     ),
                     "max_daily_profit": futures_max_profit,
                     "max_daily_loss": futures_max_loss,
                     "max_drawdown": futures_max_drawdown,
                     "avg_win": (
-                        futures_stats[3] / futures_stats[5]
-                        if futures_stats[5] > 0
+                        (futures_stats[3] or 0) / (futures_stats[5] or 1)
+                        if (futures_stats[5] or 0) > 0
                         else 0
                     ),
                     "avg_loss": (
-                        futures_stats[4] / futures_stats[6]
-                        if futures_stats[6] > 0
+                        (futures_stats[4] or 0) / (futures_stats[6] or 1)
+                        if (futures_stats[6] or 0) > 0
                         else 0
                     ),
                 },
@@ -835,8 +858,12 @@ class DaytradeService:
                     "win_count": stocks_stats[5] or 0,
                     "loss_count": stocks_stats[6] or 0,
                     "win_rate": (
-                        (stocks_stats[5] / (stocks_stats[5] + stocks_stats[6]) * 100)
-                        if (stocks_stats[5] + stocks_stats[6]) > 0
+                        (
+                            (stocks_stats[5] or 0)
+                            / ((stocks_stats[5] or 0) + (stocks_stats[6] or 0))
+                            * 100
+                        )
+                        if ((stocks_stats[5] or 0) + (stocks_stats[6] or 0)) > 0
                         else 0
                     ),
                     "max_daily_profit": stocks_max_profit,
@@ -851,8 +878,8 @@ class DaytradeService:
                     "spot_win_count": spot_stats[2] or 0,
                     "spot_loss_count": spot_stats[3] or 0,
                     "spot_win_rate": (
-                        (spot_stats[2] / spot_stats[0] * 100)
-                        if spot_stats[0] > 0
+                        ((spot_stats[2] or 0) / (spot_stats[0] or 1) * 100)
+                        if spot_stats and (spot_stats[0] or 0) > 0
                         else 0
                     ),
                 },
@@ -976,6 +1003,12 @@ class DaytradeService:
                 stocks_day_trade,
                 dividend_amount,
             ) in daily_data:
+                # None を 0 に変換
+                futures_profit = futures_profit or 0
+                stocks_profit = stocks_profit or 0
+                stocks_day_trade = stocks_day_trade or 0
+                dividend_amount = dividend_amount or 0
+
                 # 株式の合計損益（配当込み）
                 stocks_total = stocks_profit + stocks_day_trade
                 # 株式の合計損益（配当除外）
@@ -1335,8 +1368,12 @@ class DaytradeService:
                 )
                 stocks_data = cursor.fetchone()
 
-                futures_profit = futures_data[0] if futures_data else 0
-                stocks_profit = (stocks_data[0] + stocks_data[1]) if stocks_data else 0
+                futures_profit = (futures_data[0] or 0) if futures_data else 0
+                stocks_profit = (
+                    ((stocks_data[0] or 0) + (stocks_data[1] or 0))
+                    if stocks_data
+                    else 0
+                )
 
                 monthly_data.append(
                     {
