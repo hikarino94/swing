@@ -1,32 +1,34 @@
 <!-- 保有銘柄管理 -->
 <div x-data="holdingsManager()" x-cloak>
-    <div class="bg-white shadow rounded-lg p-6">
-        <div class="flex justify-between items-center mb-6">
-            <h2 class="text-xl font-bold text-gray-900">保有銘柄管理</h2>
-            <div class="flex space-x-2">
+    <div class="bg-white shadow rounded-lg p-3 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6 space-y-3 sm:space-y-0">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900">保有銘柄管理</h2>
+            <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                 <button @click="showImportModal = true"
-                        class="btn btn-primary">
+                        class="btn btn-primary w-full sm:w-auto px-3 py-2 text-sm sm:text-base">
                     📥 CSVインポート
                 </button>
                 <button @click="showAddModal = true"
-                        class="btn btn-secondary">
+                        class="btn btn-secondary w-full sm:w-auto px-3 py-2 text-sm sm:text-base">
                     ➕ 手動追加
                 </button>
             </div>
         </div>
 
         <!-- タブナビゲーション -->
-        <div class="border-b border-gray-200 mb-6">
-            <nav class="-mb-px flex space-x-8">
+        <div class="border-b border-gray-200 mb-4 sm:mb-6">
+            <nav class="-mb-px flex space-x-4 sm:space-x-8">
                 <button @click="activeTab = 'holdings'"
                         :class="activeTab === 'holdings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                    📋 保有銘柄一覧
+                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-xs sm:text-sm">
+                    <span class="hidden sm:inline">📋 保有銘柄一覧</span>
+                    <span class="sm:hidden">📋 一覧</span>
                 </button>
                 <button @click="activeTab = 'analysis'; loadAnalysis()"
                         :class="activeTab === 'analysis' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
-                    📊 ポートフォリオ分析
+                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-xs sm:text-sm">
+                    <span class="hidden sm:inline">📊 ポートフォリオ分析</span>
+                    <span class="sm:hidden">📊 分析</span>
                 </button>
             </nav>
         </div>
@@ -37,23 +39,23 @@
         <!-- フィルター設定 -->
         <div class="mb-4 space-y-4">
             <!-- 口座選択と表示切替 -->
-            <div class="flex flex-col sm:flex-row gap-4">
-                <div class="flex-1">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">口座選択</label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                <div>
+                    <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">口座選択</label>
                     <select x-model="selectedAccount"
                             @change="loadHoldings()"
-                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
                         <option value="">全口座</option>
                         <template x-for="account in accounts" :key="account">
                             <option :value="account" x-text="account"></option>
                         </template>
                     </select>
                 </div>
-                <div class="flex-1">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">預かり区分</label>
+                <div>
+                    <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">預かり区分</label>
                     <select x-model="filters.accountType"
                             @change="applyFilters()"
-                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
                         <option value="">全て</option>
                         <option value="特定">特定</option>
                         <option value="一般">一般</option>
@@ -61,21 +63,21 @@
                         <option value="旧NISA">旧NISA</option>
                     </select>
                 </div>
-                <div class="flex-1">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">現物/信用</label>
+                <div>
+                    <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">現物/信用</label>
                     <select x-model="filters.stockType"
                             @change="applyFilters()"
-                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
                         <option value="">全て</option>
                         <option value="現物">現物</option>
                         <option value="信用">信用</option>
                     </select>
                 </div>
-                <div class="flex-1" x-show="filters.stockType === '信用'">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">建区分</label>
+                <div x-show="filters.stockType === '信用'">
+                    <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">建区分</label>
                     <select x-model="filters.tradePosition"
                             @change="applyFilters()"
-                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
                         <option value="">全て</option>
                         <option value="買建">買建</option>
                         <option value="売建">売建</option>
@@ -93,12 +95,12 @@
         </div>
 
         <!-- 一括削除ボタンと表示件数 -->
-        <div x-show="holdings.length > 0" class="mb-4 flex justify-between items-center">
+        <div x-show="holdings.length > 0" class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0">
             <button @click="confirmBulkDelete()"
-                    class="btn btn-danger">
+                    class="btn btn-danger text-sm px-3 py-2">
                 🗑️ 一括削除
             </button>
-            <div class="text-sm text-gray-600">
+            <div class="text-xs sm:text-sm text-gray-600">
                 <span x-text="filteredHoldings.length"></span>件
                 <span x-show="filteredHoldings.length !== holdings.length">
                     （全<span x-text="holdings.length"></span>件中）
@@ -107,8 +109,61 @@
         </div>
 
         <!-- 保有銘柄一覧 -->
-        <div class="overflow-auto max-h-[calc(100vh-300px)]">
-            <table class="w-full divide-y divide-gray-200 text-sm">
+        <!-- モバイル用カードレイアウト -->
+        <div class="block sm:hidden space-y-3">
+            <template x-for="holding in sortedHoldings" :key="holding.id || holding.code">
+                <div class="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-mono text-sm font-semibold" x-text="holding.code"></div>
+                            <div class="text-xs text-gray-600 truncate" x-text="holding.name"></div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm font-semibold" x-text="formatNumber(holding.current_price)"></div>
+                            <div class="text-xs"
+                                 :class="holding.profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'"
+                                 x-text="formatPercentage(holding.profit_loss_ratio)"></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <span class="text-gray-500">数量:</span>
+                            <span x-text="formatNumber(holding.quantity || holding.total_quantity)"></span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">取得:</span>
+                            <span x-text="formatNumber(holding.average_price)"></span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">評価額:</span>
+                            <span x-text="formatNumber(holding.market_value)"></span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">損益:</span>
+                            <span :class="holding.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'"
+                                  x-text="formatNumber(holding.profit_loss)"></span>
+                        </div>
+                    </div>
+                    <div x-show="!aggregateView" class="pt-2 border-t flex justify-between text-xs">
+                        <div>
+                            <span class="text-gray-500">口座:</span>
+                            <span x-text="holding.account_name"></span>
+                        </div>
+                        <div class="space-x-2">
+                            <button @click="editHolding(holding)" class="text-blue-600">編集</button>
+                            <button @click="deleteHolding(holding)" class="text-red-600">削除</button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <div x-show="holdings.length === 0" class="text-center py-8 text-gray-500">
+                保有銘柄がありません
+            </div>
+        </div>
+
+        <!-- PC用テーブルレイアウト -->
+        <div class="hidden sm:block overflow-auto max-h-[calc(100vh-300px)]">
+            <table class="w-full divide-y divide-gray-200 text-xs sm:text-sm">
                 <thead class="bg-gray-50 sticky top-0">
                     <tr>
                         <th @click="sortBy('code')" class="sortable-header whitespace-nowrap" :class="sortColumn === 'code' ? 'sorted' : ''">
@@ -152,8 +207,8 @@
                 <tbody class="bg-white divide-y divide-gray-200">
                     <template x-for="holding in sortedHoldings" :key="holding.id || holding.code">
                         <tr class="hover:bg-gray-50">
-                            <td class="px-2 py-1 whitespace-nowrap font-mono" x-text="holding.code"></td>
-                            <td class="px-2 py-1 truncate max-w-[150px]" :title="holding.name" x-text="holding.name"></td>
+                            <td class="px-1 sm:px-2 py-1 whitespace-nowrap font-mono" x-text="holding.code"></td>
+                            <td class="px-1 sm:px-2 py-1 truncate max-w-[100px] sm:max-w-[150px]" :title="holding.name" x-text="holding.name"></td>
                             <td x-show="!aggregateView" class="px-2 py-1 whitespace-nowrap" x-text="holding.account_name"></td>
                             <td x-show="!aggregateView" class="px-2 py-1 whitespace-nowrap">
                                 <span x-text="holding.account_type"></span>
@@ -181,7 +236,7 @@
                                 :class="holding.profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'">
                                 <span x-text="formatPercentage(holding.profit_loss_ratio)"></span>
                             </td>
-                            <td x-show="!aggregateView" class="px-2 py-1 text-center">
+                            <td x-show="!aggregateView" class="px-1 sm:px-2 py-1 text-center">
                                 <button @click="editHolding(holding)" class="text-blue-600 hover:text-blue-900 text-xs">編集</button>
                                 <button @click="deleteHolding(holding)" class="text-red-600 hover:text-red-900 text-xs ml-1">削除</button>
                             </td>
@@ -268,63 +323,67 @@
                             </button>
                         </div>
                     </div>
-                    <div class="h-80 flex justify-center">
+                    <div class="h-64 sm:h-80 flex justify-center chart-container">
                         <canvas id="sectorChart"></canvas>
                     </div>
                 </div>
 
                 <!-- 銘柄別年間配当額（単独行） -->
-                <div class="bg-gray-50 rounded-lg p-4 mb-6 relative">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold">銘柄別年間配当額</h3>
+                <div class="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 relative">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
+                        <h3 class="text-base sm:text-lg font-semibold">銘柄別年間配当額</h3>
                         <button @click="screenshotChart('dividendAmountChart')"
-                                class="px-3 py-1 bg-gray-600 text-white rounded text-sm font-medium hover:bg-gray-700 transition-colors">
-                            📷 画像保存
+                                class="px-2 sm:px-3 py-1 bg-gray-600 text-white rounded text-xs sm:text-sm font-medium hover:bg-gray-700 transition-colors">
+                            <span class="hidden sm:inline">📷 画像保存</span>
+                            <span class="sm:hidden">📷</span>
                         </button>
                     </div>
-                    <div class="h-80 flex justify-center">
+                    <div class="h-64 sm:h-80 flex justify-center chart-container">
                         <canvas id="dividendAmountChart"></canvas>
                     </div>
                 </div>
 
                 <!-- 市場別構成とパフォーマンス分布（並列） -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
                     <!-- 市場別円グラフ -->
-                    <div class="bg-gray-50 rounded-lg p-4 relative">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-lg font-semibold">市場別構成</h3>
+                    <div class="bg-gray-50 rounded-lg p-3 sm:p-4 relative">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
+                            <h3 class="text-base sm:text-lg font-semibold">市場別構成</h3>
                             <button @click="screenshotChart('marketChart')"
-                                    class="px-3 py-1 bg-gray-600 text-white rounded text-sm font-medium hover:bg-gray-700 transition-colors">
-                                📷 画像保存
+                                    class="px-2 sm:px-3 py-1 bg-gray-600 text-white rounded text-xs sm:text-sm font-medium hover:bg-gray-700 transition-colors">
+                                <span class="hidden sm:inline">📷 画像保存</span>
+                                <span class="sm:hidden">📷</span>
                             </button>
                         </div>
-                        <div class="h-80 flex justify-center">
+                        <div class="h-64 sm:h-80 flex justify-center chart-container">
                             <canvas id="marketChart"></canvas>
                         </div>
                     </div>
 
                     <!-- パフォーマンス分布 -->
-                    <div class="bg-gray-50 rounded-lg p-4 relative">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-lg font-semibold">パフォーマンス分布</h3>
+                    <div class="bg-gray-50 rounded-lg p-3 sm:p-4 relative">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
+                            <h3 class="text-base sm:text-lg font-semibold">パフォーマンス分布</h3>
                             <button @click="screenshotChart('performanceChart')"
-                                    class="px-3 py-1 bg-gray-600 text-white rounded text-sm font-medium hover:bg-gray-700 transition-colors">
-                                📷 画像保存
+                                    class="px-2 sm:px-3 py-1 bg-gray-600 text-white rounded text-xs sm:text-sm font-medium hover:bg-gray-700 transition-colors">
+                                <span class="hidden sm:inline">📷 画像保存</span>
+                                <span class="sm:hidden">📷</span>
                             </button>
                         </div>
-                        <div class="h-64">
+                        <div class="h-64 chart-container">
                             <canvas id="performanceChart"></canvas>
                         </div>
                     </div>
                 </div>
 
                 <!-- 損益率ヒートマップ（単独行） -->
-                <div class="bg-gray-50 rounded-lg p-4 mb-6 relative">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold">損益率ヒートマップ</h3>
+                <div class="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 relative">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
+                        <h3 class="text-base sm:text-lg font-semibold">損益率ヒートマップ</h3>
                         <button @click="screenshotHeatmap()"
-                                class="px-3 py-1 bg-gray-600 text-white rounded text-sm font-medium hover:bg-gray-700 transition-colors">
-                            📷 画像保存
+                                class="px-2 sm:px-3 py-1 bg-gray-600 text-white rounded text-xs sm:text-sm font-medium hover:bg-gray-700 transition-colors">
+                            <span class="hidden sm:inline">📷 画像保存</span>
+                            <span class="sm:hidden">📷</span>
                         </button>
                     </div>
                     <div id="heatmapContainer" class="h-64 overflow-auto"></div>
@@ -332,10 +391,10 @@
 
 
                 <!-- 上位・下位銘柄 -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                     <!-- 上位銘柄 -->
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <h3 class="text-lg font-semibold mb-4 text-green-600">📈 利益上位銘柄</h3>
+                    <div class="bg-gray-50 rounded-lg p-3 sm:p-4">
+                        <h3 class="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-green-600">📈 利益上位銘柄</h3>
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b">
@@ -360,8 +419,8 @@
                     </div>
 
                     <!-- 下位銘柄 -->
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <h3 class="text-lg font-semibold mb-4 text-red-600">📉 損失上位銘柄</h3>
+                    <div class="bg-gray-50 rounded-lg p-3 sm:p-4">
+                        <h3 class="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-red-600">📉 損失上位銘柄</h3>
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="border-b">
@@ -1560,7 +1619,7 @@ window.holdingsManager = function() {
             const sortedHoldings = [...this.holdings].sort((a, b) => b.profit_loss_ratio - a.profit_loss_ratio);
 
             // ヒートマップのHTML生成
-            let html = '<div class="grid grid-cols-10 gap-1 p-2">';
+            let html = '<div class="grid grid-cols-5 sm:grid-cols-10 gap-1 p-2">';
 
             sortedHoldings.forEach(holding => {
                 const ratio = holding.profit_loss_ratio || 0;
@@ -1588,10 +1647,10 @@ window.holdingsManager = function() {
                 }
 
                 html += `
-                    <div class="${bgColor} ${textColor} rounded p-2 text-xs text-center cursor-pointer hover:opacity-80"
+                    <div class="${bgColor} ${textColor} rounded p-1 sm:p-2 text-xs text-center cursor-pointer hover:opacity-80"
                          title="${holding.code} ${holding.name}\n損益率: ${ratio.toFixed(2)}%\n評価額: ¥${holding.market_value.toLocaleString()}">
-                        <div class="font-mono">${holding.code}</div>
-                        <div class="font-bold">${ratio.toFixed(1)}%</div>
+                        <div class="font-mono text-xs">${holding.code}</div>
+                        <div class="font-bold text-xs">${ratio.toFixed(1)}%</div>
                     </div>
                 `;
             });
@@ -1765,7 +1824,7 @@ window.holdingsManager = function() {
 
 <style>
 .sortable-header {
-    @apply px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none transition-colors;
+    @apply px-1 sm:px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none transition-colors;
 }
 .sortable-header.sorted {
     @apply bg-blue-50 text-blue-700 font-semibold;
@@ -1778,5 +1837,26 @@ window.holdingsManager = function() {
 }
 .sortable-header.text-right > div {
     @apply justify-end;
+}
+
+/* モバイル対応の追加スタイル */
+@media (max-width: 640px) {
+    /* チャートのレジェンドをコンパクトに */
+    .chart-container canvas {
+        max-height: 250px;
+    }
+
+    /* ヒートマップのタイルを小さく */
+    #heatmapContainer .grid > div {
+        min-height: 40px;
+    }
+
+    /* テーブルヘッダーを縦向きに */
+    .sortable-header {
+        writing-mode: vertical-lr;
+        text-orientation: mixed;
+        padding: 0.25rem;
+        height: 60px;
+    }
 }
 </style>

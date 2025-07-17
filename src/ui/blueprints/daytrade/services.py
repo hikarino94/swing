@@ -897,14 +897,15 @@ class DaytradeService:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
 
-            # 日別の損益データを取得
+            # 日別の損益データを取得（配当を分離）
             cursor.execute(
                 """
                 SELECT
                     d.date,
                     COALESCE(f.daily_profit, 0) as futures_profit,
                     COALESCE(s.daily_profit, 0) as stocks_profit,
-                    COALESCE(s.day_trade_profit, 0) as stocks_day_trade
+                    COALESCE(s.day_trade_profit, 0) as stocks_day_trade,
+                    COALESCE(s.dividend_amount, 0) as dividend_amount
                 FROM (
                     SELECT DISTINCT date FROM (
                         SELECT trade_date as date FROM daytrade_futures
@@ -923,9 +924,17 @@ class DaytradeService:
                 LEFT JOIN (
                     SELECT
                         trade_date,
-                        SUM(COALESCE(capital_gains_tax, 0) +
-                            COALESCE(settlement_amount, 0)) as daily_profit,
-                        SUM(COALESCE(day_trade_amount, 0)) as day_trade_profit
+                        SUM(CASE
+                            WHEN trade_type != '配当金' THEN
+                                COALESCE(capital_gains_tax, 0) + COALESCE(settlement_amount, 0)
+                            ELSE 0
+                        END) as daily_profit,
+                        SUM(COALESCE(day_trade_amount, 0)) as day_trade_profit,
+                        SUM(CASE
+                            WHEN trade_type = '配当金' THEN
+                                COALESCE(settlement_amount, 0)
+                            ELSE 0
+                        END) as dividend_amount
                     FROM daytrade_stocks
                     WHERE user_id = ? AND trade_date BETWEEN ? AND ?
                       AND (trade_type LIKE '%返済%' OR trade_type = '現物売却' OR trade_type = '配当金')
@@ -957,13 +966,28 @@ class DaytradeService:
             stocks_cumulative = 0
             total_cumulative = 0
 
-            for date, futures_profit, stocks_profit, stocks_day_trade in daily_data:
-                # 株式の合計損益
+            dividend_cumulative = 0
+            stocks_without_dividend_cumulative = 0
+
+            for (
+                date,
+                futures_profit,
+                stocks_profit,
+                stocks_day_trade,
+                dividend_amount,
+            ) in daily_data:
+                # 株式の合計損益（配当込み）
                 stocks_total = stocks_profit + stocks_day_trade
+                # 株式の合計損益（配当除外）
+                stocks_without_dividend = (
+                    stocks_profit + stocks_day_trade - dividend_amount
+                )
 
                 # 累積更新
                 futures_cumulative += futures_profit
                 stocks_cumulative += stocks_total
+                stocks_without_dividend_cumulative += stocks_without_dividend
+                dividend_cumulative += dividend_amount
                 total_cumulative += futures_profit + stocks_total
 
                 cumulative_data.append(
@@ -971,9 +995,13 @@ class DaytradeService:
                         "date": date,
                         "futures_daily": futures_profit,
                         "stocks_daily": stocks_total,
+                        "stocks_without_dividend_daily": stocks_without_dividend,
+                        "dividend_daily": dividend_amount,
                         "total_daily": futures_profit + stocks_total,
                         "futures_cumulative": futures_cumulative,
                         "stocks_cumulative": stocks_cumulative,
+                        "stocks_without_dividend_cumulative": stocks_without_dividend_cumulative,
+                        "dividend_cumulative": dividend_cumulative,
                         "total_cumulative": total_cumulative,
                     }
                 )
@@ -985,6 +1013,8 @@ class DaytradeService:
                 "summary": {
                     "futures_total": futures_cumulative,
                     "stocks_total": stocks_cumulative,
+                    "stocks_without_dividend_total": stocks_without_dividend_cumulative,
+                    "dividend_total": dividend_cumulative,
                     "total": total_cumulative,
                 },
             }
