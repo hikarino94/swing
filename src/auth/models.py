@@ -60,6 +60,9 @@ class User:
     @classmethod
     def find_by_email(cls, email: str) -> Optional["User"]:
         """メールアドレスでユーザーを検索"""
+        if not email:  # 空文字列の場合はNoneを返す
+            return None
+
         conn = sqlite3.connect(get_db_path())
         cursor = conn.cursor()
         try:
@@ -127,7 +130,7 @@ class User:
                     INSERT INTO users (username, email, password_hash, role)
                     VALUES (?, ?, ?, ?)
                 """,
-                    (self.username, self.email, self.password_hash, self.role),
+                    (self.username, self.email or None, self.password_hash, self.role),
                 )
                 self.id = cursor.lastrowid
             else:
@@ -138,7 +141,13 @@ class User:
                     updated_at = datetime('now')
                     WHERE id = ?
                 """,
-                    (self.username, self.email, self.password_hash, self.role, self.id),
+                    (
+                        self.username,
+                        self.email or None,
+                        self.password_hash,
+                        self.role,
+                        self.id,
+                    ),
                 )
 
             conn.commit()

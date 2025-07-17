@@ -58,7 +58,6 @@ def register():
 
     # POST: 登録処理
     username = get_form_value(request, "username", "").strip()
-    email = get_form_value(request, "email", "").strip()
     password = get_form_value(request, "password", "")
     password_confirm = get_form_value(request, "password_confirm", "")
 
@@ -66,10 +65,8 @@ def register():
     if password != password_confirm:
         return render_template("register.html", error="パスワードが一致しません")
 
-    # 新規登録ユーザーは常にポートフォリオ専用ユーザーとして作成
-    success, message = AuthManager.register_user(
-        username, email, password, role="portfolio_only"
-    )
+    # 新規登録ユーザーは取引管理ユーザーとして作成（メール不要）
+    success, message = AuthManager.register_user(username, "", password, role="trader")
 
     if success:
         # 登録成功したら自動的にログイン

@@ -8,7 +8,7 @@ from typing import cast
 from flask import Blueprint, jsonify, render_template
 from flask import request as flask_request
 
-from src.auth import login_required
+from src.auth.decorators import trader_allowed
 from src.types.flask_types import RequestWithUser
 from src.ui.common import validate_csrf_token
 from src.utils.logging_config import get_logger
@@ -24,14 +24,14 @@ request: RequestWithUser = cast(RequestWithUser, flask_request)
 
 
 @daytrade_bp.route("/")
-@login_required
+@trader_allowed
 def index():
     """デイトレード管理画面のメインページ"""
     return render_template("daytrade/index.html")
 
 
 @daytrade_bp.route("/calendar/<year>/<month>", methods=["GET"])
-@login_required
+@trader_allowed
 def calendar(year: str, month: str):
     """指定月のカレンダーデータを取得"""
     try:
@@ -57,7 +57,7 @@ def calendar(year: str, month: str):
 
 
 @daytrade_bp.route("/import/futures", methods=["POST"])
-@login_required
+@trader_allowed
 def import_futures():
     """先物取引データのインポート"""
     if not validate_csrf_token(request):
@@ -99,7 +99,7 @@ def import_futures():
 
 
 @daytrade_bp.route("/import/stocks", methods=["POST"])
-@login_required
+@trader_allowed
 def import_stocks():
     """株式取引データのインポート（信用取引のみ）"""
     if not validate_csrf_token(request):
@@ -129,7 +129,7 @@ def import_stocks():
 
 
 @daytrade_bp.route("/import/spot-dividend", methods=["POST"])
-@login_required
+@trader_allowed
 def import_spot_dividend():
     """現物取引・配当金CSVのインポート"""
     if not validate_csrf_token(request):
@@ -159,7 +159,7 @@ def import_spot_dividend():
 
 
 @daytrade_bp.route("/summary/<year>/<month>", methods=["GET"])
-@login_required
+@trader_allowed
 def monthly_summary(year: str, month: str):
     """月別サマリーデータを取得"""
     try:
@@ -181,7 +181,7 @@ def monthly_summary(year: str, month: str):
 
 
 @daytrade_bp.route("/details/<date>", methods=["GET"])
-@login_required
+@trader_allowed
 def daily_details(date: str):
     """指定日の取引詳細を取得"""
     try:
@@ -200,7 +200,7 @@ def daily_details(date: str):
 
 
 @daytrade_bp.route("/cumulative/<start_date>/<end_date>", methods=["GET"])
-@login_required
+@trader_allowed
 def cumulative_profit(start_date: str, end_date: str):
     """指定期間の累積損益データを取得"""
     try:
@@ -220,7 +220,7 @@ def cumulative_profit(start_date: str, end_date: str):
 
 
 @daytrade_bp.route("/trades", methods=["GET"])
-@login_required
+@trader_allowed
 def trade_list():
     """取引履歴一覧を取得"""
     try:
@@ -240,7 +240,7 @@ def trade_list():
 
 
 @daytrade_bp.route("/trade", methods=["POST"])
-@login_required
+@trader_allowed
 def create_trade():
     """取引を手動登録"""
     if not validate_csrf_token(request):
@@ -259,7 +259,7 @@ def create_trade():
 
 
 @daytrade_bp.route("/trade/<int:trade_id>", methods=["PUT"])
-@login_required
+@trader_allowed
 def update_trade(trade_id: int):
     """取引を編集"""
     if not validate_csrf_token(request):
@@ -278,7 +278,7 @@ def update_trade(trade_id: int):
 
 
 @daytrade_bp.route("/trade/<int:trade_id>", methods=["DELETE"])
-@login_required
+@trader_allowed
 def delete_trade(trade_id: int):
     """取引を削除"""
     if not validate_csrf_token(request):
@@ -300,7 +300,7 @@ def delete_trade(trade_id: int):
 
 
 @daytrade_bp.route("/monthly", methods=["GET"])
-@login_required
+@trader_allowed
 def monthly_profit():
     """月別損益データを取得"""
     try:

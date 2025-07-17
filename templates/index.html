@@ -17,14 +17,26 @@
             <select x-model="activeTab"
                     @change="checkTabChange($event.target.value)"
                     class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                <option value="data">📊 データ取得</option>
-                <option value="screening">🔍 スクリーニング</option>
-                <option value="backtest">📈 バックテスト</option>
-                <option value="daytrade">📅 デイトレード</option>
+                <template x-if="userRole === 'admin' || userRole === ''">
+                    <option value="data">📊 データ取得</option>
+                </template>
+                <template x-if="userRole === 'admin' || userRole === ''">
+                    <option value="screening">🔍 スクリーニング</option>
+                </template>
+                <template x-if="userRole === 'admin' || userRole === ''">
+                    <option value="backtest">📈 バックテスト</option>
+                </template>
+                <option value="daytrade">📅 取引管理</option>
                 <option value="holdings">💼 保有銘柄</option>
-                <option value="utilities">🛠️ ユーティリティ</option>
-                <option value="results">📁 結果閲覧</option>
-                <option value="settings">⚙️ 設定</option>
+                <template x-if="userRole === 'admin' || userRole === ''">
+                    <option value="utilities">🛠️ ユーティリティ</option>
+                </template>
+                <template x-if="userRole === 'admin' || userRole === ''">
+                    <option value="results">📁 結果閲覧</option>
+                </template>
+                <template x-if="userRole === 'admin' || userRole === ''">
+                    <option value="settings">⚙️ 設定</option>
+                </template>
             </select>
         </div>
     </div>
@@ -32,48 +44,60 @@
     <!-- デスクトップ用タブナビゲーション -->
     <div class="hidden sm:block border-b border-gray-200">
         <nav class="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
-            <button @click="checkTabChange('data')"
-                    :class="{'tab-active': activeTab === 'data'}"
-                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
-                    :class="activeTab === 'data' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                📊 データ取得
-            </button>
-            <button @click="checkTabChange('screening')"
-                    :class="{'tab-active': activeTab === 'screening'}"
-                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
-                    :class="activeTab === 'screening' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                🔍 スクリーニング
-            </button>
-            <button @click="checkTabChange('backtest')"
-                    :class="{'tab-active': activeTab === 'backtest'}"
-                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
-                    :class="activeTab === 'backtest' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                📈 バックテスト
-            </button>
-            <button @click="checkTabChange('utilities')"
-                    :class="{'tab-active': activeTab === 'utilities'}"
-                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
-                    :class="activeTab === 'utilities' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                🛠️ ユーティリティ
-            </button>
-            <button @click="checkTabChange('results')"
-                    :class="{'tab-active': activeTab === 'results'}"
-                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
-                    :class="activeTab === 'results' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                📁 結果閲覧
-            </button>
-            <button @click="checkTabChange('settings')"
-                    :class="{'tab-active': activeTab === 'settings'}"
-                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
-                    :class="activeTab === 'settings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                ⚙️ 設定
-            </button>
+            <template x-if="userRole === 'admin' || userRole === ''">
+                <button @click="checkTabChange('data')"
+                        :class="{'tab-active': activeTab === 'data'}"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                        :class="activeTab === 'data' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                    📊 データ取得
+                </button>
+            </template>
+            <template x-if="userRole === 'admin' || userRole === ''">
+                <button @click="checkTabChange('screening')"
+                        :class="{'tab-active': activeTab === 'screening'}"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                        :class="activeTab === 'screening' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                    🔍 スクリーニング
+                </button>
+            </template>
+            <template x-if="userRole === 'admin' || userRole === ''">
+                <button @click="checkTabChange('backtest')"
+                        :class="{'tab-active': activeTab === 'backtest'}"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                        :class="activeTab === 'backtest' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                    📈 バックテスト
+                </button>
+            </template>
+            <template x-if="userRole === 'admin' || userRole === ''">
+                <button @click="checkTabChange('utilities')"
+                        :class="{'tab-active': activeTab === 'utilities'}"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                        :class="activeTab === 'utilities' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                    🛠️ ユーティリティ
+                </button>
+            </template>
+            <template x-if="userRole === 'admin' || userRole === ''">
+                <button @click="checkTabChange('results')"
+                        :class="{'tab-active': activeTab === 'results'}"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                        :class="activeTab === 'results' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                    📁 結果閲覧
+                </button>
+            </template>
+            <template x-if="userRole === 'admin' || userRole === ''">
+                <button @click="checkTabChange('settings')"
+                        :class="{'tab-active': activeTab === 'settings'}"
+                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
+                        :class="activeTab === 'settings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                    ⚙️ 設定
+                </button>
+            </template>
             <template x-if="isLoggedIn">
                 <button @click="checkTabChange('daytrade')"
                         :class="{'tab-active': activeTab === 'daytrade'}"
                         class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200"
                         :class="activeTab === 'daytrade' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                    📅 デイトレード
+                    📅 取引管理
                 </button>
             </template>
             <template x-if="isLoggedIn">
@@ -90,7 +114,7 @@
     <!-- タブコンテンツ -->
     <div class="mt-6">
         <!-- データ取得タブ -->
-        <div x-show="activeTab === 'data'" class="space-y-6">
+        <div x-show="activeTab === 'data' && (userRole === 'admin' || userRole === '')" class="space-y-6">
             <div class="bg-white shadow rounded-lg p-6">
                 <h2 class="text-lg font-medium text-gray-900 mb-4">データ取得</h2>
 
@@ -179,7 +203,7 @@
         </div>
 
         <!-- スクリーニングタブ -->
-        <div x-show="activeTab === 'screening'" class="space-y-6">
+        <div x-show="activeTab === 'screening' && (userRole === 'admin' || userRole === '')" class="space-y-6">
             <div class="bg-white shadow rounded-lg p-6">
                 <h2 class="text-lg font-medium text-gray-900 mb-4">スクリーニング</h2>
 
@@ -340,7 +364,7 @@
         </div>
 
         <!-- バックテストタブ -->
-        <div x-show="activeTab === 'backtest'" class="space-y-6">
+        <div x-show="activeTab === 'backtest' && (userRole === 'admin' || userRole === '')" class="space-y-6">
             <div class="bg-white shadow rounded-lg p-6">
                 <h2 class="text-lg font-medium text-gray-900 mb-4">バックテスト</h2>
 
@@ -444,7 +468,7 @@
         </div>
 
         <!-- ユーティリティタブ -->
-        <div x-show="activeTab === 'utilities'" class="space-y-6">
+        <div x-show="activeTab === 'utilities' && (userRole === 'admin' || userRole === '')" class="space-y-6">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- IDトークン更新 -->
                 <div class="bg-white shadow rounded-lg p-6">
@@ -593,7 +617,7 @@
         </div>
 
         <!-- 結果閲覧タブ -->
-        <div x-show="activeTab === 'results'" class="space-y-6">
+        <div x-show="activeTab === 'results' && (userRole === 'admin' || userRole === '')" class="space-y-6">
             <div class="bg-white shadow rounded-lg p-6">
                 <h3 class="text-lg font-medium text-gray-900 mb-4">結果ファイル一覧</h3>
                 <div class="mb-4">
@@ -666,7 +690,7 @@
         </div>
 
         <!-- 設定タブ -->
-        <div x-show="activeTab === 'settings'" class="space-y-6">
+        <div x-show="activeTab === 'settings' && (userRole === 'admin' || userRole === '')" class="space-y-6">
             <div class="bg-white shadow rounded-lg p-6">
                 <h3 class="text-lg font-medium text-gray-900 mb-4">閾値設定</h3>
                 <div class="mb-4">
@@ -685,7 +709,7 @@
             </div>
         </div>
 
-        <!-- デイトレードタブ（ログイン時のみ表示） -->
+        <!-- 取引管理タブ（ログイン時のみ表示） -->
         <div x-show="activeTab === 'daytrade' && isLoggedIn" class="space-y-6">
             {% include 'daytrade/index.html' %}
         </div>
@@ -702,11 +726,23 @@
 <script>
 function swingApp() {
     return {
-        activeTab: localStorage.getItem('swingActiveTab') || 'data',
+        activeTab: (function() {
+            const savedTab = localStorage.getItem('swingActiveTab');
+            const userRole = '{{ user.role if user else '' }}';
+
+            // traderロールの場合、取引管理タブをデフォルトに
+            if (userRole === 'trader' && !savedTab) {
+                return 'daytrade';
+            }
+
+            // 保存されたタブがある場合はそれを使用、なければroleに応じて設定
+            return savedTab || (userRole === 'trader' ? 'daytrade' : 'data');
+        })(),
         isLoading: false,
         isProcessing: false,
         processingMessage: '',
         isLoggedIn: {{ 'true' if user else 'false' }},
+        userRole: '{{ user.role if user else '' }}',
 
         // データ取得設定
         dataFetch: {

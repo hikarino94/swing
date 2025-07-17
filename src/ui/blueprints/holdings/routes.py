@@ -9,7 +9,7 @@ from typing import cast
 from flask import jsonify
 from flask import request as flask_request
 
-from src.auth import login_required
+from src.auth.decorators import trader_allowed
 from src.portfolio.csv_importer import import_holdings_csv
 from src.portfolio.holdings import (
     add_holding,
@@ -32,7 +32,7 @@ request: RequestWithUser = cast(RequestWithUser, flask_request)
 
 
 @holdings_bp.route("/list", methods=["GET"])
-@login_required
+@trader_allowed
 def list_holdings():
     """保有銘柄一覧を取得"""
     try:
@@ -52,7 +52,7 @@ def list_holdings():
 
 
 @holdings_bp.route("/import", methods=["POST"])
-@login_required
+@trader_allowed
 def import_csv():
     """CSVファイルをインポート"""
     try:
@@ -117,7 +117,7 @@ def import_csv():
 
 
 @holdings_bp.route("/add", methods=["POST"])
-@login_required
+@trader_allowed
 def add_new_holding():
     """保有銘柄を手動追加"""
     try:
@@ -162,7 +162,7 @@ def add_new_holding():
 
 
 @holdings_bp.route("/update/<int:holding_id>", methods=["PUT"])
-@login_required
+@trader_allowed
 def update_holding_info(holding_id):
     """保有銘柄を更新"""
     try:
@@ -186,7 +186,7 @@ def update_holding_info(holding_id):
 
 
 @holdings_bp.route("/delete/<int:holding_id>", methods=["DELETE"])
-@login_required
+@trader_allowed
 def delete_holding_info(holding_id):
     """保有銘柄を削除"""
     try:
@@ -209,7 +209,7 @@ def delete_holding_info(holding_id):
 
 
 @holdings_bp.route("/bulk_delete", methods=["POST"])
-@login_required
+@trader_allowed
 def bulk_delete():
     """保有銘柄を一括削除"""
     try:
@@ -234,7 +234,7 @@ def bulk_delete():
 
 
 @holdings_bp.route("/accounts", methods=["GET"])
-@login_required
+@trader_allowed
 def list_accounts():
     """ユーザーの口座一覧を取得"""
     try:
@@ -249,7 +249,7 @@ def list_accounts():
 
 
 @holdings_bp.route("/search", methods=["GET"])
-@login_required
+@trader_allowed
 def search_stocks():
     """銘柄を検索"""
     try:
@@ -268,7 +268,7 @@ def search_stocks():
 
 
 @holdings_bp.route("/analysis", methods=["GET"])
-@login_required
+@trader_allowed
 def get_portfolio_analysis():
     """ポートフォリオ分析データを取得"""
     try:

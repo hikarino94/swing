@@ -1,4 +1,6 @@
 <!-- 保有銘柄管理 -->
+<!-- Chart.jsライブラリ -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <div x-data="holdingsManager()" x-cloak>
     <div class="bg-white shadow rounded-lg p-3 sm:p-6">
         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6 space-y-3 sm:space-y-0">
@@ -24,7 +26,7 @@
                     <span class="hidden sm:inline">📋 保有銘柄一覧</span>
                     <span class="sm:hidden">📋 一覧</span>
                 </button>
-                <button @click="activeTab = 'analysis'; loadAnalysis()"
+                <button @click="switchToAnalysisTab()"
                         :class="activeTab === 'analysis' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                         class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-xs sm:text-sm">
                     <span class="hidden sm:inline">📊 ポートフォリオ分析</span>
@@ -277,7 +279,7 @@
                 <p class="text-gray-600">分析データを読み込んでいます...</p>
             </div>
 
-            <div x-show="!analysisLoading && analysisData" x-cloak>
+            <div x-show="!analysisLoading && analysisData" x-init="$watch('analysisData', () => { if (analysisData) { $nextTick(() => renderCharts()); } })">
                 <!-- 概要統計 -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                     <div class="bg-gray-50 rounded-lg p-4">
@@ -323,8 +325,8 @@
                             </button>
                         </div>
                     </div>
-                    <div class="h-64 sm:h-80 flex justify-center chart-container">
-                        <canvas id="sectorChart"></canvas>
+                    <div class="h-64 sm:h-80 relative">
+                        <canvas id="sectorChart" class="w-full h-full"></canvas>
                     </div>
                 </div>
 
@@ -338,8 +340,8 @@
                             <span class="sm:hidden">📷</span>
                         </button>
                     </div>
-                    <div class="h-64 sm:h-80 flex justify-center chart-container">
-                        <canvas id="dividendAmountChart"></canvas>
+                    <div class="h-64 sm:h-80 relative">
+                        <canvas id="dividendAmountChart" class="w-full h-full"></canvas>
                     </div>
                 </div>
 
@@ -355,8 +357,8 @@
                                 <span class="sm:hidden">📷</span>
                             </button>
                         </div>
-                        <div class="h-64 sm:h-80 flex justify-center chart-container">
-                            <canvas id="marketChart"></canvas>
+                        <div class="h-64 sm:h-80 relative">
+                            <canvas id="marketChart" class="w-full h-full"></canvas>
                         </div>
                     </div>
 
@@ -370,8 +372,8 @@
                                 <span class="sm:hidden">📷</span>
                             </button>
                         </div>
-                        <div class="h-64 chart-container">
-                            <canvas id="performanceChart"></canvas>
+                        <div class="h-64 relative">
+                            <canvas id="performanceChart" class="w-full h-full"></canvas>
                         </div>
                     </div>
                 </div>
@@ -703,7 +705,28 @@ window.holdingsManager = function() {
             // セクタータイプが変更されたらチャートを再描画
             this.$watch('sectorType', () => {
                 if (this.analysisData && this.activeTab === 'analysis') {
-                    this.renderSectorChart();
+                    setTimeout(() => {
+                        this.renderSectorChart();
+                    }, 50);
+                }
+            });
+
+            // タブが切り替わったときの処理
+            this.$watch('activeTab', (newTab) => {
+                if (newTab === 'analysis') {
+                    // タブの表示状態を確認
+                    console.log('Tab switched to analysis');
+                    // DOMが完全に更新されるのを待つ
+                    this.$nextTick(() => {
+                        // さらに遅延を追加してタブの切り替えが完了するのを待つ
+                        setTimeout(() => {
+                            // データがある場合のみチャートを描画
+                            if (this.analysisData) {
+                                console.log('Rendering charts after tab switch');
+                                this.renderCharts();
+                            }
+                        }, 300);
+                    });
                 }
             });
         },
@@ -1125,6 +1148,14 @@ window.holdingsManager = function() {
 
         async loadAnalysis() {
             if (this.analysisLoading || (this.analysisData && this.selectedAccount === this.lastAnalyzedAccount)) {
+                // 既にデータがある場合は、チャートの再描画のみ行う
+                if (this.analysisData) {
+                    this.$nextTick(() => {
+                        setTimeout(() => {
+                            this.renderCharts();
+                        }, 200);
+                    });
+                }
                 return;
             }
 
@@ -1149,9 +1180,12 @@ window.holdingsManager = function() {
                     this.analysisData = data.analysis;
                     this.lastAnalyzedAccount = this.selectedAccount;
 
-                    // チャートを描画
+                    // チャートを描画（タイミングを遅らせる）
                     this.$nextTick(() => {
-                        this.renderCharts();
+                        // Alpine.jsの$nextTickだけでは不十分な場合があるため、setTimeoutも使用
+                        setTimeout(() => {
+                            this.renderCharts();
+                        }, 200);
                     });
                 } else {
                     console.error('Failed to load analysis:', data);
@@ -1166,7 +1200,48 @@ window.holdingsManager = function() {
         },
 
         renderCharts() {
-            if (!this.analysisData) return;
+            console.log('renderCharts called', this.analysisData);
+            if (!this.analysisData) {
+                console.error('No analysis data available');
+                return;
+            }
+
+            // 既存のチャートインスタンスを全て破棄
+            if (this.sectorChartInstance) {
+                this.sectorChartInstance.destroy();
+                this.sectorChartInstance = null;
+            }
+            if (this.marketChartInstance) {
+                this.marketChartInstance.destroy();
+                this.marketChartInstance = null;
+            }
+            if (this.dividendAmountChartInstance) {
+                this.dividendAmountChartInstance.destroy();
+                this.dividendAmountChartInstance = null;
+            }
+            if (this.performanceChartInstance) {
+                this.performanceChartInstance.destroy();
+                this.performanceChartInstance = null;
+            }
+
+            // DOM要素が存在するか確認
+            const chartIds = ['sectorChart', 'marketChart', 'dividendAmountChart', 'performanceChart'];
+            let allElementsFound = true;
+            chartIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (!element) {
+                    console.error(`Chart element not found: ${id}`);
+                    allElementsFound = false;
+                } else {
+                    console.log(`Chart element found: ${id}`, element);
+                }
+            });
+
+            if (!allElementsFound) {
+                console.error('Some chart elements are missing, delaying render');
+                setTimeout(() => this.renderCharts(), 500);
+                return;
+            }
 
             // セクター別円グラフ
             this.renderSectorChart();
@@ -1185,11 +1260,20 @@ window.holdingsManager = function() {
         },
 
         renderSectorChart() {
+            console.log('renderSectorChart called');
             const ctx = document.getElementById('sectorChart');
-            if (!ctx) return;
+            if (!ctx) {
+                console.error('sectorChart element not found');
+                return;
+            }
+
+            console.log('sectorChart element:', ctx);
+            console.log('Canvas display style:', window.getComputedStyle(ctx).display);
+            console.log('Canvas parent display:', window.getComputedStyle(ctx.parentElement).display);
 
             // 既存のチャートがあれば破棄
             if (this.sectorChartInstance) {
+                console.log('Destroying existing sector chart');
                 this.sectorChartInstance.destroy();
             }
 
@@ -1197,7 +1281,18 @@ window.holdingsManager = function() {
                 ? this.analysisData.sector17_breakdown
                 : this.analysisData.sector33_breakdown;
 
-            this.sectorChartInstance = new Chart(ctx, {
+            console.log('Sector data:', sectorData);
+
+            // Canvas要素のサイズ確認（設定はしない）
+            const parentWidth = ctx.parentElement.offsetWidth;
+            const parentHeight = ctx.parentElement.offsetHeight;
+            console.log('Parent dimensions:', parentWidth, parentHeight);
+
+            // Chart.jsがresponsiveモードで自動的にサイズを管理するため、
+            // 手動でcanvasのサイズを設定しない
+
+            try {
+                this.sectorChartInstance = new Chart(ctx, {
                 type: 'pie',
                 data: {
                     labels: sectorData.map(s => s.sector),
@@ -1222,23 +1317,23 @@ window.holdingsManager = function() {
                     aspectRatio: 1.5,
                     layout: {
                         padding: {
-                            left: 50,
-                            right: 250,
-                            top: 20,
-                            bottom: 20
+                            left: window.innerWidth <= 640 ? 10 : 50,
+                            right: window.innerWidth <= 640 ? 10 : 250,
+                            top: window.innerWidth <= 640 ? 10 : 20,
+                            bottom: window.innerWidth <= 640 ? 80 : 20
                         }
                     },
                     plugins: {
                         legend: {
-                            position: 'right',
+                            position: window.innerWidth <= 640 ? 'bottom' : 'right',
                             align: 'center',
                             labels: {
-                                padding: 10,
+                                padding: window.innerWidth <= 640 ? 5 : 10,
                                 font: {
-                                    size: 12
+                                    size: window.innerWidth <= 640 ? 10 : 12
                                 },
-                                boxWidth: 15,
-                                boxHeight: 15,
+                                boxWidth: window.innerWidth <= 640 ? 12 : 15,
+                                boxHeight: window.innerWidth <= 640 ? 12 : 15,
                                 generateLabels: function(chart) {
                                     const data = chart.data;
                                     if (data.labels.length && data.datasets.length) {
@@ -1283,11 +1378,18 @@ window.holdingsManager = function() {
                     }
                 }
             });
+            console.log('Sector chart created successfully');
+            } catch (error) {
+                console.error('Error creating sector chart:', error);
+            }
         },
 
         renderMarketChart() {
             const ctx = document.getElementById('marketChart');
-            if (!ctx) return;
+            if (!ctx) {
+                console.error('marketChart element not found');
+                return;
+            }
 
             // 既存のチャートがあれば破棄
             if (this.marketChartInstance) {
@@ -1295,6 +1397,7 @@ window.holdingsManager = function() {
             }
 
             const marketData = this.analysisData.market_breakdown;
+
 
             this.marketChartInstance = new Chart(ctx, {
                 type: 'pie',
@@ -1327,12 +1430,12 @@ window.holdingsManager = function() {
                             position: 'right',
                             align: 'center',
                             labels: {
-                                padding: 10,
+                                padding: window.innerWidth <= 640 ? 5 : 10,
                                 font: {
-                                    size: 12
+                                    size: window.innerWidth <= 640 ? 10 : 12
                                 },
-                                boxWidth: 15,
-                                boxHeight: 15,
+                                boxWidth: window.innerWidth <= 640 ? 12 : 15,
+                                boxHeight: window.innerWidth <= 640 ? 12 : 15,
                                 generateLabels: function(chart) {
                                     const data = chart.data;
                                     if (data.labels.length && data.datasets.length) {
@@ -1375,7 +1478,10 @@ window.holdingsManager = function() {
 
         renderDividendAmountChart() {
             const ctx = document.getElementById('dividendAmountChart');
-            if (!ctx) return;
+            if (!ctx) {
+                console.error('dividendAmountChart element not found');
+                return;
+            }
 
             // 既存のチャートがあれば破棄
             if (this.dividendAmountChartInstance) {
@@ -1383,6 +1489,7 @@ window.holdingsManager = function() {
             }
 
             const dividendByStock = this.analysisData.dividend_by_stock;
+
 
             // データがない場合の処理
             if (!dividendByStock || dividendByStock.length === 0) {
@@ -1435,23 +1542,23 @@ window.holdingsManager = function() {
                     aspectRatio: 1.5,
                     layout: {
                         padding: {
-                            left: 50,
-                            right: 250,
-                            top: 20,
-                            bottom: 20
+                            left: window.innerWidth <= 640 ? 10 : 50,
+                            right: window.innerWidth <= 640 ? 10 : 250,
+                            top: window.innerWidth <= 640 ? 10 : 20,
+                            bottom: window.innerWidth <= 640 ? 80 : 20
                         }
                     },
                     plugins: {
                         legend: {
-                            position: 'right',
+                            position: window.innerWidth <= 640 ? 'bottom' : 'right',
                             align: 'center',
                             labels: {
-                                padding: 10,
+                                padding: window.innerWidth <= 640 ? 5 : 10,
                                 font: {
-                                    size: 12
+                                    size: window.innerWidth <= 640 ? 10 : 12
                                 },
-                                boxWidth: 15,
-                                boxHeight: 15,
+                                boxWidth: window.innerWidth <= 640 ? 12 : 15,
+                                boxHeight: window.innerWidth <= 640 ? 12 : 15,
                                 generateLabels: function(chart) {
                                     const data = chart.data;
                                     if (data.labels.length && data.datasets.length) {
@@ -1676,6 +1783,17 @@ window.holdingsManager = function() {
             `;
 
             container.innerHTML = html;
+        },
+
+        switchToAnalysisTab() {
+            console.log('switchToAnalysisTab called');
+            this.activeTab = 'analysis';
+            this.$nextTick(() => {
+                // タブ切り替えが完了してから分析データをロード
+                setTimeout(() => {
+                    this.loadAnalysis();
+                }, 100);
+            });
         },
 
         screenshotChart(chartId) {

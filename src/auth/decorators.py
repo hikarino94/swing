@@ -124,7 +124,7 @@ def admin_required(f):
                 return redirect(url_for("login"))
 
         # 管理者権限チェック
-        if user.role == "portfolio_only":
+        if user.role != "admin":
             logger.warning(f"管理者権限なしアクセス: {request.path} by {user.username}")
             if request.path.startswith("/api/"):
                 return (
@@ -132,6 +132,80 @@ def admin_required(f):
                         {
                             "success": False,
                             "error": "管理者権限が必要です",
+                            "code": "FORBIDDEN",
+                        }
+                    ),
+                    403,
+                )
+            else:
+                return "アクセス権限がありません", 403
+
+        request.current_user = user
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+def trader_allowed(f):
+    """
+    トレーダーロール以上のユーザーがアクセス可能なビュー関数のデコレータ
+    使用例:
+        @app.route('/api/daytrade/trades')
+        @trader_allowed
+        def daytrade_trades():
+            return '取引管理機能'
+    """
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # テスト環境では認証をスキップ
+        from flask import current_app
+
+        if current_app.config.get("TESTING"):
+            from .models import User
+
+            test_user = User(
+                id=1,
+                username="testuser",
+                email="test@example.com",
+                password_hash="",  # nosec B106 - テスト用の空パスワード
+                role="trader",
+            )
+            request.current_user = test_user
+            return f(*args, **kwargs)
+
+        # まずログインチェック
+        session_id = session.get("session_id")
+        user = AuthManager.get_user_by_session(session_id)
+
+        if not user:
+            if request.path.startswith("/api/"):
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "ログインが必要です",
+                            "code": "UNAUTHORIZED",
+                        }
+                    ),
+                    401,
+                )
+            else:
+                session["next_url"] = request.url
+                return redirect(url_for("login"))
+
+        # trader, admin は許可
+        # portfolio_only は拒否
+        if user.role == "portfolio_only":
+            logger.warning(
+                f"取引管理権限なしアクセス: {request.path} by {user.username}"
+            )
+            if request.path.startswith("/api/"):
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "取引管理権限が必要です",
                             "code": "FORBIDDEN",
                         }
                     ),
