@@ -129,9 +129,9 @@
         <!-- コンパクトモード：サマリーとカレンダーを横並び（デスクトップ）、縦並び（モバイル） -->
         <div x-show="daytrade.compactMode" class="grid grid-cols-1 sm:grid-cols-12 gap-4">
         <!-- 左側：サマリー情報（デスクトップ：4列分、モバイル：全幅） -->
-        <div class="col-span-1 sm:col-span-4 space-y-4" x-show="daytrade.monthlySummary">
+        <div class="col-span-1 sm:col-span-4 flex flex-col gap-4 h-full" x-show="daytrade.monthlySummary">
             <!-- 総合サマリー（コンパクト） -->
-            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4">
+            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 flex-1">
                 <h4 class="text-sm sm:text-base font-semibold mb-2">総合サマリー</h4>
                 <div class="text-lg sm:text-xl font-bold mb-2"
                      :class="((daytrade.monthlySummary?.futures?.total_profit || 0) + (daytrade.monthlySummary?.stocks?.total_settlement || 0)) >= 0 ? 'text-green-600' : 'text-red-600'"
@@ -190,7 +190,7 @@
             </div>
 
             <!-- 詳細統計（コンパクト） -->
-            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4">
+            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 flex-1">
                 <h4 class="text-sm sm:text-base font-semibold mb-2">詳細統計</h4>
                 <div class="grid grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
                     <div>
@@ -268,7 +268,7 @@
 
         <!-- 右側：カレンダー（デスクトップ：8列分、モバイル：全幅） -->
         <div class="col-span-1 sm:col-span-8">
-            <div class="bg-white shadow-sm rounded-lg p-2 sm:p-3">
+            <div class="bg-white shadow-sm rounded-lg p-2 sm:p-3 h-full">
                 <div class="grid grid-cols-7 gap-0.5 mobile-gap-narrow">
                     <!-- 曜日ヘッダー -->
                     <template x-for="(day, index) in ['日', '月', '火', '水', '木', '金', '土']">
@@ -583,13 +583,13 @@
                 </button>
             </div>
         </div>
-        <div class="relative" style="height: 300px;">
+        <div class="relative" style="height: 400px;">
             <canvas id="cumulativeChart"></canvas>
         </div>
         <style>
             @media (min-width: 640px) {
                 #cumulative-chart-area > div:last-child {
-                    height: 600px !important;
+                    height: 900px !important;
                 }
             }
         </style>

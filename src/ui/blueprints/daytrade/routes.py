@@ -66,7 +66,16 @@ def calendar(year: str, month: str):
         import traceback
 
         logger.error(f"カレンダーデータ取得エラー: {e}")
+        logger.error(f"エラータイプ: {type(e).__name__}")
         logger.error(f"スタックトレース:\n{traceback.format_exc()}")
+
+        # より詳細なデバッグ情報を追加
+        try:
+            logger.error(f"year: {year_int}, month: {month_int}")
+            logger.error(f"user_id: {request.current_user.id}")
+        except Exception as debug_e:
+            logger.error(f"デバッグ情報取得エラー: {debug_e}")
+
         return jsonify({"error": "カレンダーデータの取得に失敗しました"}), 500
 
 

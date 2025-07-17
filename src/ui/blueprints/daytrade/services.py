@@ -570,7 +570,18 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            futures_data = {row[0]: (row[1] or 0) for row in cursor.fetchall()}
+            futures_rows = cursor.fetchall()
+            logger.info(
+                f"Futures query returned {len(futures_rows)} rows for {start_date} to {end_date}"
+            )
+
+            futures_data = {}
+            for row in futures_rows:
+                if row[1] is None:
+                    logger.warning(
+                        f"Futures row has None profit_loss: date={row[0]}, profit_loss={row[1]}"
+                    )
+                futures_data[row[0]] = row[1] or 0
 
             # 株式の日別損益（信用返済、現物売却、配当金を含む）
             cursor.execute(
@@ -587,10 +598,21 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            stocks_data = {
-                row[0]: {"settlement": (row[1] or 0), "day_trade": (row[2] or 0)}
-                for row in cursor.fetchall()
-            }
+            stocks_rows = cursor.fetchall()
+            logger.info(
+                f"Stocks query returned {len(stocks_rows)} rows for {start_date} to {end_date}"
+            )
+
+            stocks_data = {}
+            for row in stocks_rows:
+                if row[1] is None or row[2] is None:
+                    logger.warning(
+                        f"Stocks row has None values: date={row[0]}, settlement={row[1]}, day_trade={row[2]}"
+                    )
+                stocks_data[row[0]] = {
+                    "settlement": (row[1] or 0),
+                    "day_trade": (row[2] or 0),
+                }
 
             # カレンダーデータの構築
             calendar_days: list[dict[str, Any]] = []
@@ -625,6 +647,19 @@ class DaytradeService:
                     ) or 0
 
                     # 株式の合計損益（税金・決済損益の合計 + 日計り分）※手数料は除外
+                    # デバッグログを追加
+                    logger.info(
+                        f"Processing {date_str}: stocks_total={stocks_total}, stocks_day_trade={stocks_day_trade}, stocks_dict={stocks_dict}"
+                    )
+
+                    # NoneType エラーを防ぐための追加チェック
+                    if stocks_total is None:
+                        logger.error(f"stocks_total is None for {date_str}")
+                        stocks_total = 0
+                    if stocks_day_trade is None:
+                        logger.error(f"stocks_day_trade is None for {date_str}")
+                        stocks_day_trade = 0
+
                     stocks_profit = stocks_total + stocks_day_trade
                     total_profit = futures_profit + stocks_profit
                 except Exception as e:
@@ -680,7 +715,20 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            futures_stats = cursor.fetchone() or (0, 0, 0, 0, 0, 0, 0)
+            futures_row = cursor.fetchone()
+            if futures_row is None:
+                futures_stats = (0, 0, 0, 0, 0, 0, 0)
+            else:
+                # 各要素がNoneの場合に0に変換
+                futures_stats = (
+                    futures_row[0] if futures_row[0] is not None else 0,
+                    futures_row[1] if futures_row[1] is not None else 0,
+                    futures_row[2] if futures_row[2] is not None else 0,
+                    futures_row[3] if futures_row[3] is not None else 0,
+                    futures_row[4] if futures_row[4] is not None else 0,
+                    futures_row[5] if futures_row[5] is not None else 0,
+                    futures_row[6] if futures_row[6] is not None else 0,
+                )
 
             # 株式の月間統計
             cursor.execute(
@@ -703,7 +751,20 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            stocks_stats = cursor.fetchone() or (0, 0, 0, 0, 0, 0, 0)
+            stocks_row = cursor.fetchone()
+            if stocks_row is None:
+                stocks_stats = (0, 0, 0, 0, 0, 0, 0)
+            else:
+                # 各要素がNoneの場合に0に変換
+                stocks_stats = (
+                    stocks_row[0] if stocks_row[0] is not None else 0,
+                    stocks_row[1] if stocks_row[1] is not None else 0,
+                    stocks_row[2] if stocks_row[2] is not None else 0,
+                    stocks_row[3] if stocks_row[3] is not None else 0,
+                    stocks_row[4] if stocks_row[4] is not None else 0,
+                    stocks_row[5] if stocks_row[5] is not None else 0,
+                    stocks_row[6] if stocks_row[6] is not None else 0,
+                )
 
             # 配当金の統計を取得
             cursor.execute(
@@ -718,7 +779,15 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            dividend_stats = cursor.fetchone() or (0, 0)
+            dividend_row = cursor.fetchone()
+            if dividend_row is None:
+                dividend_stats = (0, 0)
+            else:
+                # 各要素がNoneの場合に0に変換
+                dividend_stats = (
+                    dividend_row[0] if dividend_row[0] is not None else 0,
+                    dividend_row[1] if dividend_row[1] is not None else 0,
+                )
 
             # 現物取引の統計を取得
             cursor.execute(
@@ -735,7 +804,17 @@ class DaytradeService:
                 (self.user_id, start_date, end_date),
             )
 
-            spot_stats = cursor.fetchone() or (0, 0, 0, 0)
+            spot_row = cursor.fetchone()
+            if spot_row is None:
+                spot_stats = (0, 0, 0, 0)
+            else:
+                # 各要素がNoneの場合に0に変換
+                spot_stats = (
+                    spot_row[0] if spot_row[0] is not None else 0,
+                    spot_row[1] if spot_row[1] is not None else 0,
+                    spot_row[2] if spot_row[2] is not None else 0,
+                    spot_row[3] if spot_row[3] is not None else 0,
+                )
 
             # 日別の損益データを取得して追加統計を計算
             cursor.execute(
@@ -819,67 +898,59 @@ class DaytradeService:
                 "year": year,
                 "month": month,
                 "futures": {
-                    "trading_days": futures_stats[0] or 0,
-                    "total_trades": futures_stats[1] or 0,
-                    "total_profit": futures_stats[2] or 0,
-                    "total_win": futures_stats[3] or 0,
-                    "total_loss": futures_stats[4] or 0,
-                    "win_count": futures_stats[5] or 0,
-                    "loss_count": futures_stats[6] or 0,
+                    "trading_days": futures_stats[0],
+                    "total_trades": futures_stats[1],
+                    "total_profit": futures_stats[2],
+                    "total_win": futures_stats[3],
+                    "total_loss": futures_stats[4],
+                    "win_count": futures_stats[5],
+                    "loss_count": futures_stats[6],
                     "win_rate": (
-                        (
-                            (futures_stats[5] or 0)
-                            / ((futures_stats[5] or 0) + (futures_stats[6] or 0))
-                            * 100
-                        )
-                        if ((futures_stats[5] or 0) + (futures_stats[6] or 0)) > 0
+                        (futures_stats[5] / (futures_stats[5] + futures_stats[6]) * 100)
+                        if (futures_stats[5] + futures_stats[6]) > 0
                         else 0
                     ),
                     "max_daily_profit": futures_max_profit,
                     "max_daily_loss": futures_max_loss,
                     "max_drawdown": futures_max_drawdown,
                     "avg_win": (
-                        (futures_stats[3] or 0) / (futures_stats[5] or 1)
-                        if (futures_stats[5] or 0) > 0
+                        futures_stats[3] / futures_stats[5]
+                        if futures_stats[5] > 0
                         else 0
                     ),
                     "avg_loss": (
-                        (futures_stats[4] or 0) / (futures_stats[6] or 1)
-                        if (futures_stats[6] or 0) > 0
+                        futures_stats[4] / futures_stats[6]
+                        if futures_stats[6] > 0
                         else 0
                     ),
                 },
                 "stocks": {
-                    "trading_days": stocks_stats[0] or 0,
-                    "total_trades": stocks_stats[1] or 0,
-                    "total_settlement": stocks_stats[2] or 0,
-                    "total_day_trade": stocks_stats[3] or 0,
-                    "unique_stocks": stocks_stats[4] or 0,
-                    "win_count": stocks_stats[5] or 0,
-                    "loss_count": stocks_stats[6] or 0,
+                    "trading_days": stocks_stats[0],
+                    "total_trades": stocks_stats[1],
+                    "total_settlement": stocks_stats[2],
+                    "total_day_trade": stocks_stats[3],
+                    "unique_stocks": stocks_stats[4],
+                    "win_count": stocks_stats[5],
+                    "loss_count": stocks_stats[6],
                     "win_rate": (
-                        (
-                            (stocks_stats[5] or 0)
-                            / ((stocks_stats[5] or 0) + (stocks_stats[6] or 0))
-                            * 100
-                        )
-                        if ((stocks_stats[5] or 0) + (stocks_stats[6] or 0)) > 0
+                        (stocks_stats[5] / (stocks_stats[5] + stocks_stats[6]) * 100)
+                        if (stocks_stats[5] + stocks_stats[6]) > 0
                         else 0
                     ),
                     "max_daily_profit": stocks_max_profit,
                     "max_daily_loss": stocks_max_loss,
                     "max_drawdown": stocks_max_drawdown,
                     # 配当金情報
-                    "dividend_count": dividend_stats[0] or 0,
-                    "dividend_total": dividend_stats[1] or 0,
+                    "dividend_count": dividend_stats[0],
+                    "dividend_total": dividend_stats[1],
                     # 現物取引情報
-                    "spot_count": spot_stats[0] or 0,
-                    "spot_total": spot_stats[1] or 0,
-                    "spot_win_count": spot_stats[2] or 0,
-                    "spot_loss_count": spot_stats[3] or 0,
+                    "spot_count": spot_stats[0],
+                    "spot_total": spot_stats[1],
+                    "spot_win_count": spot_stats[2],
+                    "spot_loss_count": spot_stats[3],
                     "spot_win_rate": (
-                        ((spot_stats[2] or 0) / (spot_stats[0] or 1) * 100)
-                        if spot_stats and (spot_stats[0] or 0) > 0
+                        (spot_stats[2] / spot_stats[0] * 100)
+                        if spot_stats[0] > 0
                         else 0
                     ),
                 },
