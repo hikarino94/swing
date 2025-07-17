@@ -702,7 +702,7 @@
 <script>
 function swingApp() {
     return {
-        activeTab: 'data',
+        activeTab: localStorage.getItem('swingActiveTab') || 'data',
         isLoading: false,
         isProcessing: false,
         processingMessage: '',
@@ -861,6 +861,8 @@ function swingApp() {
                 return;
             }
             this.activeTab = newTab;
+            // タブの状態をlocalStorageに保存
+            localStorage.setItem('swingActiveTab', newTab);
         },
 
         // データ取得実行
@@ -1217,8 +1219,15 @@ function swingApp() {
 
         async loadCalendarData() {
             try {
+                console.log('loadCalendarData called:', this.daytrade.currentYear, this.daytrade.currentMonth);
                 const response = await fetch(`/api/daytrade/calendar/${this.daytrade.currentYear}/${this.daytrade.currentMonth}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const data = await response.json();
+                console.log('Calendar data received:', data);
 
                 this.daytrade.calendarDays = data.calendar_days;
                 this.daytrade.monthlySummary = data.monthly_summary;
@@ -1304,6 +1313,38 @@ function swingApp() {
             }
         },
 
+        async importSpotDividendCSV() {
+            const fileInput = this.$refs.spotDividendFile;
+            if (!fileInput.files.length) {
+                showNotification('error', 'ファイルを選択してください');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('csrf_token', this.csrfToken);
+
+            try {
+                const response = await fetch('/api/daytrade/import/spot-dividend', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('success', result.message);
+                    fileInput.value = '';
+                    this.loadCalendarData();
+                } else {
+                    showNotification('error', result.error || 'インポートに失敗しました');
+                }
+            } catch (error) {
+                console.error('インポートエラー:', error);
+                showNotification('error', 'インポート中にエラーが発生しました');
+            }
+        },
+
         formatCurrency(value) {
             if (value === null || value === undefined) return '¥0';
             return '¥' + value.toLocaleString('ja-JP');
@@ -1338,17 +1379,124 @@ function swingApp() {
             return value.toFixed(2) + '%';
         },
 
+        toggleTradeList() {
+            // トレードリスト表示の切り替え
+            this.daytrade.showTradeList = !this.daytrade.showTradeList;
+            if (this.daytrade.showTradeList) {
+                this.loadTradeList();
+            }
+        },
+
         async takeDaytradeScreenshot() {
             try {
                 const element = document.getElementById('daytrade-screenshot-area');
+
+                // 元のスタイルを保存
+                const originalWidth = element.style.width;
+                const originalTransform = element.style.transform;
+                const originalPosition = element.style.position;
+
+                // 一時的に大きくする
+                element.style.width = '2000px';
+                element.style.transform = 'scale(1)';
+                element.style.position = 'relative';
+
+                const canvas = await html2canvas(element, {
+                    backgroundColor: '#ffffff',
+                    scale: 4,  // より高解像度に
+                    width: 2000,
+                    windowWidth: 2000,
+                    logging: false,
+                    useCORS: true
+                });
+
+                // スタイルを元に戻す
+                element.style.width = originalWidth;
+                element.style.transform = originalTransform;
+                element.style.position = originalPosition;
+
+                // ダウンロード
+                const link = document.createElement('a');
+                link.download = `daytrade_${this.daytrade.currentYear}_${this.daytrade.currentMonth}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+
+                showNotification('success', 'スクリーンショットを保存しました');
+            } catch (error) {
+                console.error('スクリーンショットエラー:', error);
+                showNotification('error', 'スクリーンショットの保存に失敗しました');
+            }
+        },
+
+        // 累積グラフのスクリーンショット
+        async takeCumulativeChartScreenshot() {
+            try {
+                const element = document.getElementById('cumulative-chart-area');
+
+                // コントロール要素を一時的に非表示
+                const controls = element.querySelector('.flex.space-x-2');
+                const originalDisplay = controls.style.display;
+                controls.style.display = 'none';
+
+                // 元のスタイルを保存
+                const originalWidth = element.style.width;
+                const originalTransform = element.style.transform;
+
+                // 一時的に大きくする
+                element.style.width = '1800px';
+                element.style.transform = 'scale(1)';
+
+                const canvas = await html2canvas(element, {
+                    backgroundColor: '#ffffff',
+                    scale: 3,  // より高解像度に
+                    width: 1800,
+                    windowWidth: 1800,
+                    logging: false,
+                    useCORS: true
+                });
+
+                // スタイルを元に戻す
+                element.style.width = originalWidth;
+                element.style.transform = originalTransform;
+
+                // コントロール要素を元に戻す
+                controls.style.display = originalDisplay;
+
+                // ダウンロード
+                const link = document.createElement('a');
+                const date = new Date();
+                link.download = `累積損益グラフ_${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+
+                showNotification('success', 'スクリーンショットを保存しました');
+            } catch (error) {
+                console.error('スクリーンショットエラー:', error);
+                showNotification('error', 'スクリーンショットの保存に失敗しました');
+            }
+        },
+
+        // 月別損益のスクリーンショット
+        async takeMonthlyProfitScreenshot() {
+            try {
+                const element = document.getElementById('monthly-profit-area');
+
+                // コントロール要素を一時的に非表示
+                const controls = element.querySelector('.flex.items-center.space-x-2');
+                const originalDisplay = controls.style.display;
+                controls.style.display = 'none';
+
                 const canvas = await html2canvas(element, {
                     backgroundColor: '#ffffff',
                     scale: 2
                 });
 
+                // コントロール要素を元に戻す
+                controls.style.display = originalDisplay;
+
                 // ダウンロード
                 const link = document.createElement('a');
-                link.download = `daytrade_${this.daytrade.currentYear}_${this.daytrade.currentMonth}.png`;
+                link.download = `月別損益_${this.daytrade.monthlyYear}年.png`;
                 link.href = canvas.toDataURL();
                 link.click();
 
@@ -1441,7 +1589,9 @@ function swingApp() {
                             backgroundColor: 'rgba(75, 192, 192, 0.1)',
                             borderWidth: 3,
                             tension: 0.1,
-                            fill: true
+                            fill: true,
+                            pointRadius: 2,
+                            pointHoverRadius: 4
                         },
                         {
                             label: '先物',
@@ -1450,7 +1600,9 @@ function swingApp() {
                             backgroundColor: 'rgba(54, 162, 235, 0.1)',
                             borderWidth: 2,
                             tension: 0.1,
-                            fill: false
+                            fill: false,
+                            pointRadius: 2,
+                            pointHoverRadius: 4
                         },
                         {
                             label: '株式',
@@ -1459,7 +1611,9 @@ function swingApp() {
                             backgroundColor: 'rgba(255, 99, 132, 0.1)',
                             borderWidth: 2,
                             tension: 0.1,
-                            fill: false
+                            fill: false,
+                            pointRadius: 2,
+                            pointHoverRadius: 4
                         }
                     ]
                 },
@@ -1581,7 +1735,7 @@ function swingApp() {
                     ? `/api/daytrade/trade/${this.daytrade.editingTrade.id}`
                     : '/api/daytrade/trade';
 
-                const response = await callAPI(url, method, this.daytrade.tradeForm);
+                const response = await apiCall(url.replace('/api', ''), this.daytrade.tradeForm, method);
 
                 if (response.success) {
                     showNotification('success', this.daytrade.editingTrade ? '取引を更新しました' : '取引を登録しました');
@@ -1601,7 +1755,9 @@ function swingApp() {
             if (!confirm('この取引を削除してもよろしいですか？')) return;
 
             try {
-                const response = await callAPI(`/api/daytrade/trade/${tradeId}`, 'DELETE', {});
+                const response = await apiCall(`/daytrade/trade/${tradeId}`, {
+                    trade_category: category
+                }, 'DELETE');
 
                 if (response.success) {
                     showNotification('success', '取引を削除しました');
@@ -1617,6 +1773,7 @@ function swingApp() {
 
         // 初期化
         init() {
+            console.log('swingApp init called');
             // デフォルトの日付を設定
             const today = new Date();
             const oneMonthAgo = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
@@ -1633,6 +1790,7 @@ function swingApp() {
 
             // デイトレードタブが選択されている場合、カレンダーデータを読み込む
             if (this.activeTab === 'daytrade') {
+                console.log('Loading daytrade data on init');
                 this.loadCalendarData();
                 // 累積グラフと月別損益の初期化
                 setTimeout(() => {

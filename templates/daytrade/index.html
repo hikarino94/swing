@@ -161,6 +161,19 @@
                                 <span>銘柄数:</span>
                                 <span x-text="daytrade.monthlySummary?.stocks?.unique_stocks || 0"></span>
                             </div>
+                            <template x-if="(daytrade.monthlySummary?.stocks?.dividend_count || 0) > 0">
+                                <div class="flex justify-between">
+                                    <span>配当金:</span>
+                                    <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.dividend_total || 0)"></span>
+                                </div>
+                            </template>
+                            <template x-if="(daytrade.monthlySummary?.stocks?.spot_count || 0) > 0">
+                                <div class="flex justify-between">
+                                    <span>現物損益:</span>
+                                    <span :class="(daytrade.monthlySummary?.stocks?.spot_total || 0) >= 0 ? 'text-green-600' : 'text-red-600'"
+                                          x-text="formatCurrency(daytrade.monthlySummary?.stocks?.spot_total || 0)"></span>
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -327,10 +340,6 @@
                         <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_daily_loss || 0)"></span>
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-gray-600">最大ドローダウン:</span>
-                        <span class="text-orange-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_drawdown || 0)"></span>
-                    </div>
-                    <div class="flex justify-between">
                         <span class="text-gray-600">平均利益:</span>
                         <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.avg_win || 0)"></span>
                     </div>
@@ -380,11 +389,38 @@
                         <span class="text-gray-600">最大日次損失:</span>
                         <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_daily_loss || 0)"></span>
                     </div>
-                    <div class="flex justify-between">
-                        <span class="text-gray-600">最大ドローダウン:</span>
-                        <span class="text-orange-600" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_drawdown || 0)"></span>
-                    </div>
                 </div>
+                <template x-if="(daytrade.monthlySummary?.stocks?.dividend_count || 0) > 0">
+                    <div class="border-t pt-2 mt-2">
+                        <div class="text-sm font-medium text-gray-700 mb-1">配当金</div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">件数:</span>
+                            <span x-text="`${daytrade.monthlySummary?.stocks?.dividend_count || 0}件`"></span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">合計:</span>
+                            <span class="text-green-600 font-semibold" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.dividend_total || 0)"></span>
+                        </div>
+                    </div>
+                </template>
+                <template x-if="(daytrade.monthlySummary?.stocks?.spot_count || 0) > 0">
+                    <div class="border-t pt-2 mt-2">
+                        <div class="text-sm font-medium text-gray-700 mb-1">現物取引</div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">件数:</span>
+                            <span x-text="`${daytrade.monthlySummary?.stocks?.spot_count || 0}件`"></span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">損益:</span>
+                            <span :class="(daytrade.monthlySummary?.stocks?.spot_total || 0) >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'"
+                                  x-text="formatCurrency(daytrade.monthlySummary?.stocks?.spot_total || 0)"></span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">勝率:</span>
+                            <span x-text="`${(daytrade.monthlySummary?.stocks?.spot_win_rate || 0).toFixed(1)}%`"></span>
+                        </div>
+                    </div>
+                </template>
             </div>
         </div>
 
@@ -504,7 +540,7 @@
     <!-- スクリーンショット対象エリア終了 -->
 
     <!-- 累積損益グラフ -->
-    <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6 mt-6">
+    <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6 mt-6" id="cumulative-chart-area">
         <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold">累積損益グラフ</h3>
             <div class="flex space-x-2">
@@ -525,23 +561,33 @@
                            @change="loadCumulativeChart()"
                            class="px-3 py-1 border rounded-lg text-sm">
                 </div>
+                <button @click="takeCumulativeChartScreenshot()"
+                        class="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    📸 スクリーンショット
+                </button>
             </div>
         </div>
-        <div class="relative" style="height: 400px;">
+        <div class="relative" style="height: 600px;">
             <canvas id="cumulativeChart"></canvas>
         </div>
     </div>
 
     <!-- 月別損益表 -->
-    <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6 mt-6">
+    <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6 mt-6" id="monthly-profit-area">
         <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold">月別損益</h3>
-            <select x-model="daytrade.monthlyYear" @change="loadMonthlyProfit()"
-                    class="px-3 py-1 border rounded-lg text-sm">
-                <template x-for="year in daytrade.yearOptions">
-                    <option :value="year" x-text="year + '年'"></option>
-                </template>
-            </select>
+            <div class="flex items-center space-x-2">
+                <select x-model="daytrade.monthlyYear" @change="loadMonthlyProfit()"
+                        class="px-3 py-1 border rounded-lg text-sm">
+                    <template x-for="year in daytrade.yearOptions">
+                        <option :value="year" x-text="year + '年'"></option>
+                    </template>
+                </select>
+                <button @click="takeMonthlyProfitScreenshot()"
+                        class="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    📸 スクリーンショット
+                </button>
+            </div>
         </div>
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
@@ -723,9 +769,9 @@
                 </form>
             </div>
 
-            <!-- 株式CSV -->
+            <!-- 株式CSV（信用取引） -->
             <div class="border rounded-lg p-4">
-                <h4 class="font-medium mb-3">株式取引データ</h4>
+                <h4 class="font-medium mb-3">株式取引データ（信用）</h4>
                 <form @submit.prevent="importStocksCSV(); return false;">
                     <input type="hidden" name="csrf_token" :value="csrfToken">
                     <input type="file"
@@ -735,6 +781,26 @@
                            required>
                     <button type="submit"
                             class="mt-3 w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                        インポート
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 現物・配当金CSV -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <div class="border rounded-lg p-4 md:col-span-2">
+                <h4 class="font-medium mb-3">現物取引・配当金データ</h4>
+                <p class="text-sm text-gray-600 mb-3">現物売却と配当金のデータをインポートします</p>
+                <form @submit.prevent="importSpotDividendCSV(); return false;">
+                    <input type="hidden" name="csrf_token" :value="csrfToken">
+                    <input type="file"
+                           x-ref="spotDividendFile"
+                           accept=".csv"
+                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                           required>
+                    <button type="submit"
+                            class="mt-3 w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
                         インポート
                     </button>
                 </form>

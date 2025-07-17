@@ -258,6 +258,12 @@ class DaytradeService:
                         name = row[1]  # 銘柄名
                         market = row[2]  # 市場
 
+                        # 取引区分を確認（信用取引のみ処理）
+                        trade_type = row[3]  # 取引区分
+                        if "信用" not in trade_type:
+                            skipped_count += 1
+                            continue
+
                         # 数値データの変換
                         def parse_number(value):
                             if not value or value == "--":
@@ -316,6 +322,229 @@ class DaytradeService:
             logger.error(f"株式CSVインポートエラー: {e}")
             raise
 
+    def import_spot_dividend_csv(self, file) -> dict[str, Any]:
+        """現物取引・配当金CSVのインポート"""
+        try:
+            # まずバイナリとして読み込む
+            content_bytes = file.read()
+
+            # エンコーディングを自動検出
+            try:
+                # UTF-8 with BOMを試す
+                if content_bytes.startswith(b"\xef\xbb\xbf"):
+                    content = content_bytes.decode("utf-8-sig")
+                else:
+                    # UTF-8を試す
+                    content = content_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                # Shift-JISを試す
+                try:
+                    content = content_bytes.decode("shift-jis")
+                except UnicodeDecodeError:
+                    # CP932を試す
+                    content = content_bytes.decode("cp932")
+
+            lines = content.strip().split("\n")
+
+            # ヘッダー行を探す
+            header_index = -1
+            for i, line in enumerate(lines):
+                if "銘柄コード" in line and "銘柄" in line and "取引" in line:
+                    header_index = i
+                    break
+
+            if header_index == -1:
+                raise ValueError("CSVヘッダーが見つかりません")
+
+            # ヘッダー行を取得（デバッグ用）
+            # header_line = lines[header_index]
+            # headers = header_line.split(",")  # 現在は使用していない
+
+            # データ行を処理
+            csv_reader = csv.reader(lines[header_index + 1 :])
+
+            # CSVデータを読み込む
+            debug_lines = list(csv_reader)
+
+            spot_imported_count = 0
+            dividend_imported_count = 0
+            skipped_count = 0
+            errors = []
+
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+
+                for row_num, row in enumerate(debug_lines, start=header_index + 2):
+                    try:
+                        # 空行のスキップ
+                        if not row or not row[0] or not row[0].strip():
+                            continue
+
+                        # 最低限必要な列数（12列）のチェック
+                        if len(row) < 12:
+                            continue
+
+                        # 特殊な行（譲渡益税徴収額など）のスキップ
+                        if row[0] in [
+                            "譲渡益税徴収額",
+                            "譲渡益税還付金",
+                            "配当所得税徴収額",
+                        ]:
+                            skipped_count += 1
+                            continue
+
+                        # 取引区分を確認
+                        if len(row) <= 5:
+                            logger.warning(
+                                f"行 {row_num}: 列数が不足しています ({len(row)}列)"
+                            )
+                            skipped_count += 1
+                            continue
+
+                        trade_type = row[5]  # 取引
+
+                        if "現物売" in trade_type:
+                            # 現物売却の処理
+                            code = row[0].strip()  # 銘柄コード
+                            name = row[1].strip()  # 銘柄名
+                            trade_date = datetime.strptime(row[3], "%Y/%m/%d").strftime(
+                                "%Y-%m-%d"
+                            )  # 約定日
+                            quantity_str = (
+                                row[4].replace("株", "").replace(",", "")
+                            )  # 数量
+                            quantity = int(quantity_str)
+                            sell_amount = float(
+                                row[7].replace(",", "")
+                            )  # 売却/決済金額
+                            # 取得金額を取得（売却/決済金額と同じカラムに入っている場合もある）
+                            acquisition_amount = (
+                                float(row[10].replace(",", ""))
+                                if row[10] and row[10] != "--"
+                                else 0
+                            )  # 取得/新規金額
+
+                            # 損益を計算（売却金額 - 取得金額）
+                            profit_loss = sell_amount - acquisition_amount
+
+                            # 現物取引として保存
+                            cursor.execute(
+                                """
+                                INSERT INTO daytrade_stocks (
+                                    user_id, trade_date, code, name, market,
+                                    trade_type, term, custody_type,
+                                    delivery_date, quantity, average_price,
+                                    commission_tax, capital_gains_tax, settlement_amount,
+                                    day_trade_amount
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                """,
+                                (
+                                    self.user_id,
+                                    trade_date,
+                                    code,
+                                    name,
+                                    "",  # market
+                                    "現物売却",
+                                    "",  # term
+                                    "",  # custody_type
+                                    (
+                                        datetime.strptime(row[6], "%Y/%m/%d").strftime(
+                                            "%Y-%m-%d"
+                                        )
+                                        if row[6]
+                                        else None
+                                    ),  # 受渡日
+                                    quantity,
+                                    (
+                                        sell_amount / quantity if quantity > 0 else 0
+                                    ),  # 平均単価
+                                    0,  # commission_tax
+                                    0,  # capital_gains_tax（後で税金処理で更新される可能性）
+                                    profit_loss,  # settlement_amount（損益）
+                                    0,  # day_trade_amount
+                                ),
+                            )
+                            spot_imported_count += 1
+
+                        elif "株式配当金" in trade_type or "信用配当金" in trade_type:
+                            # 配当金の処理
+                            code = row[0].strip()  # 銘柄コード
+                            name = row[1].strip()  # 銘柄名
+                            trade_date = datetime.strptime(row[3], "%Y/%m/%d").strftime(
+                                "%Y-%m-%d"
+                            )  # 約定日
+                            # 損益金額/徴収額から配当金額を取得
+                            dividend_str = row[11].replace(",", "").replace("+", "")
+                            dividend_amount = (
+                                float(dividend_str)
+                                if dividend_str and dividend_str != "--"
+                                else 0
+                            )
+
+                            if dividend_amount > 0:
+                                # 配当金として保存
+                                cursor.execute(
+                                    """
+                                    INSERT INTO daytrade_stocks (
+                                        user_id, trade_date, code, name, market,
+                                        trade_type, term, custody_type,
+                                        delivery_date, quantity, average_price,
+                                        commission_tax, capital_gains_tax, settlement_amount,
+                                        day_trade_amount
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    """,
+                                    (
+                                        self.user_id,
+                                        trade_date,
+                                        code,
+                                        name,
+                                        "",  # market
+                                        "配当金",
+                                        "",  # term
+                                        "",  # custody_type
+                                        (
+                                            datetime.strptime(
+                                                row[6], "%Y/%m/%d"
+                                            ).strftime("%Y-%m-%d")
+                                            if row[6]
+                                            else None
+                                        ),  # 受渡日
+                                        0,  # quantity
+                                        0,  # average_price
+                                        0,  # commission_tax
+                                        0,  # capital_gains_tax（配当税は別途処理）
+                                        dividend_amount,  # settlement_amount（配当金額）
+                                        0,  # day_trade_amount
+                                    ),
+                                )
+                                dividend_imported_count += 1
+                        else:
+                            # その他の取引はスキップ
+                            skipped_count += 1
+
+                    except Exception as e:
+                        errors.append(f"行 {row_num}: {str(e)}")
+                        logger.error(
+                            f"現物・配当金データインポートエラー (行 {row_num}): {e}"
+                        )
+                        # 詳細なエラー情報をログに記録
+                        import traceback
+
+                        logger.error(f"詳細: {traceback.format_exc()}")
+
+                conn.commit()
+
+            return {
+                "spot_imported": spot_imported_count,
+                "dividend_imported": dividend_imported_count,
+                "skipped": skipped_count,
+                "errors": errors,
+            }
+
+        except Exception as e:
+            logger.error(f"現物・配当金CSVインポートエラー: {e}")
+            raise
+
     def get_calendar_data(self, year: int, month: int) -> dict[str, Any]:
         """指定月のカレンダーデータを取得"""
         start_date = f"{year:04d}-{month:02d}-01"
@@ -343,7 +572,7 @@ class DaytradeService:
 
             futures_data = {row[0]: row[1] for row in cursor.fetchall()}
 
-            # 株式の日別損益（決済損益と税金のみ）
+            # 株式の日別損益（信用返済、現物売却、配当金を含む）
             cursor.execute(
                 """
                 SELECT trade_date,
@@ -352,7 +581,7 @@ class DaytradeService:
                        SUM(COALESCE(day_trade_amount, 0)) as day_trade
                 FROM daytrade_stocks
                 WHERE user_id = ? AND trade_date BETWEEN ? AND ?
-                  AND trade_type LIKE '%返済%'
+                  AND (trade_type LIKE '%返済%' OR trade_type = '現物売却' OR trade_type = '配当金')
                 GROUP BY trade_date
             """,
                 (self.user_id, start_date, end_date),
@@ -452,12 +681,44 @@ class DaytradeService:
                                    COALESCE(settlement_amount, 0)) < 0 THEN 1 ELSE 0 END) as loss_count
                 FROM daytrade_stocks
                 WHERE user_id = ? AND trade_date BETWEEN ? AND ?
-                  AND trade_type LIKE '%返済%'
+                  AND (trade_type LIKE '%返済%' OR trade_type = '現物売却' OR trade_type = '配当金')
             """,
                 (self.user_id, start_date, end_date),
             )
 
             stocks_stats = cursor.fetchone()
+
+            # 配当金の統計を取得
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) as total_count,
+                    SUM(settlement_amount) as total_amount
+                FROM daytrade_stocks
+                WHERE user_id = ? AND trade_date BETWEEN ? AND ?
+                  AND trade_type = '配当金'
+            """,
+                (self.user_id, start_date, end_date),
+            )
+
+            dividend_stats = cursor.fetchone()
+
+            # 現物取引の統計を取得
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) as total_count,
+                    SUM(settlement_amount) as total_profit,
+                    SUM(CASE WHEN settlement_amount > 0 THEN 1 ELSE 0 END) as win_count,
+                    SUM(CASE WHEN settlement_amount < 0 THEN 1 ELSE 0 END) as loss_count
+                FROM daytrade_stocks
+                WHERE user_id = ? AND trade_date BETWEEN ? AND ?
+                  AND trade_type = '現物売却'
+            """,
+                (self.user_id, start_date, end_date),
+            )
+
+            spot_stats = cursor.fetchone()
 
             # 日別の損益データを取得して追加統計を計算
             cursor.execute(
@@ -505,7 +766,7 @@ class DaytradeService:
                         COALESCE(settlement_amount, 0)) as daily_stocks_profit
                 FROM daytrade_stocks
                 WHERE user_id = ? AND trade_date BETWEEN ? AND ?
-                  AND trade_type LIKE '%返済%'
+                  AND (trade_type LIKE '%返済%' OR trade_type = '現物売却' OR trade_type = '配当金')
                 GROUP BY trade_date
                 ORDER BY trade_date
             """,
@@ -581,6 +842,19 @@ class DaytradeService:
                     "max_daily_profit": stocks_max_profit,
                     "max_daily_loss": stocks_max_loss,
                     "max_drawdown": stocks_max_drawdown,
+                    # 配当金情報
+                    "dividend_count": dividend_stats[0] or 0,
+                    "dividend_total": dividend_stats[1] or 0,
+                    # 現物取引情報
+                    "spot_count": spot_stats[0] or 0,
+                    "spot_total": spot_stats[1] or 0,
+                    "spot_win_count": spot_stats[2] or 0,
+                    "spot_loss_count": spot_stats[3] or 0,
+                    "spot_win_rate": (
+                        (spot_stats[2] / spot_stats[0] * 100)
+                        if spot_stats[0] > 0
+                        else 0
+                    ),
                 },
             }
 
@@ -654,7 +928,7 @@ class DaytradeService:
                         SUM(COALESCE(day_trade_amount, 0)) as day_trade_profit
                     FROM daytrade_stocks
                     WHERE user_id = ? AND trade_date BETWEEN ? AND ?
-                      AND trade_type LIKE '%返済%'
+                      AND (trade_type LIKE '%返済%' OR trade_type = '現物売却' OR trade_type = '配当金')
                     GROUP BY trade_date
                 ) s ON d.date = s.trade_date
                 ORDER BY d.date
@@ -945,26 +1219,44 @@ class DaytradeService:
 
             conn.commit()
 
-    def delete_trade(self, trade_id: int) -> None:
+    def delete_trade(self, trade_id: int, trade_category: str | None = None) -> None:
         """取引を削除"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
 
-            # 先物から削除試行
-            cursor.execute(
-                "DELETE FROM daytrade_futures WHERE id = ? AND user_id = ?",
-                (trade_id, self.user_id),
-            )
-
-            if cursor.rowcount == 0:
-                # 株式から削除試行
+            if trade_category == "futures":
+                # 先物取引を削除
+                cursor.execute(
+                    "DELETE FROM daytrade_futures WHERE id = ? AND user_id = ?",
+                    (trade_id, self.user_id),
+                )
+                if cursor.rowcount == 0:
+                    raise ValueError("Futures trade not found or unauthorized")
+            elif trade_category == "stocks":
+                # 株式取引を削除
                 cursor.execute(
                     "DELETE FROM daytrade_stocks WHERE id = ? AND user_id = ?",
                     (trade_id, self.user_id),
                 )
+                if cursor.rowcount == 0:
+                    raise ValueError("Stock trade not found or unauthorized")
+            else:
+                # カテゴリが指定されていない場合は従来の処理
+                # 先物から削除試行
+                cursor.execute(
+                    "DELETE FROM daytrade_futures WHERE id = ? AND user_id = ?",
+                    (trade_id, self.user_id),
+                )
 
                 if cursor.rowcount == 0:
-                    raise ValueError("Trade not found or unauthorized")
+                    # 株式から削除試行
+                    cursor.execute(
+                        "DELETE FROM daytrade_stocks WHERE id = ? AND user_id = ?",
+                        (trade_id, self.user_id),
+                    )
+
+                    if cursor.rowcount == 0:
+                        raise ValueError("Trade not found or unauthorized")
 
             conn.commit()
 
@@ -1007,7 +1299,7 @@ class DaytradeService:
                         COUNT(*) as total_trades
                     FROM daytrade_stocks
                     WHERE user_id = ? AND trade_date >= ? AND trade_date < ?
-                      AND trade_type LIKE '%返済%'
+                      AND (trade_type LIKE '%返済%' OR trade_type = '現物売却' OR trade_type = '配当金')
                 """,
                     (self.user_id, start_date, end_date),
                 )

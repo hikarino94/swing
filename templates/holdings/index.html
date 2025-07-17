@@ -1,5 +1,5 @@
 <!-- 保有銘柄管理 -->
-<div x-data="holdingsManager()">
+<div x-data="holdingsManager()" x-cloak>
     <div class="bg-white shadow rounded-lg p-6">
         <div class="flex justify-between items-center mb-6">
             <h2 class="text-xl font-bold text-gray-900">保有銘柄管理</h2>
@@ -222,28 +222,28 @@
                 <p class="text-gray-600">分析データを読み込んでいます...</p>
             </div>
 
-            <div x-show="!analysisLoading && analysisData">
+            <div x-show="!analysisLoading && analysisData" x-cloak>
                 <!-- 概要統計 -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                     <div class="bg-gray-50 rounded-lg p-4">
                         <div class="text-sm text-gray-600">総評価額</div>
-                        <div class="text-xl font-bold" x-text="formatPrice(analysisData.total_value)"></div>
+                        <div class="text-xl font-bold" x-text="analysisData ? formatPrice(analysisData.total_value) : '-'"></div>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4">
                         <div class="text-sm text-gray-600">評価損益</div>
                         <div class="text-xl font-bold"
-                             :class="analysisData.total_profit_loss >= 0 ? 'text-green-600' : 'text-red-600'"
-                             x-text="formatPrice(analysisData.total_profit_loss)"></div>
+                             :class="analysisData && analysisData.total_profit_loss >= 0 ? 'text-green-600' : 'text-red-600'"
+                             x-text="analysisData ? formatPrice(analysisData.total_profit_loss) : '-'"></div>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4">
                         <div class="text-sm text-gray-600">損益率</div>
                         <div class="text-xl font-bold"
-                             :class="analysisData.total_profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'"
-                             x-text="formatPercentage(analysisData.total_profit_loss_ratio)"></div>
+                             :class="analysisData && analysisData.total_profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'"
+                             x-text="analysisData ? formatPercentage(analysisData.total_profit_loss_ratio) : '-'"></div>
                     </div>
                     <div class="bg-gray-50 rounded-lg p-4">
                         <div class="text-sm text-gray-600">保有銘柄数</div>
-                        <div class="text-xl font-bold" x-text="analysisData.total_holdings + '銘柄'"></div>
+                        <div class="text-xl font-bold" x-text="analysisData ? analysisData.total_holdings + '銘柄' : '-'"></div>
                     </div>
                 </div>
 
@@ -345,7 +345,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="stock in analysisData.top_gainers" :key="stock.code">
+                                <template x-for="stock in (analysisData && analysisData.top_gainers) || []" :key="stock.code">
                                     <tr class="border-b">
                                         <td class="py-2">
                                             <span x-text="stock.code" class="font-mono"></span>
@@ -371,7 +371,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="stock in analysisData.top_losers" :key="stock.code">
+                                <template x-for="stock in (analysisData && analysisData.top_losers) || []" :key="stock.code">
                                     <tr class="border-b">
                                         <td class="py-2">
                                             <span x-text="stock.code" class="font-mono"></span>

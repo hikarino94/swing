@@ -101,7 +101,7 @@ def import_futures():
 @daytrade_bp.route("/import/stocks", methods=["POST"])
 @login_required
 def import_stocks():
-    """株式取引データのインポート"""
+    """株式取引データのインポート（信用取引のみ）"""
     if not validate_csrf_token(request):
         return jsonify({"error": "Invalid CSRF token"}), 403
 
@@ -125,6 +125,36 @@ def import_stocks():
         )
     except Exception as e:
         logger.error(f"株式データインポートエラー: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@daytrade_bp.route("/import/spot-dividend", methods=["POST"])
+@login_required
+def import_spot_dividend():
+    """現物取引・配当金CSVのインポート"""
+    if not validate_csrf_token(request):
+        return jsonify({"error": "Invalid CSRF token"}), 403
+
+    if "file" not in request.files:
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+
+    try:
+        service = DaytradeService(request.current_user.id)
+        result = service.import_spot_dividend_csv(file)
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"現物取引{result['spot_imported']}件、配当金{result['dividend_imported']}件をインポートしました",
+                "details": result,
+            }
+        )
+    except Exception as e:
+        logger.error(f"現物・配当金データインポートエラー: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -255,8 +285,11 @@ def delete_trade(trade_id: int):
         return jsonify({"error": "Invalid CSRF token"}), 403
 
     try:
+        # リクエストボディからカテゴリを取得
+        trade_category = request.json.get("trade_category") if request.json else None
+
         service = DaytradeService(request.current_user.id)
-        service.delete_trade(trade_id)
+        service.delete_trade(trade_id, trade_category)
 
         return jsonify({"success": True})
     except ValueError as e:

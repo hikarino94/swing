@@ -173,15 +173,23 @@
         // API呼び出しのヘルパー関数
         async function apiCall(endpoint, data = {}, method = 'POST', silent = false) {
             try {
+                // CSRFトークンを取得
+                const csrfToken = window.csrf_token ? window.csrf_token() : '';
+
                 const options = {
                     method: method,
                     credentials: 'same-origin', // クッキーを送信
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
                     }
                 };
 
                 if (method !== 'GET') {
+                    // CSRFトークンをボディにも含める（互換性のため）
+                    if (!data.csrf_token) {
+                        data.csrf_token = csrfToken;
+                    }
                     options.body = JSON.stringify(data);
                 }
 
