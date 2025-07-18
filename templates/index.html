@@ -1395,10 +1395,6 @@ function swingApp() {
 
         formatCalendarProfit(value) {
             if (!value) return '';
-            const absValue = Math.abs(value);
-            if (absValue >= 10000) {
-                return (value / 10000).toFixed(1) + '万';
-            }
             return value.toLocaleString();
         },
 

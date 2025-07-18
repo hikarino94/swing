@@ -6,7 +6,7 @@ import csv
 import io
 import sqlite3
 from calendar import monthrange
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from src.config import get_db_path
@@ -1067,6 +1067,29 @@ class DaytradeService:
             dividend_cumulative = 0
             stocks_without_dividend_cumulative = 0
 
+            # 起点を0で追加（データがある場合のみ）
+            if daily_data:
+                # 最初のデータの日付の前日を起点とする
+                first_date = daily_data[0][0]
+                start_date_obj = datetime.strptime(first_date, "%Y-%m-%d") - timedelta(
+                    days=1
+                )
+                cumulative_data.append(
+                    {
+                        "date": start_date_obj.strftime("%Y-%m-%d"),
+                        "futures_daily": 0,
+                        "stocks_daily": 0,
+                        "stocks_without_dividend_daily": 0,
+                        "dividend_daily": 0,
+                        "total_daily": 0,
+                        "futures_cumulative": 0,
+                        "stocks_cumulative": 0,
+                        "stocks_without_dividend_cumulative": 0,
+                        "dividend_cumulative": 0,
+                        "total_cumulative": 0,
+                    }
+                )
+
             for (
                 date,
                 futures_profit,
@@ -1457,6 +1480,29 @@ class DaytradeService:
                     else 0
                 )
 
+                # 実際の取引日数を計算（先物と株式の全取引日をユニークにカウント）
+                cursor.execute(
+                    """
+                    SELECT COUNT(DISTINCT date) FROM (
+                        SELECT trade_date as date FROM daytrade_futures
+                        WHERE user_id = ? AND trade_date >= ? AND trade_date < ?
+                        UNION
+                        SELECT trade_date as date FROM daytrade_stocks
+                        WHERE user_id = ? AND trade_date >= ? AND trade_date < ?
+                          AND (trade_type LIKE '%返済%' OR trade_type = '現物売却' OR trade_type = '配当金')
+                    )
+                    """,
+                    (
+                        self.user_id,
+                        start_date,
+                        end_date,
+                        self.user_id,
+                        start_date,
+                        end_date,
+                    ),
+                )
+                actual_trading_days = cursor.fetchone()[0] or 0
+
                 monthly_data.append(
                     {
                         "month": month,
@@ -1464,9 +1510,10 @@ class DaytradeService:
                         "stocks_profit": stocks_profit,
                         "total_profit": futures_profit + stocks_profit,
                         "futures_days": futures_data[1] if futures_data else 0,
-                        "stocks_days": stocks_data[2] if stocks_data else 0,
+                        "stocks_days": stocks_data[3] if stocks_data else 0,
+                        "actual_trading_days": actual_trading_days,
                         "futures_trades": futures_data[2] if futures_data else 0,
-                        "stocks_trades": stocks_data[3] if stocks_data else 0,
+                        "stocks_trades": stocks_data[4] if stocks_data else 0,
                     }
                 )
 
