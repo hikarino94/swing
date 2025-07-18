@@ -74,9 +74,24 @@
                         :class="daytrade.compactMode ? 'bg-blue-200' : 'bg-blue-100'">
                     <span x-text="daytrade.compactMode ? 'フル表示' : 'コンパクト'"></span>
                 </button>
-                <button @click="takeDaytradeScreenshot()"
-                        class="px-4 py-3 text-sm bg-green-100 hover:bg-green-200 text-green-700 rounded-lg font-medium">
+                <button @click="daytrade.showScreenshotMenu = !daytrade.showScreenshotMenu"
+                        class="relative px-4 py-3 text-sm bg-green-100 hover:bg-green-200 text-green-700 rounded-lg font-medium">
                     📸 撮影
+                    <div x-show="daytrade.showScreenshotMenu" @click.away="daytrade.showScreenshotMenu = false"
+                         class="absolute top-full right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border z-50">
+                        <button @click.stop="takeDaytradeScreenshot(); daytrade.showScreenshotMenu = false"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 rounded-t-lg">
+                            全体を撮影
+                        </button>
+                        <button @click.stop="takeDaytradeCalendarScreenshot(); daytrade.showScreenshotMenu = false"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">
+                            カレンダーのみ
+                        </button>
+                        <button @click.stop="takeDaytradeSummaryScreenshot(); daytrade.showScreenshotMenu = false"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 rounded-b-lg">
+                            サマリーのみ
+                        </button>
+                    </div>
                 </button>
             </div>
         </div>
@@ -105,14 +120,31 @@
                     </svg>
                     <span x-text="daytrade.compactMode ? 'フル表示' : 'コンパクト'"></span>
                 </button>
-                <button @click="takeDaytradeScreenshot()"
-                        class="px-3 py-1 text-sm bg-green-100 hover:bg-green-200 text-green-700 rounded-lg flex items-center">
-                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    </svg>
-                    <span>スクリーンショット</span>
-                </button>
+                <div class="relative">
+                    <button @click="daytrade.showScreenshotMenu = !daytrade.showScreenshotMenu"
+                            class="px-3 py-1 text-sm bg-green-100 hover:bg-green-200 text-green-700 rounded-lg flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span>スクリーンショット</span>
+                    </button>
+                    <div x-show="daytrade.showScreenshotMenu" @click.away="daytrade.showScreenshotMenu = false"
+                         class="absolute top-full right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border z-50">
+                        <button @click.stop="takeDaytradeScreenshot(); daytrade.showScreenshotMenu = false"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 rounded-t-lg">
+                            全体を撮影
+                        </button>
+                        <button @click.stop="takeDaytradeCalendarScreenshot(); daytrade.showScreenshotMenu = false"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">
+                            カレンダーのみ
+                        </button>
+                        <button @click.stop="takeDaytradeSummaryScreenshot(); daytrade.showScreenshotMenu = false"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 rounded-b-lg">
+                            サマリーのみ
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <button @click="nextMonth()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center">
@@ -129,9 +161,9 @@
         <!-- コンパクトモード：サマリーとカレンダーを横並び（デスクトップ）、縦並び（モバイル） -->
         <div x-show="daytrade.compactMode" class="grid grid-cols-1 sm:grid-cols-12 gap-4">
         <!-- 左側：サマリー情報（デスクトップ：4列分、モバイル：全幅） -->
-        <div class="col-span-1 sm:col-span-4 flex flex-col gap-4" x-show="daytrade.monthlySummary">
+        <div id="daytrade-summary-area" class="col-span-1 sm:col-span-4 flex flex-col gap-4" x-show="daytrade.monthlySummary">
             <!-- 総合サマリー（コンパクト） -->
-            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 h-[180px] sm:h-[240px]">
+            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 h-[180px] sm:h-[272px]">
                 <h4 class="text-sm sm:text-base font-semibold mb-2">総合サマリー</h4>
                 <div class="text-lg sm:text-xl font-bold mb-2"
                      :class="((daytrade.monthlySummary?.futures?.total_profit || 0) + (daytrade.monthlySummary?.stocks?.total_settlement || 0)) >= 0 ? 'text-green-600' : 'text-red-600'"
@@ -190,7 +222,7 @@
             </div>
 
             <!-- 詳細統計（コンパクト） -->
-            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 h-[260px] sm:h-[320px]">
+            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 h-[260px] sm:h-[280px]">
                 <h4 class="text-sm sm:text-base font-semibold mb-2">詳細統計</h4>
                 <div class="grid grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
                     <div>
@@ -267,9 +299,9 @@
         </div>
 
         <!-- 右側：カレンダー（デスクトップ：8列分、モバイル：全幅） -->
-        <div class="col-span-1 sm:col-span-8">
-            <div class="bg-white shadow-sm rounded-lg p-2 sm:p-3 h-[450px] sm:h-[570px]">
-                <div class="grid grid-cols-7 gap-0.5 mobile-gap-narrow">
+        <div id="daytrade-calendar-area" class="col-span-1 sm:col-span-8 h-full">
+            <div class="bg-white shadow-sm rounded-lg p-2 sm:p-3 h-full flex flex-col">
+                <div class="grid grid-cols-7 gap-0.5 mobile-gap-narrow h-full">
                     <!-- 曜日ヘッダー -->
                     <template x-for="(day, index) in ['日', '月', '火', '水', '木', '金', '土']">
                         <div class="text-center font-semibold py-0.5 sm:py-1 text-xs sm:text-sm"
@@ -639,7 +671,7 @@
                                 :class="month.total_profit >= 0 ? 'text-green-700' : 'text-red-700'"
                                 x-text="formatCurrency(month.total_profit)"></td>
                             <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-right mobile-hide"
-                                x-text="Math.max(month.futures_days, month.stocks_days)"></td>
+                                x-text="month.actual_trading_days || Math.max(month.futures_days, month.stocks_days)"></td>
                             <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-right mobile-hide"
                                 x-text="month.futures_trades + month.stocks_trades"></td>
                         </tr>
