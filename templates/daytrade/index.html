@@ -129,9 +129,9 @@
         <!-- コンパクトモード：サマリーとカレンダーを横並び（デスクトップ）、縦並び（モバイル） -->
         <div x-show="daytrade.compactMode" class="grid grid-cols-1 sm:grid-cols-12 gap-4">
         <!-- 左側：サマリー情報（デスクトップ：4列分、モバイル：全幅） -->
-        <div class="col-span-1 sm:col-span-4 flex flex-col gap-4 h-full" x-show="daytrade.monthlySummary">
+        <div class="col-span-1 sm:col-span-4 flex flex-col gap-4" x-show="daytrade.monthlySummary">
             <!-- 総合サマリー（コンパクト） -->
-            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 flex-1">
+            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 h-[180px] sm:h-[240px]">
                 <h4 class="text-sm sm:text-base font-semibold mb-2">総合サマリー</h4>
                 <div class="text-lg sm:text-xl font-bold mb-2"
                      :class="((daytrade.monthlySummary?.futures?.total_profit || 0) + (daytrade.monthlySummary?.stocks?.total_settlement || 0)) >= 0 ? 'text-green-600' : 'text-red-600'"
@@ -190,7 +190,7 @@
             </div>
 
             <!-- 詳細統計（コンパクト） -->
-            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 flex-1">
+            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 h-[260px] sm:h-[320px]">
                 <h4 class="text-sm sm:text-base font-semibold mb-2">詳細統計</h4>
                 <div class="grid grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
                     <div>
@@ -268,7 +268,7 @@
 
         <!-- 右側：カレンダー（デスクトップ：8列分、モバイル：全幅） -->
         <div class="col-span-1 sm:col-span-8">
-            <div class="bg-white shadow-sm rounded-lg p-2 sm:p-3 h-full">
+            <div class="bg-white shadow-sm rounded-lg p-2 sm:p-3 h-[450px] sm:h-[570px]">
                 <div class="grid grid-cols-7 gap-0.5 mobile-gap-narrow">
                     <!-- 曜日ヘッダー -->
                     <template x-for="(day, index) in ['日', '月', '火', '水', '木', '金', '土']">
@@ -283,7 +283,7 @@
 
                     <!-- カレンダー日付（コンパクト） -->
                     <template x-for="(day, index) in daytrade.calendarDays" :key="index">
-                        <div class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[60px] sm:min-h-[60px] relative"
+                        <div class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[50px] sm:min-h-[70px] relative"
                              :class="{
                                  'bg-gray-100': !day.date,
                                  'has-trades': day.has_trades && day.date,
@@ -471,7 +471,7 @@
 
         <!-- 通常モード：カレンダー -->
         <div x-show="!daytrade.compactMode" class="bg-white shadow-sm rounded-lg p-3 sm:p-6">
-        <div class="w-full sm:max-w-6xl sm:mx-auto">
+        <div class="w-full">
             <div class="grid grid-cols-7 gap-0.5 sm:gap-1 mobile-gap-narrow">
                 <!-- 曜日ヘッダー -->
                 <template x-for="(day, index) in ['日', '月', '火', '水', '木', '金', '土']">
@@ -486,7 +486,7 @@
 
                 <!-- カレンダー日付 -->
                 <template x-for="(day, index) in daytrade.calendarDays" :key="index">
-                    <div class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[80px] sm:min-h-[120px] relative"
+                    <div class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[100px] sm:min-h-[160px] relative"
                          :class="{
                              'bg-gray-100': !day.date,
                              'has-trades': day.has_trades && day.date,

@@ -1793,8 +1793,28 @@ function swingApp() {
                     scales: {
                         y: {
                             ticks: {
+                                stepSize: 1000000, // 100万円単位
                                 callback: function(value) {
-                                    return value.toLocaleString() + '円';
+                                    // 100万円単位で表示
+                                    if (value === 0) return '0';
+                                    const millions = value / 1000000;
+                                    return millions + '00万円';
+                                }
+                            },
+                            grid: {
+                                color: function(context) {
+                                    // 0のラインを強調
+                                    if (context.tick.value === 0) {
+                                        return 'rgba(0, 0, 0, 0.3)';
+                                    }
+                                    return 'rgba(0, 0, 0, 0.1)';
+                                },
+                                lineWidth: function(context) {
+                                    // 0のラインを太く
+                                    if (context.tick.value === 0) {
+                                        return 2;
+                                    }
+                                    return 1;
                                 }
                             }
                         }

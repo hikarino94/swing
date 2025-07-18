@@ -1081,11 +1081,9 @@ class DaytradeService:
                 dividend_amount = dividend_amount or 0
 
                 # 株式の合計損益（配当込み）
-                stocks_total = stocks_profit + stocks_day_trade
+                stocks_total = stocks_profit + stocks_day_trade + dividend_amount
                 # 株式の合計損益（配当除外）
-                stocks_without_dividend = (
-                    stocks_profit + stocks_day_trade - dividend_amount
-                )
+                stocks_without_dividend = stocks_profit + stocks_day_trade
 
                 # 累積更新
                 futures_cumulative += futures_profit
@@ -1422,13 +1420,21 @@ class DaytradeService:
                 )
                 futures_data = cursor.fetchone()
 
-                # 株式の月間損益
+                # 株式の月間損益（累積損益と同じ集計方法に統一）
                 cursor.execute(
                     """
                     SELECT
-                        COALESCE(SUM(COALESCE(capital_gains_tax, 0) +
-                                     COALESCE(settlement_amount, 0)), 0) as total_profit,
+                        COALESCE(SUM(CASE
+                            WHEN trade_type != '配当金' THEN
+                                COALESCE(capital_gains_tax, 0) + COALESCE(settlement_amount, 0)
+                            ELSE 0
+                        END), 0) as total_profit,
                         COALESCE(SUM(COALESCE(day_trade_amount, 0)), 0) as day_trade_profit,
+                        COALESCE(SUM(CASE
+                            WHEN trade_type = '配当金' THEN
+                                COALESCE(settlement_amount, 0)
+                            ELSE 0
+                        END), 0) as dividend_amount,
                         COUNT(DISTINCT trade_date) as trading_days,
                         COUNT(*) as total_trades
                     FROM daytrade_stocks
@@ -1440,8 +1446,13 @@ class DaytradeService:
                 stocks_data = cursor.fetchone()
 
                 futures_profit = (futures_data[0] or 0) if futures_data else 0
+                # 通常取引 + デイトレ + 配当金
                 stocks_profit = (
-                    ((stocks_data[0] or 0) + (stocks_data[1] or 0))
+                    (
+                        (stocks_data[0] or 0)
+                        + (stocks_data[1] or 0)
+                        + (stocks_data[2] or 0)
+                    )
                     if stocks_data
                     else 0
                 )
