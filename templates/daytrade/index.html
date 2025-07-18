@@ -321,9 +321,9 @@
         <!-- 右側：カレンダー（デスクトップ：8列分、モバイル：全幅） -->
         <div id="daytrade-calendar-area" class="col-span-1 sm:col-span-8 h-full">
             <div class="bg-white shadow-sm rounded-lg p-2 sm:p-3 h-full flex flex-col">
-                <div class="grid gap-0.5 mobile-gap-narrow h-full"
+                <!-- 曜日ヘッダー -->
+                <div class="grid gap-0.5 mobile-gap-narrow"
                      :class="daytrade.hideWeekends ? 'grid-cols-5' : 'grid-cols-7'">
-                    <!-- 曜日ヘッダー -->
                     <template x-for="(day, index) in daytrade.hideWeekends ? ['月', '火', '水', '木', '金'] : ['日', '月', '火', '水', '木', '金', '土']">
                         <div class="text-center font-semibold py-0.5 sm:py-1 text-xs sm:text-sm"
                              :class="{
@@ -333,8 +333,11 @@
                              }"
                              x-text="day"></div>
                     </template>
+                </div>
 
-                    <!-- カレンダー日付（コンパクト） -->
+                <!-- カレンダー日付（コンパクト） -->
+                <div class="grid gap-0.5 mobile-gap-narrow flex-1"
+                     :class="daytrade.hideWeekends ? 'grid-cols-5' : 'grid-cols-7'">
                     <template x-for="(day, index) in daytrade.hideWeekends ? getFilteredCalendarDays() : daytrade.calendarDays" :key="index">
                         <div
                              class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[50px] sm:min-h-[70px] relative"
@@ -342,7 +345,7 @@
                                  'bg-gray-100': !day.date,
                                  'bg-white': day.date && !day.has_trades,
                                  'has-trades': day.has_trades && day.date,
-                                 'weekend': day.date && (index % 7 === 0 || index % 7 === 6),
+                                 'weekend': day.date && (daytrade.hideWeekends ? false : (index % 7 === 0 || index % 7 === 6)),
                                  'profit': day.date && day.total_profit > 0,
                                  'loss': day.date && day.total_profit < 0,
                                  'bg-green-50': day.date && day.total_profit > 0,
@@ -530,9 +533,9 @@
         <!-- 通常モード：カレンダー -->
         <div x-show="!daytrade.compactMode" class="bg-white shadow-sm rounded-lg p-3 sm:p-6">
         <div class="w-full">
-            <div class="grid gap-0.5 sm:gap-1 mobile-gap-narrow"
+            <!-- 曜日ヘッダー -->
+            <div class="grid gap-0.5 sm:gap-1 mobile-gap-narrow mb-0.5 sm:mb-1"
                  :class="daytrade.hideWeekends ? 'grid-cols-5' : 'grid-cols-7'">
-                <!-- 曜日ヘッダー -->
                 <template x-for="(day, index) in daytrade.hideWeekends ? ['月', '火', '水', '木', '金'] : ['日', '月', '火', '水', '木', '金', '土']">
                     <div class="text-center font-semibold py-0.5 sm:py-1 text-xs sm:text-base"
                          :class="{
@@ -542,8 +545,11 @@
                          }"
                          x-text="day"></div>
                 </template>
+            </div>
 
-                <!-- カレンダー日付 -->
+            <!-- カレンダー日付 -->
+            <div class="grid gap-0.5 sm:gap-1 mobile-gap-narrow"
+                 :class="daytrade.hideWeekends ? 'grid-cols-5' : 'grid-cols-7'">
                 <template x-for="(day, index) in daytrade.hideWeekends ? getFilteredCalendarDays() : daytrade.calendarDays" :key="index">
                     <div
                          class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[100px] sm:min-h-[160px] relative"
@@ -551,7 +557,7 @@
                              'bg-gray-100': !day.date,
                              'bg-white': day.date && !day.has_trades,
                              'has-trades': day.has_trades && day.date,
-                             'weekend': day.date && (index % 7 === 0 || index % 7 === 6),
+                             'weekend': day.date && (daytrade.hideWeekends ? false : (index % 7 === 0 || index % 7 === 6)),
                              'profit': day.date && day.total_profit > 0,
                              'loss': day.date && day.total_profit < 0,
                              'bg-green-50': day.date && day.total_profit > 0,
