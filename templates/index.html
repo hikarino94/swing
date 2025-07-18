@@ -1404,6 +1404,41 @@ function swingApp() {
             const sign = value >= 0 ? '+' : '';
             return sign + value.toLocaleString();
         },
+        // 土日非表示時のカレンダーデータを計算
+        getFilteredCalendarDays() {
+            if (!this.daytrade.hideWeekends) {
+                return this.daytrade.calendarDays;
+            }
+
+            // 土日を除外したカレンダーデータを作成
+            const filtered = [];
+
+            // 各日付を処理（週ごとではなく、個別に処理）
+            for (let i = 0; i < this.daytrade.calendarDays.length; i++) {
+                const dayOfWeek = i % 7;
+                // 日曜日（0）と土曜日（6）を除外
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                    filtered.push(this.daytrade.calendarDays[i]);
+                }
+            }
+
+            // 最終週を完成させるための空白セルを追加
+            const remaining = filtered.length % 5;
+            if (remaining > 0) {
+                for (let i = 0; i < (5 - remaining); i++) {
+                    filtered.push({
+                        date: null,
+                        day: null,
+                        futures_profit: 0,
+                        stocks_profit: 0,
+                        total_profit: 0,
+                        has_trades: false
+                    });
+                }
+            }
+
+            return filtered;
+        },
 
         formatPercentage(value) {
             if (value === null || value === undefined) return '0%';

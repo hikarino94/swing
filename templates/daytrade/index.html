@@ -3,10 +3,14 @@
 <style>
     /* カレンダーの枠線を確実に表示 */
     .calendar-cell {
-        border: 1px solid #d1d5db !important;
+        border: 1px solid #e5e7eb !important;
     }
     .calendar-cell.has-trades {
         border: 2px solid #3b82f6 !important;
+    }
+    /* 取引なしの日は薄い枠線 */
+    .calendar-cell.bg-white {
+        border: 1px solid #f3f4f6 !important;
     }
     /* 土日の背景色 */
     .calendar-cell.weekend {
@@ -331,17 +335,18 @@
                     </template>
 
                     <!-- カレンダー日付（コンパクト） -->
-                    <template x-for="(day, index) in daytrade.calendarDays" :key="index">
-                        <div x-show="!daytrade.hideWeekends || (index % 7 !== 0 && index % 7 !== 6)"
+                    <template x-for="(day, index) in daytrade.hideWeekends ? getFilteredCalendarDays() : daytrade.calendarDays" :key="index">
+                        <div
                              class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[50px] sm:min-h-[70px] relative"
                              :class="{
                                  'bg-gray-100': !day.date,
+                                 'bg-white': day.date && !day.has_trades,
                                  'has-trades': day.has_trades && day.date,
                                  'weekend': day.date && (index % 7 === 0 || index % 7 === 6),
                                  'profit': day.date && day.total_profit > 0,
                                  'loss': day.date && day.total_profit < 0,
-                                 'bg-green-50': day.date && day.total_profit > 0 && index % 7 !== 0 && index % 7 !== 6,
-                                 'bg-red-50': day.date && day.total_profit < 0 && index % 7 !== 0 && index % 7 !== 6
+                                 'bg-green-50': day.date && day.total_profit > 0,
+                                 'bg-red-50': day.date && day.total_profit < 0
                              }"
                              @click="day.date && showDayDetails(day.date)">
                             <template x-if="day.date">
@@ -352,6 +357,9 @@
                                             <div class="text-xs font-bold text-center"
                                                  :class="day.total_profit >= 0 ? 'text-green-700' : 'text-red-700'"
                                                  x-text="formatCompactProfit(day.total_profit)"></div>
+                                        </template>
+                                        <template x-if="day.total_profit === 0">
+                                            <div class="text-xs text-gray-400 text-center">−</div>
                                         </template>
                                     </div>
                                 </div>
@@ -536,17 +544,18 @@
                 </template>
 
                 <!-- カレンダー日付 -->
-                <template x-for="(day, index) in daytrade.calendarDays" :key="index">
-                    <div x-show="!daytrade.hideWeekends || (index % 7 !== 0 && index % 7 !== 6)"
+                <template x-for="(day, index) in daytrade.hideWeekends ? getFilteredCalendarDays() : daytrade.calendarDays" :key="index">
+                    <div
                          class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[100px] sm:min-h-[160px] relative"
                          :class="{
                              'bg-gray-100': !day.date,
+                             'bg-white': day.date && !day.has_trades,
                              'has-trades': day.has_trades && day.date,
                              'weekend': day.date && (index % 7 === 0 || index % 7 === 6),
                              'profit': day.date && day.total_profit > 0,
                              'loss': day.date && day.total_profit < 0,
-                             'bg-green-50': day.date && day.total_profit > 0 && index % 7 !== 0 && index % 7 !== 6,
-                             'bg-red-50': day.date && day.total_profit < 0 && index % 7 !== 0 && index % 7 !== 6
+                             'bg-green-50': day.date && day.total_profit > 0,
+                             'bg-red-50': day.date && day.total_profit < 0
                          }"
                          @click="day.date && showDayDetails(day.date)">
                         <template x-if="day.date">
@@ -559,6 +568,9 @@
                                             <div class="text-xs font-bold"
                                                  :class="day.total_profit >= 0 ? 'text-green-700' : 'text-red-700'"
                                                  x-text="formatCompactProfit(day.total_profit)"></div>
+                                        </template>
+                                        <template x-if="day.total_profit === 0">
+                                            <div class="text-xs text-gray-400">−</div>
                                         </template>
                                     </div>
 
@@ -587,6 +599,9 @@
                                                      :class="day.total_profit >= 0 ? 'text-green-700' : 'text-red-700'"
                                                      x-text="formatCalendarProfit(day.total_profit)"></div>
                                             </div>
+                                        </template>
+                                        <template x-if="day.total_profit === 0">
+                                            <div class="text-center text-gray-400 text-lg">−</div>
                                         </template>
                                     </div>
                                 </div>
