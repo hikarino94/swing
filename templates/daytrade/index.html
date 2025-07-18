@@ -69,6 +69,12 @@
                 </button>
             </div>
             <div class="flex gap-2">
+                <!-- 土日表示切り替えボタン（モバイル） -->
+                <button @click="daytrade.hideWeekends = !daytrade.hideWeekends"
+                        class="flex-1 px-3 py-3 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium"
+                        :class="daytrade.hideWeekends ? 'bg-gray-200' : 'bg-gray-100'">
+                    <span x-text="daytrade.hideWeekends ? '土日表示' : '土日非表示'"></span>
+                </button>
                 <button @click="daytrade.compactMode = !daytrade.compactMode"
                         class="flex-1 px-3 py-3 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg font-medium"
                         :class="daytrade.compactMode ? 'bg-blue-200' : 'bg-blue-100'">
@@ -107,6 +113,16 @@
 
             <div class="flex items-center space-x-4">
                 <h3 class="text-xl font-semibold" x-text="`${daytrade.currentYear}年 ${daytrade.currentMonth}月`"></h3>
+                <!-- 土日表示切り替えボタン（デスクトップ） -->
+                <button @click="daytrade.hideWeekends = !daytrade.hideWeekends"
+                        class="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center"
+                        :class="daytrade.hideWeekends ? 'bg-gray-200' : 'bg-gray-100'"
+                        title="土日の表示/非表示を切り替えます">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    <span x-text="daytrade.hideWeekends ? '土日表示' : '土日非表示'"></span>
+                </button>
                 <button @click="daytrade.compactMode = !daytrade.compactMode"
                         class="px-3 py-1 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg flex items-center"
                         :class="daytrade.compactMode ? 'bg-blue-200' : 'bg-blue-100'">
@@ -301,21 +317,23 @@
         <!-- 右側：カレンダー（デスクトップ：8列分、モバイル：全幅） -->
         <div id="daytrade-calendar-area" class="col-span-1 sm:col-span-8 h-full">
             <div class="bg-white shadow-sm rounded-lg p-2 sm:p-3 h-full flex flex-col">
-                <div class="grid grid-cols-7 gap-0.5 mobile-gap-narrow h-full">
+                <div class="grid gap-0.5 mobile-gap-narrow h-full"
+                     :class="daytrade.hideWeekends ? 'grid-cols-5' : 'grid-cols-7'">
                     <!-- 曜日ヘッダー -->
-                    <template x-for="(day, index) in ['日', '月', '火', '水', '木', '金', '土']">
+                    <template x-for="(day, index) in daytrade.hideWeekends ? ['月', '火', '水', '木', '金'] : ['日', '月', '火', '水', '木', '金', '土']">
                         <div class="text-center font-semibold py-0.5 sm:py-1 text-xs sm:text-sm"
                              :class="{
-                                 'text-red-600': index === 0,
-                                 'text-blue-600': index === 6,
-                                 'text-gray-700': index > 0 && index < 6
+                                 'text-red-600': !daytrade.hideWeekends && index === 0,
+                                 'text-blue-600': !daytrade.hideWeekends && index === 6,
+                                 'text-gray-700': daytrade.hideWeekends || (index > 0 && index < 6)
                              }"
                              x-text="day"></div>
                     </template>
 
                     <!-- カレンダー日付（コンパクト） -->
                     <template x-for="(day, index) in daytrade.calendarDays" :key="index">
-                        <div class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[50px] sm:min-h-[70px] relative"
+                        <div x-show="!daytrade.hideWeekends || (index % 7 !== 0 && index % 7 !== 6)"
+                             class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[50px] sm:min-h-[70px] relative"
                              :class="{
                                  'bg-gray-100': !day.date,
                                  'has-trades': day.has_trades && day.date,
@@ -504,21 +522,23 @@
         <!-- 通常モード：カレンダー -->
         <div x-show="!daytrade.compactMode" class="bg-white shadow-sm rounded-lg p-3 sm:p-6">
         <div class="w-full">
-            <div class="grid grid-cols-7 gap-0.5 sm:gap-1 mobile-gap-narrow">
+            <div class="grid gap-0.5 sm:gap-1 mobile-gap-narrow"
+                 :class="daytrade.hideWeekends ? 'grid-cols-5' : 'grid-cols-7'">
                 <!-- 曜日ヘッダー -->
-                <template x-for="(day, index) in ['日', '月', '火', '水', '木', '金', '土']">
+                <template x-for="(day, index) in daytrade.hideWeekends ? ['月', '火', '水', '木', '金'] : ['日', '月', '火', '水', '木', '金', '土']">
                     <div class="text-center font-semibold py-0.5 sm:py-1 text-xs sm:text-base"
                          :class="{
-                             'text-red-600': index === 0,
-                             'text-blue-600': index === 6,
-                             'text-gray-700': index > 0 && index < 6
+                             'text-red-600': !daytrade.hideWeekends && index === 0,
+                             'text-blue-600': !daytrade.hideWeekends && index === 6,
+                             'text-gray-700': daytrade.hideWeekends || (index > 0 && index < 6)
                          }"
                          x-text="day"></div>
                 </template>
 
                 <!-- カレンダー日付 -->
                 <template x-for="(day, index) in daytrade.calendarDays" :key="index">
-                    <div class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[100px] sm:min-h-[160px] relative"
+                    <div x-show="!daytrade.hideWeekends || (index % 7 !== 0 && index % 7 !== 6)"
+                         class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[100px] sm:min-h-[160px] relative"
                          :class="{
                              'bg-gray-100': !day.date,
                              'has-trades': day.has_trades && day.date,

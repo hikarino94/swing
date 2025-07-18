@@ -687,6 +687,25 @@ class DaytradeService:
                     }
                 )
 
+            # 月末の空白セルを追加（最終週を完成させる）
+            total_cells = len(calendar_days)
+            # 7で割り切れるように調整（最終週を埋める）
+            remaining_cells = 7 - (total_cells % 7)
+            if remaining_cells < 7:  # 既に7の倍数の場合は追加しない
+                for _ in range(remaining_cells):
+                    calendar_days.append(
+                        {
+                            "date": None,
+                            "day": None,
+                            "futures_profit": 0,
+                            "stocks_profit": 0,
+                            "stocks_settlement": 0,
+                            "stocks_day_trade": 0,
+                            "total_profit": 0,
+                            "has_trades": False,
+                        }
+                    )
+
             return {"year": year, "month": month, "days": calendar_days}
 
     def get_monthly_summary(self, year: int, month: int) -> dict[str, Any]:
