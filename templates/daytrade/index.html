@@ -184,16 +184,18 @@
         <div id="daytrade-summary-area" class="col-span-1 sm:col-span-4 flex flex-col gap-4" x-show="daytrade.monthlySummary">
             <!-- 総合サマリー（コンパクト） -->
             <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 h-[180px] sm:h-[272px]">
-                <h4 class="text-sm sm:text-base font-semibold mb-2">総合サマリー</h4>
-                <div class="text-lg sm:text-xl font-bold mb-2"
+                <h4 class="text-lg sm:text-xl font-semibold mb-2">
+                    <span x-text="`${daytrade.currentYear}年${daytrade.currentMonth}月 総合サマリー`"></span>
+                </h4>
+                <div class="text-2xl sm:text-3xl font-bold mb-2"
                      :class="((daytrade.monthlySummary?.futures?.total_profit || 0) + (daytrade.monthlySummary?.stocks?.total_settlement || 0)) >= 0 ? 'text-green-600' : 'text-red-600'"
                      x-text="formatCurrency((daytrade.monthlySummary?.futures?.total_profit || 0) + (daytrade.monthlySummary?.stocks?.total_settlement || 0))"></div>
-                <div class="grid grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
+                <div class="grid grid-cols-2 gap-3 sm:gap-4 text-base sm:text-lg">
                     <div>
-                        <div class="text-gray-600 mb-1 text-xs sm:text-sm">先物</div>
+                        <div class="text-gray-600 mb-1 text-base sm:text-lg">先物</div>
                         <div class="space-y-1">
                             <div class="flex justify-between">
-                                <span class="text-xs sm:text-sm">損益:</span>
+                                <span>損益:</span>
                                 <span :class="(daytrade.monthlySummary?.futures?.total_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'"
                                       x-text="formatCurrency(daytrade.monthlySummary?.futures?.total_profit || 0)"></span>
                             </div>
@@ -208,7 +210,7 @@
                         </div>
                     </div>
                     <div>
-                        <div class="text-gray-600 mb-1">株式</div>
+                        <div class="text-gray-600 mb-1 text-base sm:text-lg">株式</div>
                         <div class="space-y-1">
                             <div class="flex justify-between">
                                 <span>損益:</span>
@@ -243,10 +245,10 @@
 
             <!-- 詳細統計（コンパクト） -->
             <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 h-[260px] sm:h-[280px]">
-                <h4 class="text-sm sm:text-base font-semibold mb-2">詳細統計</h4>
-                <div class="grid grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
+                <h4 class="text-lg sm:text-xl font-semibold mb-2">詳細統計</h4>
+                <div class="grid grid-cols-2 gap-3 sm:gap-4 text-base sm:text-lg">
                     <div>
-                        <div class="text-gray-600 mb-1">先物</div>
+                        <div class="text-gray-600 mb-1 text-base sm:text-lg">先物</div>
                         <div class="space-y-1">
                             <div class="flex justify-between">
                                 <span>取引日数:</span>
@@ -279,7 +281,7 @@
                         </div>
                     </div>
                     <div>
-                        <div class="text-gray-600 mb-1">株式</div>
+                        <div class="text-gray-600 mb-1 text-base sm:text-lg">株式</div>
                         <div class="space-y-1">
                             <div class="flex justify-between">
                                 <span>取引日数:</span>
@@ -304,9 +306,9 @@
                         </div>
                     </div>
                 </div>
-                <div class="border-t pt-2 mt-2 text-xs sm:text-sm">
+                <div class="border-t pt-2 mt-2 text-base sm:text-lg">
                     <div class="flex justify-between">
-                        <span class="text-gray-600 text-xs sm:text-sm">総取引日数:</span>
+                        <span class="text-gray-600 text-base sm:text-lg">総取引日数:</span>
                         <span x-text="Math.max(daytrade.monthlySummary?.futures?.trading_days || 0, daytrade.monthlySummary?.stocks?.trading_days || 0)"></span>
                     </div>
                     <div class="flex justify-between">
@@ -321,6 +323,10 @@
         <!-- 右側：カレンダー（デスクトップ：8列分、モバイル：全幅） -->
         <div id="daytrade-calendar-area" class="col-span-1 sm:col-span-8 h-full">
             <div class="bg-white shadow-sm rounded-lg p-2 sm:p-3 h-full flex flex-col">
+                <!-- 年月ヘッダー -->
+                <div class="text-center mb-2">
+                    <h3 class="text-xl sm:text-2xl font-bold text-gray-800" x-text="`${daytrade.currentYear}年 ${daytrade.currentMonth}月`"></h3>
+                </div>
                 <!-- 曜日ヘッダー -->
                 <div class="grid gap-0.5 mobile-gap-narrow"
                      :class="daytrade.hideWeekends ? 'grid-cols-5' : 'grid-cols-7'">
@@ -354,15 +360,15 @@
                              @click="day.date && showDayDetails(day.date)">
                             <template x-if="day.date">
                                 <div class="p-1 h-full flex flex-col">
-                                    <div class="text-xs font-medium text-gray-700 text-center" x-text="day.day"></div>
+                                    <div class="text-2xl sm:text-3xl font-bold text-gray-700 text-center" x-text="day.day"></div>
                                     <div class="flex-1 flex items-center justify-center">
                                         <template x-if="day.total_profit !== 0">
-                                            <div class="text-xs font-bold text-center"
+                                            <div class="text-xl sm:text-2xl font-bold text-center"
                                                  :class="day.total_profit >= 0 ? 'text-green-700' : 'text-red-700'"
                                                  x-text="formatCompactProfit(day.total_profit)"></div>
                                         </template>
                                         <template x-if="day.total_profit === 0">
-                                            <div class="text-xs text-gray-400 text-center">−</div>
+                                            <div class="text-xl sm:text-2xl text-gray-400 text-center">−</div>
                                         </template>
                                     </div>
                                 </div>
@@ -378,8 +384,8 @@
     <div x-show="!daytrade.compactMode" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6" x-show="daytrade.monthlySummary">
         <!-- 先物サマリー -->
         <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6">
-            <h4 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">先物取引サマリー</h4>
-            <div class="space-y-2 text-sm sm:text-base">
+            <h4 class="text-xl sm:text-2xl font-semibold mb-2 sm:mb-3">先物取引サマリー</h4>
+            <div class="space-y-2 text-lg sm:text-xl">
                 <div class="flex justify-between">
                     <span class="text-gray-600">取引日数:</span>
                     <span x-text="daytrade.monthlySummary?.futures?.trading_days || 0"></span>
@@ -424,8 +430,8 @@
 
         <!-- 株式サマリー -->
         <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6">
-            <h4 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">株式取引サマリー</h4>
-            <div class="space-y-2 text-sm sm:text-base">
+            <h4 class="text-xl sm:text-2xl font-semibold mb-2 sm:mb-3">株式取引サマリー</h4>
+            <div class="space-y-2 text-lg sm:text-xl">
                 <div class="flex justify-between">
                     <span class="text-gray-600">取引日数:</span>
                     <span x-text="daytrade.monthlySummary?.stocks?.trading_days || 0"></span>
@@ -463,12 +469,12 @@
                 </div>
                 <template x-if="(daytrade.monthlySummary?.stocks?.dividend_count || 0) > 0">
                     <div class="border-t pt-2 mt-2">
-                        <div class="text-sm font-medium text-gray-700 mb-1">配当金</div>
-                        <div class="flex justify-between text-sm">
+                        <div class="text-lg font-medium text-gray-700 mb-1">配当金</div>
+                        <div class="flex justify-between text-lg">
                             <span class="text-gray-600">件数:</span>
                             <span x-text="`${daytrade.monthlySummary?.stocks?.dividend_count || 0}件`"></span>
                         </div>
-                        <div class="flex justify-between text-sm">
+                        <div class="flex justify-between text-lg">
                             <span class="text-gray-600">合計:</span>
                             <span class="text-green-600 font-semibold" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.dividend_total || 0)"></span>
                         </div>
@@ -476,17 +482,17 @@
                 </template>
                 <template x-if="(daytrade.monthlySummary?.stocks?.spot_count || 0) > 0">
                     <div class="border-t pt-2 mt-2">
-                        <div class="text-sm font-medium text-gray-700 mb-1">現物取引</div>
-                        <div class="flex justify-between text-sm">
+                        <div class="text-lg font-medium text-gray-700 mb-1">現物取引</div>
+                        <div class="flex justify-between text-lg">
                             <span class="text-gray-600">件数:</span>
                             <span x-text="`${daytrade.monthlySummary?.stocks?.spot_count || 0}件`"></span>
                         </div>
-                        <div class="flex justify-between text-sm">
+                        <div class="flex justify-between text-lg">
                             <span class="text-gray-600">損益:</span>
                             <span :class="(daytrade.monthlySummary?.stocks?.spot_total || 0) >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'"
                                   x-text="formatCurrency(daytrade.monthlySummary?.stocks?.spot_total || 0)"></span>
                         </div>
-                        <div class="flex justify-between text-sm">
+                        <div class="flex justify-between text-lg">
                             <span class="text-gray-600">勝率:</span>
                             <span x-text="`${(daytrade.monthlySummary?.stocks?.spot_win_rate || 0).toFixed(1)}%`"></span>
                         </div>
@@ -497,14 +503,14 @@
 
         <!-- 総合サマリー -->
         <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6 col-span-1 md:col-span-2 lg:col-span-1">
-            <h4 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">総合サマリー</h4>
+            <h4 class="text-xl sm:text-2xl font-semibold mb-2 sm:mb-3">総合サマリー</h4>
             <div class="space-y-2">
-                <div class="flex justify-between text-base sm:text-xl">
+                <div class="flex justify-between text-xl sm:text-3xl">
                     <span class="text-gray-700 font-medium">月間合計損益:</span>
                     <span :class="((daytrade.monthlySummary?.futures?.total_profit || 0) + (daytrade.monthlySummary?.stocks?.total_settlement || 0)) >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'"
                           x-text="formatCurrency((daytrade.monthlySummary?.futures?.total_profit || 0) + (daytrade.monthlySummary?.stocks?.total_settlement || 0))"></span>
                 </div>
-                <div class="border-t pt-2 mt-2 space-y-2 text-base">
+                <div class="border-t pt-2 mt-2 space-y-2 text-lg sm:text-xl">
                     <div class="flex justify-between">
                         <span class="text-gray-600">先物損益:</span>
                         <span :class="(daytrade.monthlySummary?.futures?.total_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'"
@@ -533,6 +539,10 @@
         <!-- 通常モード：カレンダー -->
         <div x-show="!daytrade.compactMode" class="bg-white shadow-sm rounded-lg p-3 sm:p-6">
         <div class="w-full">
+            <!-- 年月ヘッダー -->
+            <div class="text-center mb-3">
+                <h3 class="text-xl sm:text-2xl font-bold text-gray-800" x-text="`${daytrade.currentYear}年 ${daytrade.currentMonth}月`"></h3>
+            </div>
             <!-- 曜日ヘッダー -->
             <div class="grid gap-0.5 sm:gap-1 mobile-gap-narrow mb-0.5 sm:mb-1"
                  :class="daytrade.hideWeekends ? 'grid-cols-5' : 'grid-cols-7'">
@@ -566,17 +576,17 @@
                          @click="day.date && showDayDetails(day.date)">
                         <template x-if="day.date">
                             <div class="p-1 sm:p-2 h-full flex flex-col">
-                                <div class="text-sm sm:text-base font-medium text-gray-700 mb-1" x-text="day.day"></div>
+                                <div class="text-2xl sm:text-3xl font-bold text-gray-700 mb-1" x-text="day.day"></div>
                                 <div class="flex-1 flex flex-col justify-center space-y-1">
                                     <!-- モバイル：合計のみ表示（コンパクト表記） -->
                                     <div class="sm:hidden">
                                         <template x-if="day.total_profit !== 0">
-                                            <div class="text-xs font-bold"
+                                            <div class="text-xl sm:text-2xl font-bold"
                                                  :class="day.total_profit >= 0 ? 'text-green-700' : 'text-red-700'"
                                                  x-text="formatCompactProfit(day.total_profit)"></div>
                                         </template>
                                         <template x-if="day.total_profit === 0">
-                                            <div class="text-xs text-gray-400">−</div>
+                                            <div class="text-xl sm:text-2xl text-gray-400">−</div>
                                         </template>
                                     </div>
 
@@ -584,7 +594,7 @@
                                     <div class="hidden sm:block">
                                         <!-- 先物損益 -->
                                         <template x-if="day.futures_profit !== 0">
-                                            <div class="text-sm"
+                                            <div class="text-lg sm:text-xl"
                                                  :class="day.futures_profit >= 0 ? 'text-green-600' : 'text-red-600'">
                                                 <span class="font-medium">先:</span>
                                                 <span x-text="formatCalendarProfit(day.futures_profit)"></span>
@@ -592,7 +602,7 @@
                                         </template>
                                         <!-- 株式損益 -->
                                         <template x-if="day.stocks_profit !== 0">
-                                            <div class="text-sm"
+                                            <div class="text-lg sm:text-xl"
                                                  :class="day.stocks_profit >= 0 ? 'text-green-600' : 'text-red-600'">
                                                 <span class="font-medium">株:</span>
                                                 <span x-text="formatCalendarProfit(day.stocks_profit)"></span>
@@ -601,13 +611,13 @@
                                         <!-- 合計損益（区切り線付き） -->
                                         <template x-if="day.total_profit !== 0">
                                             <div class="border-t pt-1 mt-1">
-                                                <div class="text-lg font-bold"
+                                                <div class="text-xl sm:text-2xl font-bold"
                                                      :class="day.total_profit >= 0 ? 'text-green-700' : 'text-red-700'"
                                                      x-text="formatCalendarProfit(day.total_profit)"></div>
                                             </div>
                                         </template>
                                         <template x-if="day.total_profit === 0">
-                                            <div class="text-center text-gray-400 text-lg">−</div>
+                                            <div class="text-center text-gray-400 text-xl sm:text-2xl">−</div>
                                         </template>
                                     </div>
                                 </div>
