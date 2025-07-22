@@ -61,17 +61,18 @@ def test_db(tmp_path):
                 code TEXT PRIMARY KEY,
                 company_name TEXT,
                 market_name TEXT,
+                sector17_name TEXT,
                 sector33_name TEXT,
                 delete_flag INTEGER DEFAULT 0
             )
         """
         )
 
-        # テストデータ挿入
+        # テストデータ挿入（5桁コード形式）
         conn.execute(
             """
-            INSERT INTO listed_info (code, company_name, market_name)
-            VALUES ('7203', 'トヨタ自動車', '東証プライム')
+            INSERT INTO listed_info (code, company_name, market_name, sector17_name, sector33_name, delete_flag)
+            VALUES ('72030', 'トヨタ自動車', '東証プライム', '輸送用機器', '輸送用機器', 0)
         """
         )
 
@@ -80,6 +81,39 @@ def test_db(tmp_path):
             INSERT INTO holdings (user_id, code, account_name, account_type,
                                 quantity, average_price, current_price)
             VALUES (1, '7203', 'default', '特定', 100, 2000, 2100)
+        """
+        )
+
+        # pricesテーブル（get_holdingsで参照される）
+        conn.execute(
+            """
+            CREATE TABLE prices (
+                code TEXT NOT NULL,
+                date TEXT NOT NULL,
+                open REAL,
+                high REAL,
+                low REAL,
+                close REAL,
+                upper_limit REAL,
+                lower_limit REAL,
+                volume INTEGER,
+                turnover_value INTEGER,
+                adj_factor REAL,
+                adj_open REAL,
+                adj_high REAL,
+                adj_low REAL,
+                adj_close REAL,
+                adj_volume INTEGER,
+                PRIMARY KEY (code, date)
+            )
+        """
+        )
+
+        # pricesテストデータ挿入（5桁コード形式）
+        conn.execute(
+            """
+            INSERT INTO prices (code, date, close)
+            VALUES ('72030', '2025-07-22', 2100)
         """
         )
 
@@ -152,7 +186,7 @@ def test_update_holding(mock_db_path, test_db):
     holdings = get_holdings(user_id=1)
     assert holdings[0]["quantity"] == 150
     assert holdings[0]["average_price"] == 2050
-    assert holdings[0]["current_price"] == 2200
+    assert holdings[0]["current_price"] == 2100  # pricesテーブルの値が使われるため
 
     # 存在しないIDの更新
     success = update_holding(holding_id=999, quantity=100)

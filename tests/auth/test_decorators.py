@@ -289,6 +289,10 @@ class TestAdminRequired:
         mock_user.role = "user"
         mock_get_user.return_value = mock_user
 
+        @app.route("/login")
+        def login():
+            return "Login Page"
+
         @app.route("/admin")
         @admin_required
         def admin_view():
@@ -301,9 +305,9 @@ class TestAdminRequired:
                 sess["session_id"] = "user-session-id"
 
             response = client.get("/admin")
-            # userロールは管理者権限があると判定される（portfolio_onlyのみ拒否）
-            assert response.status_code == 200
-            assert b"Admin: normal_user" in response.data
+            # userロールは管理者権限がないため、403エラーを返す
+            assert response.status_code == 403
+            assert "アクセス権限がありません" in response.get_data(as_text=True)
 
 
 class TestDecoratorsIntegration:

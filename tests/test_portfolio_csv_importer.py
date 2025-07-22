@@ -160,6 +160,29 @@ def test_db(tmp_path):
         """
         )
 
+        # listed_infoテーブル（CSVインポートで参照される）
+        conn.execute(
+            """
+            CREATE TABLE listed_info (
+                code TEXT PRIMARY KEY,
+                company_name TEXT,
+                market_code TEXT,
+                market_name TEXT,
+                scale_category TEXT,
+                industry_code33 TEXT,
+                industry_name33 TEXT,
+                sector33_name TEXT,
+                industry_code17 TEXT,
+                industry_name17 TEXT,
+                sector17_name TEXT,
+                listed_date TEXT,
+                delisted_date TEXT,
+                delete_flag INTEGER DEFAULT 0,
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """
+        )
+
     return db_path
 
 
@@ -245,7 +268,7 @@ def test_import_duplicate_handling(mock_db_path, test_db, tmp_path):
         # 数量が新しい値に更新されている
         assert active_rows[0][8] == 100  # quantity
 
-        # 論理削除されたデータも含めると2件
+        # 物理削除されたため、全体でも1件のみ
         cursor.execute("SELECT * FROM holdings")
         all_rows = cursor.fetchall()
-        assert len(all_rows) == 2
+        assert len(all_rows) == 1
