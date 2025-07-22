@@ -123,7 +123,7 @@ class TestScreenFundamental:
             with patch.object(pd.DataFrame, "to_excel", side_effect=mock_to_excel):
                 # リクエスト
                 response = client.post(
-                    "/api/screen/fundamental",
+                    "/api/screening/fundamental",
                     json={
                         "lookback": 365,
                         "recent": 30,
@@ -205,7 +205,7 @@ class TestScreenFundamental:
 
             with patch.object(pd.DataFrame, "to_excel", side_effect=mock_to_excel):
                 # リクエスト（パラメータなし）
-                response = client.post("/api/screen/fundamental", json={})
+                response = client.post("/api/screening/fundamental", json={})
 
         # 検証
         assert response.status_code == 200
@@ -240,7 +240,7 @@ class TestScreenFundamental:
         mock_connect.return_value = mock_conn
 
         # リクエスト
-        response = client.post("/api/screen/fundamental", json={})
+        response = client.post("/api/screening/fundamental", json={})
 
         # 検証
         assert response.status_code == 200
@@ -285,7 +285,7 @@ class TestScreenFundamental:
             mock_excel_writer.side_effect = Exception("Write error")
 
             # リクエスト
-            response = client.post("/api/screen/fundamental", json={})
+            response = client.post("/api/screening/fundamental", json={})
 
         # 検証
         assert response.status_code == 200
@@ -310,7 +310,7 @@ class TestScreenFundamental:
         }
 
         # リクエスト
-        response = client.post("/api/screen/fundamental", json={})
+        response = client.post("/api/screening/fundamental", json={})
 
         # 検証
         assert response.status_code == 200
@@ -332,7 +332,7 @@ class TestScreenFundamental:
             # ユーザーが存在しない（ログインしていない）状態をシミュレート
             mock_get_user.return_value = None
 
-            response = client.post("/api/screen/fundamental", json={})
+            response = client.post("/api/screening/fundamental", json={})
 
         assert response.status_code == 401
 
@@ -347,7 +347,7 @@ class TestScreenFundamental:
             # portfolio_onlyユーザーを返す
             mock_get_user.return_value = normal_user
 
-            response = client.post("/api/screen/fundamental", json={})
+            response = client.post("/api/screening/fundamental", json={})
 
         assert response.status_code == 403
 
@@ -419,7 +419,7 @@ class TestScreenTechnical:
             with patch.object(pd.DataFrame, "to_excel", side_effect=mock_to_excel):
                 # リクエスト
                 response = client.post(
-                    "/api/screen/technical",
+                    "/api/screening/technical",
                     json={
                         "action": "screen",
                         "as_of": "2024-01-15",
@@ -454,7 +454,7 @@ class TestScreenTechnical:
 
         # リクエスト
         response = client.post(
-            "/api/screen/technical",
+            "/api/screening/technical",
             json={
                 "action": "indicators",
                 "as_of": "2024-01-15",
@@ -526,7 +526,7 @@ class TestScreenTechnical:
 
             with patch.object(pd.DataFrame, "to_excel", side_effect=mock_to_excel):
                 # リクエスト（actionなし）
-                response = client.post("/api/screen/technical", json={})
+                response = client.post("/api/screening/technical", json={})
 
         # 検証
         assert response.status_code == 200
@@ -561,7 +561,7 @@ class TestScreenTechnical:
         mock_connect.return_value = mock_conn
 
         # リクエスト
-        response = client.post("/api/screen/technical", json={"action": "screen"})
+        response = client.post("/api/screening/technical", json={"action": "screen"})
 
         # 検証
         assert response.status_code == 200
@@ -583,7 +583,7 @@ class TestScreenTechnical:
         mock_run.side_effect = Exception("Unexpected error")
 
         # リクエスト
-        response = client.post("/api/screen/technical", json={})
+        response = client.post("/api/screening/technical", json={})
 
         # 検証
         assert response.status_code == 200
@@ -651,7 +651,7 @@ class TestScreenTechnical:
             with patch.object(pd.DataFrame, "to_excel", side_effect=mock_to_excel):
                 # リクエスト
                 response = client.post(
-                    "/api/screen/technical",
+                    "/api/screening/technical",
                     json={"action": "screen", "as_of": "2024-01-15"},
                 )
 
@@ -676,7 +676,7 @@ class TestScreenMl:
 
         # リクエスト
         response = client.post(
-            "/api/screen/ml",
+            "/api/screening/ml",
             json={"action": "train", "force": True},
         )
 
@@ -701,7 +701,7 @@ class TestScreenMl:
 
         # リクエスト
         response = client.post(
-            "/api/screen/ml",
+            "/api/screening/ml",
             json={
                 "action": "screen",
                 "top": 20,
@@ -727,7 +727,7 @@ class TestScreenMl:
         mock_run.return_value = {"success": True}
 
         # リクエスト（actionなし）
-        response = client.post("/api/screen/ml", json={})
+        response = client.post("/api/screening/ml", json={})
 
         # 検証
         assert response.status_code == 200
@@ -744,7 +744,7 @@ class TestScreenMl:
 
         # リクエスト
         response = client.post(
-            "/api/screen/ml",
+            "/api/screening/ml",
             json={"action": "train"},
         )
 
@@ -766,9 +766,9 @@ class TestScreeningIntegration:
         mock_run.return_value = {"success": True, "message": "Success"}
 
         endpoints = [
-            ("/api/screen/fundamental", {"lookback": 365}),
-            ("/api/screen/technical", {"action": "screen", "lookback": 20}),
-            ("/api/screen/ml", {"action": "screen", "top": 10}),
+            ("/api/screening/fundamental", {"lookback": 365}),
+            ("/api/screening/technical", {"action": "screen", "lookback": 20}),
+            ("/api/screening/ml", {"action": "screen", "top": 10}),
         ]
 
         for endpoint, params in endpoints:
@@ -781,9 +781,9 @@ class TestScreeningIntegration:
     def test_request_methods(self, client):
         """HTTPメソッドの制限テスト"""
         endpoints = [
-            "/api/screen/fundamental",
-            "/api/screen/technical",
-            "/api/screen/ml",
+            "/api/screening/fundamental",
+            "/api/screening/technical",
+            "/api/screening/ml",
         ]
 
         for endpoint in endpoints:
@@ -859,7 +859,7 @@ class TestScreeningIntegration:
 
             with patch.object(pd.DataFrame, "to_excel", side_effect=mock_to_excel):
                 # リクエスト
-                response = client.post("/api/screen/fundamental", json={})
+                response = client.post("/api/screening/fundamental", json={})
                 assert response.status_code == 200
 
                 # 列幅設定の確認

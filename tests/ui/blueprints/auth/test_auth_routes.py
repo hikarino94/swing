@@ -194,7 +194,7 @@ class TestRegisterRoute:
 
         # register_userの呼び出しを確認
         mock_auth_manager.register_user.assert_called_once_with(
-            "newuser", "new@example.com", "password123", role="portfolio_only"
+            "newuser", "", "password123", role="trader"
         )
 
         # 自動ログインの確認
@@ -273,7 +273,7 @@ class TestRegisterRoute:
 
             # strip()されていることを確認
             mock_auth.register_user.assert_called_once_with(
-                "newuser", "new@example.com", "password123", role="portfolio_only"
+                "newuser", "", "password123", role="trader"
             )
 
 

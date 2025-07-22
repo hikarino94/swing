@@ -342,4 +342,5 @@ class TestBlueprints:
         assert "backtest" in blueprint_names
         assert "utils" in blueprint_names
         assert "results" in blueprint_names
-        assert "portfolio" in blueprint_names
+        assert "holdings" in blueprint_names
+        assert "daytrade" in blueprint_names
