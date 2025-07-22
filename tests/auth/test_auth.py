@@ -39,12 +39,21 @@ class TestAuthManagerRegister:
         assert "ユーザー名は3文字以上" in message
 
     def test_register_user_invalid_email(self):
-        """無効なメールアドレスのテスト"""
-        success, message = AuthManager.register_user(
-            "testuser", "invalid-email", "password123"
-        )
-        assert success is False
-        assert "有効なメールアドレス" in message
+        """無効なメールアドレスのテスト（メールバリデーションは削除されたため成功するはず）"""
+        with (
+            patch("src.auth.auth.User.find_by_username") as mock_find_username,
+            patch("src.auth.auth.User.find_by_email") as mock_find_email,
+            patch("src.auth.auth.User.save") as mock_save,
+        ):
+            mock_find_username.return_value = None
+            mock_find_email.return_value = None
+            mock_save.return_value = True
+
+            success, message = AuthManager.register_user(
+                "testuser", "invalid-email", "password123"
+            )
+            assert success is True
+            assert message == "ユーザー登録が完了しました"
 
     def test_register_user_short_password(self):
         """短いパスワードのテスト"""

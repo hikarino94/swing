@@ -23,6 +23,9 @@
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 
+    <!-- html2canvas for screenshots -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
     <!-- Custom styles -->
     <style>
         [x-cloak] { display: none !important; }
@@ -170,19 +173,39 @@
         // API呼び出しのヘルパー関数
         async function apiCall(endpoint, data = {}, method = 'POST', silent = false) {
             try {
+                // CSRFトークンを取得
+                const csrfToken = window.csrf_token ? window.csrf_token() : '';
+
                 const options = {
                     method: method,
                     credentials: 'same-origin', // クッキーを送信
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
                     }
                 };
 
                 if (method !== 'GET') {
+                    // CSRFトークンをボディにも含める（互換性のため）
+                    if (!data.csrf_token) {
+                        data.csrf_token = csrfToken;
+                    }
                     options.body = JSON.stringify(data);
                 }
 
                 const response = await fetch(`/api${endpoint}`, options);
+
+                // レスポンスがJSONかチェック
+                const contentType = response.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    const text = await response.text();
+                    console.error('非JSONレスポンス:', text);
+                    return {
+                        success: false,
+                        error: 'サーバーからJSONでないレスポンスが返されました。APIエラーの可能性があります。'
+                    };
+                }
+
                 const result = await response.json();
 
                 if (!silent) {

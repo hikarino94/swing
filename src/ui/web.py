@@ -4,6 +4,7 @@ Swing Trading Tool - モダンなWeb UI版
 タブ型インターフェースでGUIアプリの機能を統合
 """
 
+import argparse
 import sqlite3
 from pathlib import Path
 from typing import cast
@@ -18,8 +19,9 @@ from src.types.flask_types import RequestWithUser, get_args_value
 from src.ui.blueprints import (
     auth_bp,
     backtest_bp,
+    daytrade_bp,
     fetch_bp,
-    portfolio_bp,
+    holdings_bp,
     results_bp,
     screening_bp,
     utils_bp,
@@ -101,11 +103,35 @@ def init_database():
 init_database()
 
 
-# チャンク転送エンコーディングを有効化
+# チャンク転送エンコーディングを有効化とセキュリティヘッダーの追加
 @app.after_request
 def after_request(response):
     # 小さなチャンクサイズでレスポンスを送信
     response.direct_passthrough = False
+
+    # Content Security Policy (CSP) ヘッダーの設定
+    # Plotly.jsなどの外部ライブラリが動的コード生成を行う可能性があるため、'unsafe-eval'を許可
+    csp_policy = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+        "https://cdn.tailwindcss.com "
+        "https://unpkg.com "
+        "https://cdn.jsdelivr.net "
+        "https://cdn.plot.ly; "
+        "style-src 'self' 'unsafe-inline' "
+        "https://cdn.jsdelivr.net; "
+        "font-src 'self' data:; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self';"
+    )
+    response.headers["Content-Security-Policy"] = csp_policy
+
+    # その他のセキュリティヘッダー
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
     return response
 
 
@@ -116,7 +142,8 @@ app.register_blueprint(screening_bp)
 app.register_blueprint(backtest_bp)
 app.register_blueprint(utils_bp)
 app.register_blueprint(results_bp)
-app.register_blueprint(portfolio_bp)
+app.register_blueprint(daytrade_bp)
+app.register_blueprint(holdings_bp)
 
 
 # メインページルート
@@ -155,16 +182,7 @@ def index():
         session.clear()
         return redirect(url_for("auth.login"))
 
-    # ポートフォリオ専用ユーザーの場合は権限をチェック
-    if user.role == "portfolio_only":
-        # ポートフォリオタブのみ表示するようにユーザー情報を渡す
-        return render_template(
-            "index.html", user=user, portfolio_only=True, selected_tab="portfolio"
-        )
-
-    return render_template(
-        "index.html", user=user, portfolio_only=False, selected_tab=selected_tab
-    )
+    return render_template("index.html", user=user, selected_tab=selected_tab)
 
 
 @app.route("/screening")
@@ -214,6 +232,20 @@ def import_page():
 
 
 if __name__ == "__main__":
+    # コマンドライン引数の解析
+    parser = argparse.ArgumentParser(description="Swing Trading Tool Web UI")
+    parser.add_argument(
+        "--port", type=int, default=5005, help="ポート番号を指定（デフォルト: 5005）"
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="0.0.0.0",
+        help="ホストアドレスを指定（デフォルト: 0.0.0.0）",
+    )
+    parser.add_argument("--debug", action="store_true", help="デバッグモードで起動")
+    args = parser.parse_args()
+
     # ホストを0.0.0.0に設定してWSL2からアクセス可能にする
     # threaded=Trueで並行処理を有効化
-    app.run(host="0.0.0.0", port=5005, debug=True, threaded=True)
+    app.run(host=args.host, port=args.port, debug=args.debug, threaded=True)

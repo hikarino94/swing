@@ -208,12 +208,30 @@ class TestAPIClientMethods:
         with patch.object(
             client, "get_with_pagination", return_value=mock_response
         ) as mock_get:
-            result = client.get_daily_quotes(code="1234", date="2023-01-01")
+            result = client.get_daily_quotes(date="2023-01-01", code="1234")
 
         assert result == mock_response
         mock_get.assert_called_once_with(
-            "/prices/daily_quotes", {"code": "1234", "date": "2023-01-01"}
+            "/prices/daily_quotes", {"date": "2023-01-01", "code": "1234"}
         )
+
+    @patch("src.utils.api_utils.get_idtoken")
+    def test_get_daily_quotes_without_code(self, mock_get_idtoken):
+        """銘柄コードなしでの日次株価取得テスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        mock_response = [
+            {"code": "1234", "close": 1000},
+            {"code": "5678", "close": 2000},
+        ]
+        with patch.object(
+            client, "get_with_pagination", return_value=mock_response
+        ) as mock_get:
+            result = client.get_daily_quotes(date="2023-01-01")
+
+        assert result == mock_response
+        mock_get.assert_called_once_with("/prices/daily_quotes", {"date": "2023-01-01"})
 
     @patch("src.utils.api_utils.get_idtoken")
     def test_get_statements(self, mock_get_idtoken):
@@ -229,6 +247,71 @@ class TestAPIClientMethods:
 
         assert result == mock_response
         mock_get.assert_called_once_with("/fins/statements", {"code": "1234"})
+
+    @patch("src.utils.api_utils.get_idtoken")
+    def test_get_statements_with_date(self, mock_get_idtoken):
+        """日付指定での財務諸表取得テスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        mock_response = [{"code": "1234", "revenue": 1000000, "date": "2023-03-31"}]
+        with patch.object(
+            client, "get_with_pagination", return_value=mock_response
+        ) as mock_get:
+            result = client.get_statements(code="1234", date="2023-03-31")
+
+        assert result == mock_response
+        mock_get.assert_called_once_with(
+            "/fins/statements", {"code": "1234", "date": "2023-03-31"}
+        )
+
+    @patch("src.utils.api_utils.get_idtoken")
+    def test_get_statements_no_params(self, mock_get_idtoken):
+        """パラメータなしでの財務諸表取得テスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        mock_response = [{"code": "1234", "revenue": 1000000}]
+        with patch.object(
+            client, "get_with_pagination", return_value=mock_response
+        ) as mock_get:
+            result = client.get_statements()
+
+        assert result == mock_response
+        mock_get.assert_called_once_with("/fins/statements", {})
+
+    @patch("src.utils.api_utils.get_idtoken")
+    def test_get_listed_info(self, mock_get_idtoken):
+        """上場銘柄情報取得メソッドのテスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        mock_response = [{"code": "1234", "company_name": "Test Company"}]
+        with patch.object(
+            client, "get_with_pagination", return_value=mock_response
+        ) as mock_get:
+            result = client.get_listed_info(code="1234")
+
+        assert result == mock_response
+        mock_get.assert_called_once_with("/listed/info", {"code": "1234"})
+
+    @patch("src.utils.api_utils.get_idtoken")
+    def test_get_listed_info_without_code(self, mock_get_idtoken):
+        """銘柄コードなしでの上場銘柄情報取得テスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        mock_response = [
+            {"code": "1234", "company_name": "Company A"},
+            {"code": "5678", "company_name": "Company B"},
+        ]
+        with patch.object(
+            client, "get_with_pagination", return_value=mock_response
+        ) as mock_get:
+            result = client.get_listed_info()
+
+        assert result == mock_response
+        mock_get.assert_called_once_with("/listed/info", {})
 
 
 class TestAPIClientRetry:
@@ -258,3 +341,146 @@ class TestAPIClientRetry:
             with pytest.raises(requests.exceptions.HTTPError):
                 # ただし、このテストではリトライが設定通り動作することを確認
                 client._request("GET", "/test")
+
+
+class TestPaginationEdgeCases:
+    """ページネーションのエッジケーステスト"""
+
+    @patch("src.utils.api_utils.get_idtoken")
+    def test_get_with_pagination_empty_data(self, mock_get_idtoken):
+        """空のデータが返された場合のテスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        # 空のレスポンス
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "data": [],
+            "pagination_key": None,
+        }
+
+        with patch.object(client, "_request", return_value=mock_response):
+            result = client.get_with_pagination("/test/endpoint", data_key="data")
+
+        assert result == []
+
+    @patch("src.utils.api_utils.get_idtoken")
+    def test_get_with_pagination_auto_detect_fallback(self, mock_get_idtoken):
+        """データキー自動検出のフォールバックテスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        # 未知のエンドポイントで最初の配列を探す
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "meta": {"version": "1.0"},
+            "results": [{"id": 1}, {"id": 2}],
+            "pagination_key": None,
+        }
+
+        with patch.object(client, "_request", return_value=mock_response):
+            result = client.get_with_pagination("/unknown/endpoint")
+
+        assert result == [{"id": 1}, {"id": 2}]
+
+    @patch("src.utils.api_utils.get_idtoken")
+    def test_get_with_pagination_no_list_data(self, mock_get_idtoken):
+        """リスト型のデータが見つからない場合のテスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        # リスト型のデータがないレスポンス
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "meta": {"version": "1.0"},
+            "status": "ok",
+            "pagination_key": None,
+        }
+
+        with patch.object(client, "_request", return_value=mock_response):
+            result = client.get_with_pagination("/no-list/endpoint")
+
+        assert result == []
+
+    @patch("src.utils.api_utils.get_idtoken")
+    def test_get_with_pagination_fins_statements_endpoint(self, mock_get_idtoken):
+        """財務諸表エンドポイントの自動検出テスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "statements": [{"code": "1234", "revenue": 1000}],
+            "pagination_key": None,
+        }
+
+        with patch.object(client, "_request", return_value=mock_response):
+            result = client.get_with_pagination("/fins/fins_statements")
+
+        assert result == [{"code": "1234", "revenue": 1000}]
+
+    @patch("src.utils.api_utils.get_idtoken")
+    def test_get_with_pagination_listed_info_endpoint(self, mock_get_idtoken):
+        """上場銘柄情報エンドポイントの自動検出テスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "info": [{"code": "1234", "name": "Test Corp"}],
+            "pagination_key": None,
+        }
+
+        with patch.object(client, "_request", return_value=mock_response):
+            result = client.get_with_pagination("/listed/listed_info")
+
+        assert result == [{"code": "1234", "name": "Test Corp"}]
+
+
+class TestRequestExceptionHandling:
+    """リクエスト例外処理のテスト"""
+
+    @patch("src.utils.api_utils.get_idtoken")
+    def test_request_connection_error(self, mock_get_idtoken):
+        """接続エラーのテスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        with patch.object(
+            client.session,
+            "request",
+            side_effect=requests.exceptions.ConnectionError("Connection failed"),
+        ):
+            with pytest.raises(requests.exceptions.ConnectionError):
+                client._request("GET", "/test")
+
+    @patch("src.utils.api_utils.get_idtoken")
+    def test_request_timeout_error(self, mock_get_idtoken):
+        """タイムアウトエラーのテスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        with patch.object(
+            client.session,
+            "request",
+            side_effect=requests.exceptions.Timeout("Request timeout"),
+        ):
+            with pytest.raises(requests.exceptions.Timeout):
+                client._request("GET", "/test")
+
+    @patch("src.utils.api_utils.get_idtoken")
+    @patch("src.utils.api_utils.logger")
+    def test_request_logs_error(self, mock_logger, mock_get_idtoken):
+        """エラー時のログ出力テスト"""
+        mock_get_idtoken.return_value = "test_token"
+        client = JQuantsAPIClient()
+
+        error = requests.exceptions.HTTPError("404 Not Found")
+        mock_response = Mock()
+        mock_response.raise_for_status.side_effect = error
+
+        with patch.object(client.session, "request", return_value=mock_response):
+            with pytest.raises(requests.exceptions.HTTPError):
+                client._request("GET", "/invalid")
+
+        mock_logger.error.assert_called_once_with(f"API request failed: {error}")

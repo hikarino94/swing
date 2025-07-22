@@ -49,6 +49,21 @@ def generate_csrf_token():
     return session["_csrf_token"]
 
 
+def validate_csrf_token(request):
+    """CSRFトークンの検証"""
+    token = session.get("_csrf_token", None)
+    if not token:
+        return False
+
+    # フォームデータまたはJSONからトークンを取得
+    if request.is_json:
+        provided_token = request.json.get("csrf_token")
+    else:
+        provided_token = request.form.get("csrf_token")
+
+    return token == provided_token
+
+
 def compress_response(f):
     """レスポンスをgzip圧縮するデコレータ"""
 

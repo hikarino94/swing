@@ -125,7 +125,34 @@ class TestScheduleConfiguration:
 
 
 class TestMainLoop:
-    """メインループのテスト（該当する場合）"""
+    """メインループのテスト"""
+
+    @patch("src.cli.scheduler.schedule")
+    @patch("src.cli.scheduler.time")
+    @patch("src.cli.scheduler.logger")
+    def test_main_function(self, mock_logger, mock_time, mock_schedule):
+        """main関数のテスト"""
+        from src.cli.scheduler import main
+
+        # 3回実行後に停止するようにモック
+        mock_time.sleep.side_effect = [None, None, KeyboardInterrupt]
+
+        # main関数を実行（KeyboardInterruptで終了）
+        try:
+            main()
+        except KeyboardInterrupt:
+            pass
+
+        # ログ出力の確認
+        mock_logger.info.assert_called_with("scheduler start")
+
+        # スケジュール実行の確認
+        assert mock_schedule.run_pending.call_count == 3
+        assert mock_time.sleep.call_count == 3
+
+        # sleep時間の確認
+        for call in mock_time.sleep.call_args_list:
+            assert call[0][0] == 30  # 30秒でsleep
 
     @patch("src.cli.scheduler.schedule")
     @patch("src.cli.scheduler.time")
@@ -134,13 +161,12 @@ class TestMainLoop:
         # 3回実行後に停止するようにモック
         mock_time.sleep.side_effect = [None, None, KeyboardInterrupt]
 
-        # main関数が存在する場合のテスト例
+        # schedule.run_pending()を呼び出すループをテスト
         try:
-            # schedule.run_pending()を呼び出すループをテスト
             loop_count = 0
             while True:
                 mock_schedule.run_pending()
-                mock_time.sleep(1)
+                mock_time.sleep(30)
                 loop_count += 1
                 if loop_count >= 3:
                     break

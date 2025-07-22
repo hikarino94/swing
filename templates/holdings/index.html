@@ -1,0 +1,1997 @@
+<!-- 保有銘柄管理 -->
+<div x-data="holdingsManager()" x-cloak>
+    <div class="bg-white shadow rounded-lg p-3 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6 space-y-3 sm:space-y-0">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900">保有銘柄管理</h2>
+            <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                <button @click="showImportModal = true"
+                        class="btn btn-primary w-full sm:w-auto px-3 py-2 text-sm sm:text-base">
+                    📥 CSVインポート
+                </button>
+                <button @click="showAddModal = true"
+                        class="btn btn-secondary w-full sm:w-auto px-3 py-2 text-sm sm:text-base">
+                    ➕ 手動追加
+                </button>
+            </div>
+        </div>
+
+        <!-- タブナビゲーション -->
+        <div class="border-b border-gray-200 mb-4 sm:mb-6">
+            <nav class="-mb-px flex space-x-4 sm:space-x-8">
+                <button @click="activeTab = 'holdings'"
+                        :class="activeTab === 'holdings' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-xs sm:text-sm">
+                    <span class="hidden sm:inline">📋 保有銘柄一覧</span>
+                    <span class="sm:hidden">📋 一覧</span>
+                </button>
+                <button @click="switchToAnalysisTab()"
+                        :class="activeTab === 'analysis' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-xs sm:text-sm">
+                    <span class="hidden sm:inline">📊 ポートフォリオ分析</span>
+                    <span class="sm:hidden">📊 分析</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- 保有銘柄一覧タブ -->
+        <div x-show="activeTab === 'holdings'" x-transition>
+
+        <!-- フィルター設定 -->
+        <div class="mb-4 space-y-4">
+            <!-- 口座選択と表示切替 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                <div>
+                    <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">口座選択</label>
+                    <select x-model="selectedAccount"
+                            @change="loadHoldings()"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                        <option value="">全口座</option>
+                        <template x-for="account in accounts" :key="account">
+                            <option :value="account" x-text="account"></option>
+                        </template>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">預かり区分</label>
+                    <select x-model="filters.accountType"
+                            @change="applyFilters()"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                        <option value="">全て</option>
+                        <option value="特定">特定</option>
+                        <option value="一般">一般</option>
+                        <option value="NISA">NISA</option>
+                        <option value="旧NISA">旧NISA</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">現物/信用</label>
+                    <select x-model="filters.stockType"
+                            @change="applyFilters()"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                        <option value="">全て</option>
+                        <option value="現物">現物</option>
+                        <option value="信用">信用</option>
+                    </select>
+                </div>
+                <div x-show="filters.stockType === '信用'">
+                    <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">建区分</label>
+                    <select x-model="filters.tradePosition"
+                            @change="applyFilters()"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                        <option value="">全て</option>
+                        <option value="買建">買建</option>
+                        <option value="売建">売建</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex items-center">
+                <label class="flex items-center">
+                    <input type="checkbox" x-model="aggregateView"
+                           @change="loadHoldings()"
+                           class="rounded text-blue-600 focus:ring-blue-500">
+                    <span class="ml-2 text-sm text-gray-700">複数口座・預かり区分を合算表示</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- 一括削除ボタンと表示件数 -->
+        <div x-show="holdings.length > 0" class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0">
+            <button @click="confirmBulkDelete()"
+                    class="btn btn-danger text-sm px-3 py-2">
+                🗑️ 一括削除
+            </button>
+            <div class="text-xs sm:text-sm text-gray-600">
+                <span x-text="filteredHoldings.length"></span>件
+                <span x-show="filteredHoldings.length !== holdings.length">
+                    （全<span x-text="holdings.length"></span>件中）
+                </span>
+            </div>
+        </div>
+
+        <!-- 保有銘柄一覧 -->
+        <!-- モバイル用カードレイアウト -->
+        <div class="block sm:hidden space-y-3">
+            <template x-for="holding in sortedHoldings" :key="holding.id || holding.code">
+                <div class="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-mono text-sm font-semibold" x-text="holding.code"></div>
+                            <div class="text-xs text-gray-600 truncate" x-text="holding.name"></div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm font-semibold" x-text="formatNumber(holding.current_price)"></div>
+                            <div class="text-xs"
+                                 :class="holding.profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'"
+                                 x-text="formatPercentage(holding.profit_loss_ratio)"></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <span class="text-gray-500">数量:</span>
+                            <span x-text="formatNumber(holding.quantity || holding.total_quantity)"></span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">取得:</span>
+                            <span x-text="formatNumber(holding.average_price)"></span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">評価額:</span>
+                            <span x-text="formatNumber(holding.market_value)"></span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">損益:</span>
+                            <span :class="holding.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'"
+                                  x-text="formatNumber(holding.profit_loss)"></span>
+                        </div>
+                    </div>
+                    <div x-show="!aggregateView" class="pt-2 border-t flex justify-between text-xs">
+                        <div>
+                            <span class="text-gray-500">口座:</span>
+                            <span x-text="holding.account_name"></span>
+                        </div>
+                        <div class="space-x-2">
+                            <button @click="editHolding(holding)" class="text-blue-600">編集</button>
+                            <button @click="deleteHolding(holding)" class="text-red-600">削除</button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <div x-show="holdings.length === 0" class="text-center py-8 text-gray-500">
+                保有銘柄がありません
+            </div>
+        </div>
+
+        <!-- PC用テーブルレイアウト -->
+        <div class="hidden sm:block overflow-auto max-h-[calc(100vh-300px)]">
+            <table class="w-full divide-y divide-gray-200 text-xs sm:text-sm">
+                <thead class="bg-gray-50 sticky top-0">
+                    <tr>
+                        <th @click="sortBy('code')" class="sortable-header whitespace-nowrap" :class="sortColumn === 'code' ? 'sorted' : ''">
+                            コード
+                        </th>
+                        <th @click="sortBy('name')" class="sortable-header whitespace-nowrap" :class="sortColumn === 'name' ? 'sorted' : ''">
+                            銘柄名
+                        </th>
+                        <th x-show="!aggregateView" @click="sortBy('account_name')" class="sortable-header whitespace-nowrap" :class="sortColumn === 'account_name' ? 'sorted' : ''">
+                            口座
+                        </th>
+                        <th x-show="!aggregateView" @click="sortBy('account_type')" class="sortable-header whitespace-nowrap" :class="sortColumn === 'account_type' ? 'sorted' : ''">
+                            区分
+                        </th>
+                        <th x-show="!aggregateView" @click="sortBy('quantity')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'quantity' ? 'sorted' : ''">
+                            数量
+                        </th>
+                        <th x-show="aggregateView" @click="sortBy('total_quantity')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'total_quantity' ? 'sorted' : ''">
+                            合計
+                        </th>
+                        <th @click="sortBy('average_price')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'average_price' ? 'sorted' : ''">
+                            取得
+                        </th>
+                        <th @click="sortBy('current_price')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'current_price' ? 'sorted' : ''">
+                            現在
+                        </th>
+                        <th @click="sortBy('market_value')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'market_value' ? 'sorted' : ''">
+                            評価額
+                        </th>
+                        <th @click="sortBy('profit_loss')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'profit_loss' ? 'sorted' : ''">
+                            損益
+                        </th>
+                        <th @click="sortBy('profit_loss_ratio')" class="sortable-header text-right whitespace-nowrap" :class="sortColumn === 'profit_loss_ratio' ? 'sorted' : ''">
+                            率
+                        </th>
+                        <th x-show="!aggregateView" class="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            操作
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="holding in sortedHoldings" :key="holding.id || holding.code">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-1 sm:px-2 py-1 whitespace-nowrap font-mono" x-text="holding.code"></td>
+                            <td class="px-1 sm:px-2 py-1 truncate max-w-[100px] sm:max-w-[150px]" :title="holding.name" x-text="holding.name"></td>
+                            <td x-show="!aggregateView" class="px-2 py-1 whitespace-nowrap" x-text="holding.account_name"></td>
+                            <td x-show="!aggregateView" class="px-2 py-1 whitespace-nowrap">
+                                <span x-text="holding.account_type"></span>
+                                <span x-show="holding.stock_type === '信用'" class="text-xs text-gray-500" x-text="`(${holding.stock_type}${holding.trade_position ? '/' + holding.trade_position : ''})`"></span>
+                            </td>
+                            <td class="px-2 py-1 text-right tabular-nums">
+                                <div x-show="!aggregateView" x-text="formatNumber(holding.quantity)"></div>
+                                <div x-show="aggregateView">
+                                    <div x-text="formatNumber(holding.total_quantity || holding.quantity)" class="font-semibold"></div>
+                                    <div class="text-xs text-gray-500 space-y-0">
+                                        <div x-show="holding.spot_quantity > 0">現物: <span x-text="formatNumber(holding.spot_quantity)"></span></div>
+                                        <div x-show="holding.margin_buy_quantity > 0">買建: <span x-text="formatNumber(holding.margin_buy_quantity)"></span></div>
+                                        <div x-show="holding.margin_sell_quantity > 0">売建: <span x-text="formatNumber(holding.margin_sell_quantity)"></span></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-2 py-1 text-right tabular-nums" x-text="formatNumber(holding.average_price)"></td>
+                            <td class="px-2 py-1 text-right tabular-nums font-semibold" x-text="formatNumber(holding.current_price)"></td>
+                            <td class="px-2 py-1 text-right tabular-nums" x-text="formatNumber(holding.market_value)"></td>
+                            <td class="px-2 py-1 text-right tabular-nums font-semibold"
+                                :class="holding.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'">
+                                <span x-text="formatNumber(holding.profit_loss)"></span>
+                            </td>
+                            <td class="px-2 py-1 text-right tabular-nums"
+                                :class="holding.profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'">
+                                <span x-text="formatPercentage(holding.profit_loss_ratio)"></span>
+                            </td>
+                            <td x-show="!aggregateView" class="px-1 sm:px-2 py-1 text-center">
+                                <button @click="editHolding(holding)" class="text-blue-600 hover:text-blue-900 text-xs">編集</button>
+                                <button @click="deleteHolding(holding)" class="text-red-600 hover:text-red-900 text-xs ml-1">削除</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+                <tfoot x-show="holdings.length > 0" class="bg-gray-50 sticky bottom-0">
+                    <tr class="font-semibold">
+                        <td colspan="2" class="px-2 py-1">合計</td>
+                        <td x-show="!aggregateView" colspan="2"></td>
+                        <td x-show="!aggregateView"></td>
+                        <td x-show="aggregateView"></td>
+                        <td colspan="2"></td>
+                        <td class="px-2 py-1 text-right tabular-nums" x-text="formatNumber(totals.market_value)"></td>
+                        <td class="px-2 py-1 text-right tabular-nums"
+                            :class="totals.profit_loss >= 0 ? 'text-green-600' : 'text-red-600'"
+                            x-text="formatNumber(totals.profit_loss)"></td>
+                        <td class="px-2 py-1 text-right tabular-nums"
+                            :class="totals.profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'"
+                            x-text="formatPercentage(totals.profit_loss_ratio)"></td>
+                        <td x-show="!aggregateView"></td>
+                    </tr>
+                </tfoot>
+            </table>
+            <div x-show="holdings.length === 0" class="text-center py-8 text-gray-500">
+                保有銘柄がありません
+            </div>
+            <div x-show="holdings.length > 0 && filteredHoldings.length === 0" class="text-center py-8 text-gray-500">
+                フィルター条件に一致する銘柄がありません
+            </div>
+        </div>
+        </div>
+
+        <!-- ポートフォリオ分析タブ -->
+        <template x-if="activeTab === 'analysis'">
+        <div>
+            <div x-show="analysisLoading" class="text-center py-8">
+                <div class="spinner mx-auto mb-4"></div>
+                <p class="text-gray-600">分析データを読み込んでいます...</p>
+            </div>
+
+            <div x-show="!analysisLoading && analysisData" x-init="if (analysisData) { $nextTick(() => { setTimeout(() => renderCharts(), 500); }); }">
+                <!-- 概要統計 -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-600">総評価額</div>
+                        <div class="text-xl font-bold" x-text="analysisData ? formatPrice(analysisData.total_value) : '-'"></div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-600">評価損益</div>
+                        <div class="text-xl font-bold"
+                             :class="analysisData && analysisData.total_profit_loss >= 0 ? 'text-green-600' : 'text-red-600'"
+                             x-text="analysisData ? formatPrice(analysisData.total_profit_loss) : '-'"></div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-600">損益率</div>
+                        <div class="text-xl font-bold"
+                             :class="analysisData && analysisData.total_profit_loss_ratio >= 0 ? 'text-green-600' : 'text-red-600'"
+                             x-text="analysisData ? formatPercentage(analysisData.total_profit_loss_ratio) : '-'"></div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-600">保有銘柄数</div>
+                        <div class="text-xl font-bold" x-text="analysisData ? analysisData.total_holdings + '銘柄' : '-'"></div>
+                    </div>
+                </div>
+
+                <!-- セクター別構成（単独行） -->
+                <div class="bg-gray-50 rounded-lg p-4 mb-6 relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">セクター別構成</h3>
+                        <div class="flex items-center space-x-2">
+                            <button @click="sectorType = '17'"
+                                    :class="sectorType === '17' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'"
+                                    class="px-3 py-1 rounded text-sm font-medium transition-colors">
+                                17業種
+                            </button>
+                            <button @click="sectorType = '33'"
+                                    :class="sectorType === '33' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'"
+                                    class="px-3 py-1 rounded text-sm font-medium transition-colors">
+                                33業種
+                            </button>
+                            <button @click="screenshotChart('sectorChart')"
+                                    class="ml-4 px-3 py-1 bg-gray-600 text-white rounded text-sm font-medium hover:bg-gray-700 transition-colors">
+                                📷 画像保存
+                            </button>
+                        </div>
+                    </div>
+                    <div class="h-64 sm:h-80 relative">
+                        <canvas id="sectorChart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <!-- 銘柄別年間配当額（単独行） -->
+                <div class="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 relative">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
+                        <h3 class="text-base sm:text-lg font-semibold">銘柄別年間配当額</h3>
+                        <button @click="screenshotChart('dividendAmountChart')"
+                                class="px-2 sm:px-3 py-1 bg-gray-600 text-white rounded text-xs sm:text-sm font-medium hover:bg-gray-700 transition-colors">
+                            <span class="hidden sm:inline">📷 画像保存</span>
+                            <span class="sm:hidden">📷</span>
+                        </button>
+                    </div>
+                    <div class="h-64 sm:h-80 relative">
+                        <canvas id="dividendAmountChart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <!-- 市場別構成とパフォーマンス分布（並列） -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+                    <!-- 市場別円グラフ -->
+                    <div class="bg-gray-50 rounded-lg p-3 sm:p-4 relative">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
+                            <h3 class="text-base sm:text-lg font-semibold">市場別構成</h3>
+                            <button @click="screenshotChart('marketChart')"
+                                    class="px-2 sm:px-3 py-1 bg-gray-600 text-white rounded text-xs sm:text-sm font-medium hover:bg-gray-700 transition-colors">
+                                <span class="hidden sm:inline">📷 画像保存</span>
+                                <span class="sm:hidden">📷</span>
+                            </button>
+                        </div>
+                        <div class="h-64 sm:h-80 relative">
+                            <canvas id="marketChart" class="w-full h-full"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- パフォーマンス分布 -->
+                    <div class="bg-gray-50 rounded-lg p-3 sm:p-4 relative">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
+                            <h3 class="text-base sm:text-lg font-semibold">パフォーマンス分布</h3>
+                            <button @click="screenshotChart('performanceChart')"
+                                    class="px-2 sm:px-3 py-1 bg-gray-600 text-white rounded text-xs sm:text-sm font-medium hover:bg-gray-700 transition-colors">
+                                <span class="hidden sm:inline">📷 画像保存</span>
+                                <span class="sm:hidden">📷</span>
+                            </button>
+                        </div>
+                        <div class="h-64 relative">
+                            <canvas id="performanceChart" class="w-full h-full"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 損益率ヒートマップ（単独行） -->
+                <div class="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 relative">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
+                        <h3 class="text-base sm:text-lg font-semibold">損益率ヒートマップ</h3>
+                        <button @click="screenshotHeatmap()"
+                                class="px-2 sm:px-3 py-1 bg-gray-600 text-white rounded text-xs sm:text-sm font-medium hover:bg-gray-700 transition-colors">
+                            <span class="hidden sm:inline">📷 画像保存</span>
+                            <span class="sm:hidden">📷</span>
+                        </button>
+                    </div>
+                    <div id="heatmapContainer" class="h-64 overflow-auto"></div>
+                </div>
+
+
+                <!-- 上位・下位銘柄 -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                    <!-- 上位銘柄 -->
+                    <div class="bg-gray-50 rounded-lg p-3 sm:p-4">
+                        <h3 class="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-green-600">📈 利益上位銘柄</h3>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-2">銘柄</th>
+                                    <th class="text-right py-2">評価損益</th>
+                                    <th class="text-right py-2">損益率</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="stock in (analysisData && analysisData.top_gainers) || []" :key="stock.code">
+                                    <tr class="border-b">
+                                        <td class="py-2">
+                                            <span x-text="stock.code" class="font-mono"></span>
+                                            <span x-text="stock.name" class="text-xs text-gray-600 block"></span>
+                                        </td>
+                                        <td class="text-right py-2 text-green-600" x-text="formatPrice(stock.profit_loss)"></td>
+                                        <td class="text-right py-2 text-green-600" x-text="formatPercentage(stock.profit_loss_ratio)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 下位銘柄 -->
+                    <div class="bg-gray-50 rounded-lg p-3 sm:p-4">
+                        <h3 class="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-red-600">📉 損失上位銘柄</h3>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-2">銘柄</th>
+                                    <th class="text-right py-2">評価損益</th>
+                                    <th class="text-right py-2">損益率</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="stock in (analysisData && analysisData.top_losers) || []" :key="stock.code">
+                                    <tr class="border-b">
+                                        <td class="py-2">
+                                            <span x-text="stock.code" class="font-mono"></span>
+                                            <span x-text="stock.name" class="text-xs text-gray-600 block"></span>
+                                        </td>
+                                        <td class="text-right py-2 text-red-600" x-text="formatPrice(stock.profit_loss)"></td>
+                                        <td class="text-right py-2 text-red-600" x-text="formatPercentage(stock.profit_loss_ratio)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="!analysisLoading && !analysisData" class="text-center py-8 text-gray-500">
+                分析データがありません
+            </div>
+        </div>
+        </template>
+    </div>
+
+    <!-- CSVインポートモーダル -->
+    <div x-show="showImportModal"
+         class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">CSVインポート</h3>
+
+            <form @submit.prevent="importCSV()">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">口座名</label>
+                        <input type="text" x-model="importData.account_name" required
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">CSVタイプ</label>
+                        <select x-model="importData.csv_type" required
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="spot">現物</option>
+                            <option value="margin">信用</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">CSVファイル</label>
+                        <input type="file" @change="importData.file = $event.target.files[0]"
+                               accept=".csv" required
+                               class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" @click="showImportModal = false"
+                            class="btn btn-secondary">
+                        キャンセル
+                    </button>
+                    <button type="submit"
+                            class="btn btn-primary">
+                        インポート
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 手動追加モーダル -->
+    <div x-show="showAddModal"
+         class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">保有銘柄追加</h3>
+
+            <form @submit.prevent="addHolding()">
+                <div class="space-y-4">
+                    <!-- 銘柄検索 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">銘柄検索</label>
+                        <input type="text" x-model="stockSearch"
+                               @input="searchStocks()"
+                               placeholder="銘柄コードまたは銘柄名"
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+
+                        <div x-show="searchResults.length > 0"
+                             class="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md">
+                            <template x-for="stock in searchResults" :key="stock.code">
+                                <div @click="selectStock(stock)"
+                                     class="px-3 py-2 hover:bg-gray-100 cursor-pointer">
+                                    <span x-text="stock.code" class="font-mono"></span> -
+                                    <span x-text="stock.company_name"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- 基本情報 -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">銘柄コード</label>
+                            <input type="text" x-model="addData.code" required readonly
+                                   class="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">口座名</label>
+                            <input type="text" x-model="addData.account_name" required
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">預かり区分</label>
+                            <select x-model="addData.account_type" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="特定">特定</option>
+                                <option value="一般">一般</option>
+                                <option value="NISA">NISA</option>
+                                <option value="旧NISA">旧NISA</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">現物/信用</label>
+                            <select x-model="addData.stock_type" required
+                                    @change="addData.trade_position = ''; addData.margin_term = ''"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="現物">現物</option>
+                                <option value="信用">信用</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 信用取引の場合の追加項目 -->
+                    <div x-show="addData.stock_type === '信用'" class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">建区分</label>
+                            <select x-model="addData.trade_position" :required="addData.stock_type === '信用'"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="">選択してください</option>
+                                <option value="買建">買建</option>
+                                <option value="売建">売建</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">期限</label>
+                            <select x-model="addData.margin_term" :required="addData.stock_type === '信用'"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="">選択してください</option>
+                                <option value="6ヵ月">6ヵ月</option>
+                                <option value="無期限">無期限</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 数量と価格 -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">数量</label>
+                            <input type="number" x-model="addData.quantity" required min="1"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">取得単価</label>
+                            <input type="number" x-model="addData.average_price" required min="0" step="0.01"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" @click="showAddModal = false; resetAddData()"
+                            class="btn btn-secondary">
+                        キャンセル
+                    </button>
+                    <button type="submit"
+                            class="btn btn-primary">
+                        追加
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 編集モーダル -->
+    <div x-show="showEditModal"
+         class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">保有銘柄編集</h3>
+
+            <form @submit.prevent="updateHolding()">
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">数量</label>
+                            <input type="number" x-model="editData.quantity" required min="1"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">取得単価</label>
+                            <input type="number" x-model="editData.average_price" required min="0" step="0.01"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" @click="showEditModal = false"
+                            class="btn btn-secondary">
+                        キャンセル
+                    </button>
+                    <button type="submit"
+                            class="btn btn-primary">
+                        更新
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+window.holdingsManager = function() {
+    return {
+        holdings: [],
+        filteredHoldings: [],
+        accounts: [],
+        selectedAccount: '',
+        aggregateView: false,
+        sortColumn: 'code',
+        sortDirection: 'asc',
+        showImportModal: false,
+        showAddModal: false,
+        showEditModal: false,
+        stockSearch: '',
+        searchResults: [],
+        activeTab: 'holdings',
+        analysisData: null,
+        analysisLoading: false,
+        sectorType: '17',
+        filters: {
+            accountType: '',
+            stockType: '',
+            tradePosition: ''
+        },
+        importData: {
+            account_name: '',
+            csv_type: 'spot',
+            file: null
+        },
+        addData: {
+            code: '',
+            account_name: '',
+            account_type: '特定',
+            stock_type: '現物',
+            trade_position: '',
+            margin_term: '',
+            quantity: 100,
+            average_price: 0
+        },
+        editData: {},
+
+        init() {
+            this.loadAccounts();
+            this.loadHoldings();
+
+            // Chart.jsが確実に読み込まれるのを待つ
+            if (typeof Chart === 'undefined') {
+                window.addEventListener('load', () => {
+                    console.log('Window loaded, Chart.js available:', typeof Chart !== 'undefined');
+                });
+            }
+
+            // セクタータイプが変更されたらチャートを再描画
+            this.$watch('sectorType', () => {
+                if (this.analysisData && this.activeTab === 'analysis') {
+                    setTimeout(() => {
+                        this.renderSectorChart();
+                    }, 50);
+                }
+            });
+
+            // タブが切り替わったときの処理
+            this.$watch('activeTab', (newTab) => {
+                if (newTab === 'analysis') {
+                    // タブの表示状態を確認
+                    console.log('Tab switched to analysis');
+                    // DOMが完全に更新されるのを待つ
+                    this.$nextTick(() => {
+                        // さらに遅延を追加してタブの切り替えが完了するのを待つ
+                        setTimeout(() => {
+                            // データがある場合のみチャートを描画
+                            if (this.analysisData) {
+                                console.log('Rendering charts after tab switch');
+                                this.renderCharts();
+                            }
+                        }, 300);
+                    });
+                }
+            });
+        },
+
+        async loadAccounts() {
+            try {
+                const csrfToken = window.csrf_token ? window.csrf_token() : '{{ csrf_token() }}';
+                const response = await fetch('/api/holdings/accounts', {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.accounts = data.accounts;
+                    console.log('Loaded accounts:', this.accounts);
+                } else {
+                    console.error('Failed to load accounts:', data);
+                }
+            } catch (error) {
+                console.error('Error loading accounts:', error);
+            }
+        },
+
+        async loadHoldings() {
+            console.log('loadHoldings called');
+            try {
+                const params = new URLSearchParams();
+                if (this.selectedAccount) {
+                    params.append('account_name', this.selectedAccount);
+                }
+                if (this.aggregateView) {
+                    params.append('aggregate', 'true');
+                }
+
+                const csrfToken = window.csrf_token ? window.csrf_token() : '{{ csrf_token() }}';
+                console.log('CSRF token for list:', csrfToken);
+                const response = await fetch(`/api/holdings/list?${params}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.holdings = data.holdings;
+                    console.log('Holdings loaded:', this.holdings.length);
+                    this.applyFilters();
+                } else {
+                    console.error('Failed to load holdings:', data);
+                    alert(data.message || '保有銘柄の取得に失敗しました');
+                }
+            } catch (error) {
+                console.error('Error loading holdings:', error);
+                alert('エラーが発生しました: ' + error.message);
+            }
+        },
+
+        async importCSV() {
+            console.log('importCSV called');
+            if (!this.importData.file) {
+                alert('ファイルを選択してください');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('account_name', this.importData.account_name);
+            formData.append('csv_type', this.importData.csv_type);
+            formData.append('file', this.importData.file);
+            const csrfToken = window.csrf_token ? window.csrf_token() : '{{ csrf_token() }}';
+            console.log('CSRF token:', csrfToken);
+            formData.append('csrf_token', csrfToken);
+
+            try {
+                const response = await fetch('/api/holdings/import', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    this.showImportModal = false;
+                    this.importData = {
+                        account_name: '',
+                        csv_type: 'spot',
+                        file: null
+                    };
+                    this.loadHoldings();
+                    this.loadAccounts();
+                } else {
+                    alert(data.message || 'インポートに失敗しました');
+                }
+            } catch (error) {
+                console.error('Error importing CSV:', error);
+                alert('エラーが発生しました: ' + error.message);
+            }
+        },
+
+        async searchStocks() {
+            console.log('searchStocks called:', this.stockSearch);
+            if (this.stockSearch.length < 1) {
+                this.searchResults = [];
+                return;
+            }
+
+            try {
+                const csrfToken = window.csrf_token ? window.csrf_token() : '{{ csrf_token() }}';
+                const response = await fetch(`/api/holdings/search?keyword=${encodeURIComponent(this.stockSearch)}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.searchResults = data.stocks;
+                    console.log('Search results:', this.searchResults);
+                } else {
+                    this.searchResults = [];
+                    console.error('Search failed:', data);
+                }
+            } catch (error) {
+                console.error('Error searching stocks:', error);
+                this.searchResults = [];
+                alert('銘柄検索エラー: ' + error.message);
+            }
+        },
+
+        selectStock(stock) {
+            this.addData.code = stock.code;
+            this.stockSearch = `${stock.code} - ${stock.company_name}`;
+            this.searchResults = [];
+        },
+
+        async addHolding() {
+            try {
+                const response = await fetch('/api/holdings/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        ...this.addData,
+                        csrf_token: window.csrf_token()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.$dispatch('show-alert', {
+                        type: 'success',
+                        message: data.message
+                    });
+                    this.showAddModal = false;
+                    this.resetAddData();
+                    this.loadHoldings();
+                    this.loadAccounts();
+                } else {
+                    this.$dispatch('show-alert', {
+                        type: 'error',
+                        message: data.message || '追加に失敗しました'
+                    });
+                }
+            } catch (error) {
+                console.error('Error adding holding:', error);
+                this.$dispatch('show-alert', {
+                    type: 'error',
+                    message: 'エラーが発生しました'
+                });
+            }
+        },
+
+        editHolding(holding) {
+            this.editData = {
+                id: holding.id,
+                quantity: holding.quantity,
+                average_price: holding.average_price
+            };
+            this.showEditModal = true;
+        },
+
+        async updateHolding() {
+            try {
+                const response = await fetch(`/api/holdings/update/${this.editData.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        ...this.editData,
+                        csrf_token: window.csrf_token()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.$dispatch('show-alert', {
+                        type: 'success',
+                        message: data.message
+                    });
+                    this.showEditModal = false;
+                    this.loadHoldings();
+                } else {
+                    this.$dispatch('show-alert', {
+                        type: 'error',
+                        message: data.message || '更新に失敗しました'
+                    });
+                }
+            } catch (error) {
+                console.error('Error updating holding:', error);
+                this.$dispatch('show-alert', {
+                    type: 'error',
+                    message: 'エラーが発生しました'
+                });
+            }
+        },
+
+        async deleteHolding(holding) {
+            if (!confirm(`${holding.code} ${holding.name} を削除してよろしいですか？`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/holdings/delete/${holding.id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        csrf_token: window.csrf_token()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.$dispatch('show-alert', {
+                        type: 'success',
+                        message: data.message
+                    });
+                    this.loadHoldings();
+                } else {
+                    this.$dispatch('show-alert', {
+                        type: 'error',
+                        message: data.message || '削除に失敗しました'
+                    });
+                }
+            } catch (error) {
+                console.error('Error deleting holding:', error);
+                this.$dispatch('show-alert', {
+                    type: 'error',
+                    message: 'エラーが発生しました'
+                });
+            }
+        },
+
+        confirmBulkDelete() {
+            const message = this.selectedAccount
+                ? `口座「${this.selectedAccount}」の全銘柄を削除してよろしいですか？`
+                : '全口座の全銘柄を削除してよろしいですか？';
+
+            if (!confirm(message)) {
+                return;
+            }
+
+            this.bulkDelete();
+        },
+
+        async bulkDelete() {
+            try {
+                const response = await fetch('/api/holdings/bulk_delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        account_name: this.selectedAccount,
+                        csrf_token: window.csrf_token()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.$dispatch('show-alert', {
+                        type: 'success',
+                        message: data.message
+                    });
+                    this.loadHoldings();
+                    this.loadAccounts();
+                } else {
+                    this.$dispatch('show-alert', {
+                        type: 'error',
+                        message: data.message || '削除に失敗しました'
+                    });
+                }
+            } catch (error) {
+                console.error('Error bulk deleting:', error);
+                this.$dispatch('show-alert', {
+                    type: 'error',
+                    message: 'エラーが発生しました'
+                });
+            }
+        },
+
+        applyFilters() {
+            this.filteredHoldings = this.holdings.filter(h => {
+                // 預かり区分フィルター
+                if (this.filters.accountType && h.account_type !== this.filters.accountType) {
+                    return false;
+                }
+
+                // 現物/信用フィルター
+                if (this.filters.stockType && h.stock_type !== this.filters.stockType) {
+                    return false;
+                }
+
+                // 建区分フィルター（信用の場合のみ）
+                if (this.filters.tradePosition && h.trade_position !== this.filters.tradePosition) {
+                    return false;
+                }
+
+                return true;
+            });
+
+            console.log(`Filtered: ${this.filteredHoldings.length} / ${this.holdings.length} holdings`);
+        },
+
+        resetAddData() {
+            this.addData = {
+                code: '',
+                account_name: '',
+                account_type: '特定',
+                stock_type: '現物',
+                trade_position: '',
+                margin_term: '',
+                quantity: 100,
+                average_price: 0
+            };
+            this.stockSearch = '';
+            this.searchResults = [];
+        },
+
+        sortBy(column) {
+            if (this.sortColumn === column) {
+                this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortColumn = column;
+                this.sortDirection = 'asc';
+            }
+        },
+
+        get sortedHoldings() {
+            return [...this.filteredHoldings].sort((a, b) => {
+                const aVal = a[this.sortColumn];
+                const bVal = b[this.sortColumn];
+
+                if (aVal === null || aVal === undefined) return 1;
+                if (bVal === null || bVal === undefined) return -1;
+
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    return this.sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                } else {
+                    const result = String(aVal).localeCompare(String(bVal));
+                    return this.sortDirection === 'asc' ? result : -result;
+                }
+            });
+        },
+
+        get totals() {
+            const total = this.filteredHoldings.reduce((acc, h) => {
+                acc.market_value += h.market_value || 0;
+                acc.profit_loss += h.profit_loss || 0;
+                return acc;
+            }, { market_value: 0, profit_loss: 0 });
+
+            total.profit_loss_ratio = total.market_value > 0
+                ? (total.profit_loss / (total.market_value - total.profit_loss)) * 100
+                : 0;
+
+            return total;
+        },
+
+        formatNumber(value, decimals = 0) {
+            if (value === null || value === undefined) return '-';
+            return new Intl.NumberFormat('ja-JP', {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            }).format(value);
+        },
+
+        formatPrice(value) {
+            if (value === null || value === undefined) return '-';
+            return '¥' + this.formatNumber(value);
+        },
+
+        formatPercentage(value) {
+            if (value === null || value === undefined) return '-';
+            return this.formatNumber(value, 2) + '%';
+        },
+
+        async loadAnalysis() {
+            if (this.analysisLoading || (this.analysisData && this.selectedAccount === this.lastAnalyzedAccount)) {
+                // 既にデータがある場合は、チャートの再描画のみ行う
+                if (this.analysisData) {
+                    this.$nextTick(() => {
+                        setTimeout(() => {
+                            this.renderCharts();
+                        }, 200);
+                    });
+                }
+                return;
+            }
+
+            this.analysisLoading = true;
+            try {
+                const params = new URLSearchParams();
+                if (this.selectedAccount) {
+                    params.append('account_name', this.selectedAccount);
+                }
+
+                const csrfToken = window.csrf_token ? window.csrf_token() : '{{ csrf_token() }}';
+                const response = await fetch(`/api/holdings/analysis?${params}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.analysisData = data.analysis;
+                    this.lastAnalyzedAccount = this.selectedAccount;
+
+                    // チャートを描画（タイミングを遅らせる）
+                    this.$nextTick(() => {
+                        // Alpine.jsの$nextTickだけでは不十分な場合があるため、setTimeoutも使用
+                        setTimeout(() => {
+                            this.renderCharts();
+                        }, 200);
+                    });
+                } else {
+                    console.error('Failed to load analysis:', data);
+                    alert(data.message || '分析データの取得に失敗しました');
+                }
+            } catch (error) {
+                console.error('Error loading analysis:', error);
+                alert('エラーが発生しました: ' + error.message);
+            } finally {
+                this.analysisLoading = false;
+            }
+        },
+
+        renderCharts() {
+            console.log('renderCharts called', this.analysisData);
+
+            // Chart.jsが読み込まれているか確認
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js is not loaded yet, retrying...');
+                setTimeout(() => this.renderCharts(), 500);
+                return;
+            }
+
+            if (!this.analysisData) {
+                console.error('No analysis data available');
+                return;
+            }
+
+            // 既存のチャートインスタンスを全て破棄
+            if (this.sectorChartInstance) {
+                this.sectorChartInstance.destroy();
+                this.sectorChartInstance = null;
+            }
+            if (this.marketChartInstance) {
+                this.marketChartInstance.destroy();
+                this.marketChartInstance = null;
+            }
+            if (this.dividendAmountChartInstance) {
+                this.dividendAmountChartInstance.destroy();
+                this.dividendAmountChartInstance = null;
+            }
+            if (this.performanceChartInstance) {
+                this.performanceChartInstance.destroy();
+                this.performanceChartInstance = null;
+            }
+
+            // DOM要素が存在するか確認
+            const chartIds = ['sectorChart', 'marketChart', 'dividendAmountChart', 'performanceChart'];
+            let allElementsFound = true;
+            chartIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (!element) {
+                    console.error(`Chart element not found: ${id}`);
+                    allElementsFound = false;
+                } else {
+                    console.log(`Chart element found: ${id}`, element);
+                }
+            });
+
+            if (!allElementsFound) {
+                console.error('Some chart elements are missing, delaying render');
+                setTimeout(() => this.renderCharts(), 500);
+                return;
+            }
+
+            // セクター別円グラフ
+            this.renderSectorChart();
+
+            // 市場別円グラフ
+            this.renderMarketChart();
+
+            // 年間配当額分布
+            this.renderDividendAmountChart();
+
+            // パフォーマンス分布チャート
+            this.renderPerformanceChart();
+
+            // ヒートマップ
+            this.renderHeatmap();
+        },
+
+        renderSectorChart() {
+            console.log('renderSectorChart called');
+            console.log('Chart.js loaded?', typeof Chart !== 'undefined');
+
+            const ctx = document.getElementById('sectorChart');
+            if (!ctx) {
+                console.error('sectorChart element not found');
+                return;
+            }
+
+            console.log('sectorChart element:', ctx);
+            console.log('Canvas display style:', window.getComputedStyle(ctx).display);
+            console.log('Canvas parent display:', window.getComputedStyle(ctx.parentElement).display);
+
+            // 既存のチャートがあれば破棄
+            if (this.sectorChartInstance) {
+                console.log('Destroying existing sector chart');
+                this.sectorChartInstance.destroy();
+            }
+
+            const sectorData = this.sectorType === '17'
+                ? this.analysisData.sector17_breakdown
+                : this.analysisData.sector33_breakdown;
+
+            console.log('Sector data:', sectorData);
+
+            // Canvas要素のサイズ確認（設定はしない）
+            const parentWidth = ctx.parentElement.offsetWidth;
+            const parentHeight = ctx.parentElement.offsetHeight;
+            console.log('Parent dimensions:', parentWidth, parentHeight);
+
+            // Chart.jsがresponsiveモードで自動的にサイズを管理するため、
+            // 手動でcanvasのサイズを設定しない
+
+            try {
+                this.sectorChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: sectorData.map(s => s.sector),
+                    datasets: [{
+                        data: sectorData.map(s => s.value),
+                        backgroundColor: [
+                            '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+                            '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
+                            '#06B6D4', '#A855F7', '#EAB308', '#DC2626', '#0EA5E9',
+                            '#D946EF', '#22C55E', '#F43F5E', '#0891B2', '#9333EA',
+                            '#16A34A', '#E11D48', '#0284C7', '#7C3AED', '#15803D',
+                            '#BE123C', '#0369A1', '#6D28D9', '#166534', '#9F1239',
+                            '#0C4A6E', '#5B21B6', '#14532D', '#881337', '#082F49'
+                        ],
+                        borderWidth: 1,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    aspectRatio: 1.5,
+                    layout: {
+                        padding: {
+                            left: window.innerWidth <= 640 ? 10 : 50,
+                            right: window.innerWidth <= 640 ? 10 : 250,
+                            top: window.innerWidth <= 640 ? 10 : 20,
+                            bottom: window.innerWidth <= 640 ? 80 : 20
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: window.innerWidth <= 640 ? 'bottom' : 'right',
+                            align: 'center',
+                            labels: {
+                                padding: window.innerWidth <= 640 ? 5 : 10,
+                                font: {
+                                    size: window.innerWidth <= 640 ? 10 : 12
+                                },
+                                boxWidth: window.innerWidth <= 640 ? 12 : 15,
+                                boxHeight: window.innerWidth <= 640 ? 12 : 15,
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        return data.labels.map((label, i) => {
+                                            const meta = chart.getDatasetMeta(0);
+                                            const style = meta.controller.getStyle(i);
+                                            const value = data.datasets[0].data[i];
+                                            const ratio = sectorData[i].ratio;
+
+                                            // ラベルが長すぎる場合は省略
+                                            let displayLabel = label;
+                                            if (label.length > 15) {
+                                                displayLabel = label.substring(0, 12) + '...';
+                                            }
+
+                                            return {
+                                                text: `${displayLabel} (${ratio.toFixed(1)}%)`,
+                                                fillStyle: style.backgroundColor,
+                                                strokeStyle: style.borderColor,
+                                                lineWidth: style.borderWidth,
+                                                hidden: isNaN(value) || meta.data[i].hidden,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const sector = sectorData[context.dataIndex];
+                                    return [
+                                        `${sector.sector}: ¥${sector.value.toLocaleString()}`,
+                                        `構成比: ${sector.ratio.toFixed(1)}%`,
+                                        `銘柄数: ${sector.count}`
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            console.log('Sector chart created successfully');
+            } catch (error) {
+                console.error('Error creating sector chart:', error);
+            }
+        },
+
+        renderMarketChart() {
+            const ctx = document.getElementById('marketChart');
+            if (!ctx) {
+                console.error('marketChart element not found');
+                return;
+            }
+
+            // 既存のチャートがあれば破棄
+            if (this.marketChartInstance) {
+                this.marketChartInstance.destroy();
+            }
+
+            const marketData = this.analysisData.market_breakdown;
+
+
+            this.marketChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: marketData.map(m => m.market),
+                    datasets: [{
+                        data: marketData.map(m => m.value),
+                        backgroundColor: [
+                            '#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981',
+                            '#14B8A6', '#3B82F6', '#EF4444', '#F97316', '#84CC16'
+                        ],
+                        borderWidth: 1,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    aspectRatio: 1.5,
+                    layout: {
+                        padding: {
+                            left: 20,
+                            right: 200,
+                            top: 20,
+                            bottom: 20
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            align: 'center',
+                            labels: {
+                                padding: window.innerWidth <= 640 ? 5 : 10,
+                                font: {
+                                    size: window.innerWidth <= 640 ? 10 : 12
+                                },
+                                boxWidth: window.innerWidth <= 640 ? 12 : 15,
+                                boxHeight: window.innerWidth <= 640 ? 12 : 15,
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        return data.labels.map((label, i) => {
+                                            const meta = chart.getDatasetMeta(0);
+                                            const style = meta.controller.getStyle(i);
+                                            const value = data.datasets[0].data[i];
+                                            const ratio = marketData[i].ratio;
+
+                                            return {
+                                                text: `${label} (${ratio.toFixed(1)}%)`,
+                                                fillStyle: style.backgroundColor,
+                                                strokeStyle: style.borderColor,
+                                                lineWidth: style.borderWidth,
+                                                hidden: isNaN(value) || meta.data[i].hidden,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const market = marketData[context.dataIndex];
+                                    return [
+                                        `${market.market}: ¥${market.value.toLocaleString()}`,
+                                        `構成比: ${market.ratio.toFixed(1)}%`,
+                                        `銘柄数: ${market.count}`
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        renderDividendAmountChart() {
+            const ctx = document.getElementById('dividendAmountChart');
+            if (!ctx) {
+                console.error('dividendAmountChart element not found');
+                return;
+            }
+
+            // 既存のチャートがあれば破棄
+            if (this.dividendAmountChartInstance) {
+                this.dividendAmountChartInstance.destroy();
+            }
+
+            const dividendByStock = this.analysisData.dividend_by_stock;
+
+
+            // データがない場合の処理
+            if (!dividendByStock || dividendByStock.length === 0) {
+                ctx.getContext('2d').font = '16px sans-serif';
+                ctx.getContext('2d').textAlign = 'center';
+                ctx.getContext('2d').fillText('配当データがありません', ctx.width / 2, ctx.height / 2);
+                return;
+            }
+
+            // 上位10銘柄に絞る（その他も含める）
+            let displayData = [];
+            let othersAmount = 0;
+            let othersCount = 0;
+
+            for (let i = 0; i < dividendByStock.length; i++) {
+                if (i < 10) {
+                    displayData.push(dividendByStock[i]);
+                } else {
+                    othersAmount += dividendByStock[i].annual_dividend;
+                    othersCount++;
+                }
+            }
+
+            if (othersCount > 0) {
+                displayData.push({
+                    name: `その他（${othersCount}銘柄）`,
+                    annual_dividend: othersAmount,
+                    ratio: (othersAmount / this.analysisData.total_dividend_amount * 100)
+                });
+            }
+
+            this.dividendAmountChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: displayData.map(d => d.name || d.code),
+                    datasets: [{
+                        data: displayData.map(d => d.annual_dividend),
+                        backgroundColor: [
+                            '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+                            '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
+                            '#94A3B8'  // その他用の色
+                        ],
+                        borderWidth: 1,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    aspectRatio: 1.5,
+                    layout: {
+                        padding: {
+                            left: window.innerWidth <= 640 ? 10 : 50,
+                            right: window.innerWidth <= 640 ? 10 : 250,
+                            top: window.innerWidth <= 640 ? 10 : 20,
+                            bottom: window.innerWidth <= 640 ? 80 : 20
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: window.innerWidth <= 640 ? 'bottom' : 'right',
+                            align: 'center',
+                            labels: {
+                                padding: window.innerWidth <= 640 ? 5 : 10,
+                                font: {
+                                    size: window.innerWidth <= 640 ? 10 : 12
+                                },
+                                boxWidth: window.innerWidth <= 640 ? 12 : 15,
+                                boxHeight: window.innerWidth <= 640 ? 12 : 15,
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        return data.labels.map((label, i) => {
+                                            const meta = chart.getDatasetMeta(0);
+                                            const style = meta.controller.getStyle(i);
+                                            const value = data.datasets[0].data[i];
+                                            const ratio = displayData[i].ratio ||
+                                                (value / chart.config.data.datasets[0].data.reduce((a, b) => a + b, 0) * 100);
+
+                                            // ラベルが長すぎる場合は省略
+                                            let displayLabel = label;
+                                            if (label.length > 12) {
+                                                displayLabel = label.substring(0, 10) + '...';
+                                            }
+
+                                            return {
+                                                text: `${displayLabel} (${ratio.toFixed(1)}%)`,
+                                                fillStyle: style.backgroundColor,
+                                                strokeStyle: style.borderColor,
+                                                lineWidth: style.borderWidth,
+                                                hidden: isNaN(value) || meta.data[i].hidden,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const stock = displayData[context.dataIndex];
+                                    const result = [
+                                        `年間配当額: ¥${Math.round(stock.annual_dividend).toLocaleString()}`
+                                    ];
+
+                                    if (stock.dividend_yield) {
+                                        result.push(`配当利回り: ${stock.dividend_yield.toFixed(2)}%`);
+                                    }
+                                    if (stock.market_value) {
+                                        result.push(`評価額: ¥${stock.market_value.toLocaleString()}`);
+                                    }
+
+                                    return result;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        renderPerformanceChart() {
+            const ctx = document.getElementById('performanceChart');
+            if (!ctx) return;
+
+            // 既存のチャートがあれば破棄
+            if (this.performanceChartInstance) {
+                this.performanceChartInstance.destroy();
+            }
+
+            const perfData = this.analysisData.performance_distribution;
+
+            // 色の設定（損失が大きいほど濃い赤、利益が大きいほど濃い緑）
+            const getColor = (range) => {
+                if (range.includes('-50%以下')) return '#7F1D1D';  // 最も濃い赤
+                if (range.includes('-50%～-20%')) return '#B91C1C';
+                if (range.includes('-20%～-10%')) return '#DC2626';
+                if (range.includes('-10%～0%')) return '#EF4444';
+                if (range.includes('0%～10%')) return '#10B981';
+                if (range.includes('10%～20%')) return '#059669';
+                if (range.includes('20%～50%')) return '#047857';
+                if (range.includes('50%以上')) return '#064E3B';  // 最も濃い緑
+                return '#6B7280';
+            };
+
+            this.performanceChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: perfData.map(p => p.range),
+                    datasets: [{
+                        label: '銘柄数',
+                        data: perfData.map(p => p.count),
+                        backgroundColor: perfData.map(p => getColor(p.range)),
+                        borderColor: perfData.map(p => getColor(p.range)),
+                        borderWidth: 1
+                    }, {
+                        label: '評価額（百万円）',
+                        data: perfData.map(p => p.value / 1000000),
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 2,
+                        type: 'line',
+                        yAxisID: 'y1',
+                        tension: 0.2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '銘柄数'
+                            },
+                            ticks: {
+                                stepSize: 1
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '評価額（百万円）'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                afterTitle: function(context) {
+                                    const perf = perfData[context[0].dataIndex];
+                                    return `構成比: ${perf.ratio.toFixed(1)}%`;
+                                },
+                                label: function(context) {
+                                    if (context.dataset.label === '銘柄数') {
+                                        return `銘柄数: ${context.parsed.y}`;
+                                    } else {
+                                        return `評価額: ¥${(context.parsed.y * 1000000).toLocaleString()}`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        renderHeatmap() {
+            const container = document.getElementById('heatmapContainer');
+            if (!container) return;
+
+            // 保有銘柄を損益率でソート
+            const sortedHoldings = [...this.holdings].sort((a, b) => b.profit_loss_ratio - a.profit_loss_ratio);
+
+            // ヒートマップのHTML生成
+            let html = '<div class="grid grid-cols-5 sm:grid-cols-10 gap-1 p-2">';
+
+            sortedHoldings.forEach(holding => {
+                const ratio = holding.profit_loss_ratio || 0;
+                let bgColor = '';
+                let textColor = 'text-white';
+
+                if (ratio >= 20) {
+                    bgColor = 'bg-green-600';
+                } else if (ratio >= 10) {
+                    bgColor = 'bg-green-500';
+                } else if (ratio >= 5) {
+                    bgColor = 'bg-green-400';
+                } else if (ratio >= 0) {
+                    bgColor = 'bg-green-300';
+                    textColor = 'text-gray-800';
+                } else if (ratio >= -5) {
+                    bgColor = 'bg-red-300';
+                    textColor = 'text-gray-800';
+                } else if (ratio >= -10) {
+                    bgColor = 'bg-red-400';
+                } else if (ratio >= -20) {
+                    bgColor = 'bg-red-500';
+                } else {
+                    bgColor = 'bg-red-600';
+                }
+
+                html += `
+                    <div class="${bgColor} ${textColor} rounded p-1 sm:p-2 text-xs text-center cursor-pointer hover:opacity-80"
+                         title="${holding.code} ${holding.name}\n損益率: ${ratio.toFixed(2)}%\n評価額: ¥${holding.market_value.toLocaleString()}">
+                        <div class="font-mono text-xs">${holding.code}</div>
+                        <div class="font-bold text-xs">${ratio.toFixed(1)}%</div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+
+            // 凡例
+            html += `
+                <div class="mt-4 flex justify-center items-center text-xs">
+                    <span class="mr-2">損失</span>
+                    <div class="flex">
+                        <div class="w-6 h-6 bg-red-600"></div>
+                        <div class="w-6 h-6 bg-red-500"></div>
+                        <div class="w-6 h-6 bg-red-400"></div>
+                        <div class="w-6 h-6 bg-red-300"></div>
+                        <div class="w-6 h-6 bg-green-300"></div>
+                        <div class="w-6 h-6 bg-green-400"></div>
+                        <div class="w-6 h-6 bg-green-500"></div>
+                        <div class="w-6 h-6 bg-green-600"></div>
+                    </div>
+                    <span class="ml-2">利益</span>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        },
+
+        switchToAnalysisTab() {
+            console.log('switchToAnalysisTab called');
+            this.activeTab = 'analysis';
+            this.$nextTick(() => {
+                // タブ切り替えが完了してから分析データをロード
+                setTimeout(() => {
+                    this.loadAnalysis();
+                }, 100);
+            });
+        },
+
+        screenshotChart(chartId) {
+            const canvas = document.getElementById(chartId);
+            if (!canvas) {
+                alert('チャートが見つかりません');
+                return;
+            }
+
+            // 新しいcanvasを作成して、白背景を追加
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // 白背景を描画
+            tempCtx.fillStyle = 'white';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+            // 元のチャートを描画
+            tempCtx.drawImage(canvas, 0, 0);
+
+            // ダウンロード
+            tempCanvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+
+                // ファイル名を設定
+                const date = new Date().toISOString().slice(0, 10);
+                let filename = '';
+                switch(chartId) {
+                    case 'sectorChart':
+                        filename = `セクター別構成_${this.sectorType}業種_${date}.png`;
+                        break;
+                    case 'dividendAmountChart':
+                        filename = `銘柄別年間配当額_${date}.png`;
+                        break;
+                    case 'marketChart':
+                        filename = `市場別構成_${date}.png`;
+                        break;
+                    case 'performanceChart':
+                        filename = `パフォーマンス分布_${date}.png`;
+                        break;
+                    default:
+                        filename = `チャート_${date}.png`;
+                }
+
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        },
+
+        screenshotHeatmap() {
+            const container = document.getElementById('heatmapContainer');
+            if (!container) {
+                alert('ヒートマップが見つかりません');
+                return;
+            }
+
+            // html2canvasライブラリを動的に読み込み
+            if (typeof html2canvas === 'undefined') {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+                script.onload = () => {
+                    this.captureHeatmap();
+                };
+                document.head.appendChild(script);
+            } else {
+                this.captureHeatmap();
+            }
+        },
+
+        captureHeatmap() {
+            // キャプチャ用の一時的なコンテナを作成
+            const tempContainer = document.createElement('div');
+            tempContainer.style.cssText = `
+                position: fixed;
+                top: -9999px;
+                left: -9999px;
+                background: white;
+                padding: 40px;
+                width: 1600px;
+                z-index: -1;
+            `;
+            document.body.appendChild(tempContainer);
+
+            // ヒートマップのコンテンツをクローン
+            const heatmapContainer = document.querySelector('#heatmapContainer');
+            const titleElement = document.querySelector('#heatmapContainer').closest('.bg-gray-50').querySelector('h3');
+
+            // タイトルをクローン（ボタンは除外）
+            const titleClone = document.createElement('h3');
+            titleClone.className = 'text-lg font-semibold mb-4';
+            titleClone.textContent = '損益率ヒートマップ';
+            tempContainer.appendChild(titleClone);
+
+            // ヒートマップコンテンツをクローン
+            const contentClone = heatmapContainer.cloneNode(true);
+            contentClone.style.cssText = 'height: auto; overflow: visible;';
+            tempContainer.appendChild(contentClone);
+
+            // 少し待ってからキャプチャ
+            setTimeout(() => {
+                const options = {
+                    scale: 3, // より高解像度
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    width: 1600,
+                    height: tempContainer.scrollHeight,
+                    windowWidth: 1600,
+                    windowHeight: tempContainer.scrollHeight
+                };
+
+                html2canvas(tempContainer, options).then(canvas => {
+                    // 一時コンテナを削除
+                    document.body.removeChild(tempContainer);
+
+                    canvas.toBlob((blob) => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+
+                        const date = new Date().toISOString().slice(0, 10);
+                        a.download = `損益率ヒートマップ_${date}.png`;
+
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }, 'image/png');
+                }).catch(error => {
+                    // エラー時も一時コンテナを削除
+                    document.body.removeChild(tempContainer);
+                    console.error('ヒートマップのキャプチャに失敗しました:', error);
+                    alert('画像の保存に失敗しました');
+                });
+            }, 100);
+        }
+    };
+}
+</script>
+
+<style>
+.sortable-header {
+    @apply px-1 sm:px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none transition-colors;
+}
+.sortable-header.sorted {
+    @apply bg-blue-50 text-blue-700 font-semibold;
+}
+.sortable-header.sorted:hover {
+    @apply bg-blue-100;
+}
+.sortable-header > div {
+    @apply flex items-center;
+}
+.sortable-header.text-right > div {
+    @apply justify-end;
+}
+
+/* モバイル対応の追加スタイル */
+@media (max-width: 640px) {
+    /* チャートのレジェンドをコンパクトに */
+    .chart-container canvas {
+        max-height: 250px;
+    }
+
+    /* ヒートマップのタイルを小さく */
+    #heatmapContainer .grid > div {
+        min-height: 40px;
+    }
+
+    /* テーブルヘッダーを縦向きに */
+    .sortable-header {
+        writing-mode: vertical-lr;
+        text-orientation: mixed;
+        padding: 0.25rem;
+        height: 60px;
+    }
+}
+</style>

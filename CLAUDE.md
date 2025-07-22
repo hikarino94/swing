@@ -9,6 +9,7 @@
 - コードの変更理由と効果を具体的に説明してください
 - 何か修正を加える場合は他に影響がないか必ず確認し、影響範囲を全て修正してください
 - 修正を加えた後はLintを実行して構文エラーがないことを確認する
+- レビューは人間が行うので簡潔でわかりやすいコードを書く
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

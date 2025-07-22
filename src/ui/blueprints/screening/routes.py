@@ -20,7 +20,7 @@ from src.utils.logging_config import get_logger
 logger = get_logger("web.screening")
 
 # Blueprint作成
-screening_bp = Blueprint("screening", __name__, url_prefix="/api/screen")
+screening_bp = Blueprint("screening", __name__, url_prefix="/api/screening")
 
 # 型付きrequest
 request: RequestWithUser = cast(RequestWithUser, flask_request)

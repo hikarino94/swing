@@ -253,9 +253,9 @@ CREATE INDEX IF NOT EXISTS idx_tech_date_short_count ON technical_indicators(sig
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
-    email TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE,
     password_hash TEXT NOT NULL,
-    role TEXT DEFAULT 'admin',  -- 'admin' or 'portfolio_only'
+    role TEXT DEFAULT 'trader',  -- 'admin', 'portfolio_only', or 'trader'
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -274,15 +274,80 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 
--- holdings -----------------------------------------------------------
+-- daytrade_futures -------------------------------------------------------
+-- 先物デイトレード記録（取引日ベースで決済損益を管理）
+CREATE TABLE IF NOT EXISTS daytrade_futures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    trade_date TEXT NOT NULL,  -- 取引日 YYYY-MM-DD
+    trade_number TEXT NOT NULL,  -- 約定番号
+    trade_datetime TEXT NOT NULL,  -- 約定日時
+    market TEXT,  -- 市場
+    symbol TEXT NOT NULL,  -- 銘柄
+    trade_type TEXT NOT NULL,  -- 取引（決済買/決済売）
+    price REAL NOT NULL,  -- 約定価格
+    quantity INTEGER NOT NULL,  -- 約定数量
+    commission REAL DEFAULT 0,  -- 手数料
+    tax REAL DEFAULT 0,  -- 消費税
+    settlement_amount REAL NOT NULL,  -- 約定金額
+    delivery_amount REAL,  -- 受渡金額
+    delivery_date TEXT,  -- 受渡日
+    open_date TEXT,  -- 新規建日
+    open_price REAL,  -- 新規建単価
+    open_commission REAL,  -- 新規建手数料
+    open_tax REAL,  -- 新規建消費税
+    profit_loss REAL NOT NULL,  -- 決済損益
+    sq_date TEXT,  -- SQ日
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_daytrade_futures_user_id ON daytrade_futures(user_id);
+CREATE INDEX IF NOT EXISTS idx_daytrade_futures_trade_date ON daytrade_futures(trade_date);
+CREATE INDEX IF NOT EXISTS idx_daytrade_futures_symbol ON daytrade_futures(symbol);
+CREATE INDEX IF NOT EXISTS idx_daytrade_futures_user_date ON daytrade_futures(user_id, trade_date);
+
+-- daytrade_stocks -------------------------------------------------------
+-- 株式デイトレード記録（約定日ベースで受渡金額・決済損益を管理）
+CREATE TABLE IF NOT EXISTS daytrade_stocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    code TEXT NOT NULL,  -- 銘柄コード
+    name TEXT NOT NULL,  -- 銘柄名
+    market TEXT,  -- 市場
+    trade_type TEXT NOT NULL,  -- 取引区分（信用新規買/信用返済売等）
+    term TEXT,  -- 期限（６ヵ月/日計り/無期限）
+    custody_type TEXT,  -- 預り区分（特定/一般）
+    trade_date TEXT NOT NULL,  -- 約定日 YYYY-MM-DD
+    delivery_date TEXT,  -- 受渡日
+    quantity INTEGER NOT NULL,  -- 株数
+    average_price REAL NOT NULL,  -- 平均約定単価
+    commission_tax REAL,  -- 手数料・諸経費等
+    capital_gains_tax REAL,  -- 課税額・譲渡益税
+    settlement_amount REAL,  -- 受渡金額・決済損益
+    day_trade_amount REAL,  -- 受渡金額(日計り分)
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_user_id ON daytrade_stocks(user_id);
+CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_trade_date ON daytrade_stocks(trade_date);
+CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_code ON daytrade_stocks(code);
+CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_user_date ON daytrade_stocks(user_id, trade_date);
+CREATE INDEX IF NOT EXISTS idx_daytrade_stocks_user_code_date ON daytrade_stocks(user_id, code, trade_date);
+
+-- holdings -------------------------------------------------------
+-- 保有銘柄管理（現物・信用取引対応）
 CREATE TABLE IF NOT EXISTS holdings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     code TEXT NOT NULL,
     account_name TEXT NOT NULL DEFAULT 'default',
-    account_type TEXT NOT NULL DEFAULT '特定',
+    account_type TEXT NOT NULL DEFAULT '特定',  -- 特定/一般/NISA/旧NISA
+    stock_type TEXT DEFAULT '現物',  -- 現物/信用
+    trade_position TEXT,  -- 買建/売建（信用の場合）
+    margin_term TEXT,  -- 6ヵ月/無期限（信用の場合）
     quantity INTEGER NOT NULL,
     average_price REAL NOT NULL,
+    current_price REAL,
     market_value REAL,
     profit_loss REAL,
     profit_loss_ratio REAL,
@@ -293,122 +358,15 @@ CREATE TABLE IF NOT EXISTS holdings (
     actual_bps REAL,
     expected_dividend REAL,
     lending_type TEXT,
+    acquisition_date TEXT,
     updated_at TEXT DEFAULT (datetime('now')),
     deleted_at TEXT DEFAULT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE(user_id, code, account_name, account_type)
+    UNIQUE(user_id, code, account_name, account_type, stock_type, trade_position)
 );
 CREATE INDEX IF NOT EXISTS idx_holdings_user_id ON holdings(user_id);
 CREATE INDEX IF NOT EXISTS idx_holdings_code ON holdings(code);
 CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_name);
-CREATE INDEX IF NOT EXISTS idx_holdings_deleted ON holdings(deleted_at);
-
--- transactions -------------------------------------------------------
-CREATE TABLE IF NOT EXISTS transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    code TEXT NOT NULL,
-    transaction_date TEXT NOT NULL,  -- YYYY-MM-DD
-    transaction_type TEXT NOT NULL,  -- 'buy' or 'sell'
-    quantity INTEGER NOT NULL,
-    price REAL NOT NULL,
-    commission REAL DEFAULT 0,
-    tax REAL DEFAULT 0,
-    total_amount REAL NOT NULL,
-    remarks TEXT,
-    detailed_type TEXT,
-    realized_profit REAL,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_code ON transactions(code);
-CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date);
-CREATE INDEX IF NOT EXISTS idx_transactions_user_code ON transactions(user_id, code);
-
--- fund_master --------------------------------------------------------
--- 投資信託マスター（ファンド基本情報）
-CREATE TABLE IF NOT EXISTS fund_master (
-    fund_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fund_name TEXT NOT NULL,
-    fund_name_kana TEXT,
-    isin_code TEXT UNIQUE,  -- 国際証券識別番号（あれば）
-    fund_code TEXT,  -- 運用会社のファンドコード
-    management_company TEXT,  -- 運用会社名
-    fund_type TEXT,  -- ファンドタイプ（国内株式、海外株式、債券等）
-    investment_area TEXT,  -- 投資地域
-    investment_target TEXT,  -- 投資対象
-    benchmark TEXT,  -- ベンチマーク
-    inception_date TEXT,  -- 設定日
-    is_active INTEGER DEFAULT 1,  -- アクティブフラグ
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_fund_master_name ON fund_master(fund_name);
-CREATE INDEX IF NOT EXISTS idx_fund_master_isin ON fund_master(isin_code);
-CREATE INDEX IF NOT EXISTS idx_fund_master_active ON fund_master(is_active);
-
--- fund_prices --------------------------------------------------------
--- 投資信託基準価額履歴
-CREATE TABLE IF NOT EXISTS fund_prices (
-    fund_id INTEGER NOT NULL,
-    date TEXT NOT NULL,  -- YYYY-MM-DD
-    nav REAL NOT NULL,  -- 基準価額（Net Asset Value）
-    total_net_assets REAL,  -- 純資産総額（百万円）
-    dividend_amount REAL DEFAULT 0,  -- 分配金
-    created_at TEXT DEFAULT (datetime('now')),
-    PRIMARY KEY (fund_id, date),
-    FOREIGN KEY (fund_id) REFERENCES fund_master(fund_id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_fund_prices_fund_id ON fund_prices(fund_id);
-CREATE INDEX IF NOT EXISTS idx_fund_prices_date ON fund_prices(date);
-
--- fund_holdings ------------------------------------------------------
--- 投資信託保有情報
-CREATE TABLE IF NOT EXISTS fund_holdings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    fund_id INTEGER NOT NULL,
-    account_name TEXT NOT NULL DEFAULT 'default',
-    account_type TEXT NOT NULL DEFAULT '特定',  -- 特定/NISA/つみたてNISA
-    quantity REAL NOT NULL,  -- 口数
-    average_price REAL NOT NULL,  -- 平均取得基準価額
-    dividend_method TEXT DEFAULT '再投資',  -- 分配金受取方法: 受取/再投資
-    market_value REAL,  -- 現在価値
-    profit_loss REAL,  -- 評価損益
-    profit_loss_ratio REAL,  -- 評価損益率
-    updated_at TEXT DEFAULT (datetime('now')),
-    deleted_at TEXT DEFAULT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (fund_id) REFERENCES fund_master(fund_id),
-    UNIQUE(user_id, fund_id, account_name, account_type)
-);
-CREATE INDEX IF NOT EXISTS idx_fund_holdings_user_id ON fund_holdings(user_id);
-CREATE INDEX IF NOT EXISTS idx_fund_holdings_fund_id ON fund_holdings(fund_id);
-CREATE INDEX IF NOT EXISTS idx_fund_holdings_account ON fund_holdings(account_name);
-CREATE INDEX IF NOT EXISTS idx_fund_holdings_deleted ON fund_holdings(deleted_at);
-
--- fund_transactions --------------------------------------------------
--- 投資信託取引履歴
-CREATE TABLE IF NOT EXISTS fund_transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    fund_id INTEGER NOT NULL,
-    transaction_date TEXT NOT NULL,  -- YYYY-MM-DD
-    transaction_type TEXT NOT NULL,  -- 'buy'/'sell'/'dividend'(分配金)
-    quantity REAL NOT NULL,  -- 口数
-    price REAL NOT NULL,  -- 基準価額
-    amount REAL NOT NULL,  -- 約定金額
-    commission REAL DEFAULT 0,  -- 手数料
-    tax REAL DEFAULT 0,  -- 税金
-    remarks TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (fund_id) REFERENCES fund_master(fund_id)
-);
-CREATE INDEX IF NOT EXISTS idx_fund_transactions_user_id ON fund_transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_fund_transactions_fund_id ON fund_transactions(fund_id);
-CREATE INDEX IF NOT EXISTS idx_fund_transactions_date ON fund_transactions(transaction_date);
 
 
 """
@@ -472,8 +430,12 @@ def init_schema(db_path: str | Path) -> None:
                     code TEXT NOT NULL,
                     account_name TEXT NOT NULL DEFAULT 'default',
                     account_type TEXT NOT NULL DEFAULT '特定',
+                    stock_type TEXT DEFAULT '現物',  -- 現物/信用
+                    trade_position TEXT,  -- 買建/売建（信用の場合）
+                    margin_term TEXT,  -- 6ヵ月/無期限（信用の場合）
                     quantity INTEGER NOT NULL,
                     average_price REAL NOT NULL,
+                    current_price REAL,  -- 現在値
                     market_value REAL,
                     profit_loss REAL,
                     profit_loss_ratio REAL,
@@ -484,10 +446,11 @@ def init_schema(db_path: str | Path) -> None:
                     actual_bps REAL,
                     expected_dividend REAL,
                     lending_type TEXT,
+                    acquisition_date TEXT,  -- 取得日
                     updated_at TEXT DEFAULT (datetime('now')),
                     deleted_at TEXT DEFAULT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    UNIQUE(user_id, code, account_name, account_type)
+                    UNIQUE(user_id, code, account_name, account_type, stock_type, trade_position)
                 )
             """
             )
@@ -499,31 +462,107 @@ def init_schema(db_path: str | Path) -> None:
                 "CREATE INDEX idx_holdings_account ON holdings(account_name)"
             )
 
-            # データを復元（account_typeがない古いデータの場合は'特定'を設定）
+            # データを復元（古いデータの場合はデフォルト値を設定）
             for row in backup_data:
-                if len(row) == 18:  # 古い形式（account_typeなし）
+                if len(row) == 18:  # 最も古い形式（account_typeなし）
                     # id, user_id, code, account_name, quantity, ...
                     cursor.execute(
                         """
                         INSERT INTO holdings (id, user_id, code, account_name, account_type,
-                                            quantity, average_price, market_value, profit_loss,
+                                            stock_type, trade_position, margin_term, quantity,
+                                            average_price, current_price, market_value, profit_loss,
                                             profit_loss_ratio, expected_per, actual_pbr,
                                             dividend_yield, expected_eps, actual_bps,
-                                            expected_dividend, lending_type, updated_at)
-                        VALUES (?, ?, ?, ?, '特定', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                            expected_dividend, lending_type, acquisition_date, updated_at)
+                        VALUES (?, ?, ?, ?, '特定', '現物', NULL, NULL, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
                     """,
-                        row,
+                        (
+                            row[0],
+                            row[1],
+                            row[2],
+                            row[3],
+                            row[4],
+                            row[5],
+                            row[6],
+                            row[7],
+                            row[8],
+                            row[9],
+                            row[10],
+                            row[11],
+                            row[12],
+                            row[13],
+                            row[14],
+                            row[15],
+                            row[16],
+                            row[17],
+                        ),
                     )
-                else:  # 新しい形式（account_typeあり）
+                elif len(row) == 19:  # 古い形式（account_typeあり、新カラムなし）
                     cursor.execute(
                         """
-                        INSERT INTO holdings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO holdings (id, user_id, code, account_name, account_type,
+                                            stock_type, trade_position, margin_term, quantity,
+                                            average_price, current_price, market_value, profit_loss,
+                                            profit_loss_ratio, expected_per, actual_pbr,
+                                            dividend_yield, expected_eps, actual_bps,
+                                            expected_dividend, lending_type, acquisition_date, updated_at, deleted_at)
+                        VALUES (?, ?, ?, ?, ?, '現物', NULL, NULL, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+                    """,
+                        (
+                            row[0],
+                            row[1],
+                            row[2],
+                            row[3],
+                            row[4],
+                            row[5],
+                            row[6],
+                            row[7],
+                            row[8],
+                            row[9],
+                            row[10],
+                            row[11],
+                            row[12],
+                            row[13],
+                            row[14],
+                            row[15],
+                            row[16],
+                            row[17],
+                            row[18],
+                        ),
+                    )
+                else:  # 最新形式（全カラムあり）
+                    cursor.execute(
+                        """
+                        INSERT INTO holdings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                         row,
                     )
 
             conn.commit()
             logger.info("holdingsテーブルの再作成とデータ復元が完了しました")
+
+        # 保有銘柄管理テーブルの新しいカラム追加（信用取引対応）
+        try:
+            cursor.execute("SELECT stock_type FROM holdings LIMIT 1")
+        except sqlite3.OperationalError:
+            # カラムが存在しない場合は追加
+            cursor.execute(
+                "ALTER TABLE holdings ADD COLUMN stock_type TEXT DEFAULT '現物'"
+            )  # 現物/信用
+            cursor.execute(
+                "ALTER TABLE holdings ADD COLUMN trade_position TEXT"
+            )  # 買建/売建（信用の場合）
+            cursor.execute(
+                "ALTER TABLE holdings ADD COLUMN margin_term TEXT"
+            )  # 6ヵ月/無期限（信用の場合）
+            cursor.execute(
+                "ALTER TABLE holdings ADD COLUMN current_price REAL"
+            )  # 現在値
+            cursor.execute(
+                "ALTER TABLE holdings ADD COLUMN acquisition_date TEXT"
+            )  # 取得日
+            conn.commit()
+            logger.info("holdingsテーブルに信用取引関連カラムを追加しました")
 
 
 def main() -> None:  # pragma: no cover

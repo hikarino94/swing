@@ -23,6 +23,11 @@ class RequestWithUser(FlaskRequest):
 
     current_user: User
 
+    @property
+    def user_id(self) -> int:
+        """current_user.idへの便利なアクセサ"""
+        return self.current_user.id
+
 
 def get_form_value(request: FlaskRequest, key: str, default: str = "") -> str:
     """
