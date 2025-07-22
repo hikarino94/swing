@@ -226,13 +226,17 @@ def analyze_json():
 @admin_required
 def thresholds():
     """闾値設定の取得/更新"""
-    threshold_file = "screening/thresholds.json"
+    # configモジュールから設定ファイルパスを取得
+    from src.config import config
+
+    threshold_file = config.get_file_path("thresholds")
 
     if request.method == "GET":
         try:
             with open(threshold_file) as f:
                 return jsonify({"success": True, "data": json.load(f)})
         except Exception as e:
+            logger.error(f"閾値設定ファイル読み込みエラー: {threshold_file} - {e}")
             return jsonify({"success": False, "error": str(e)})
 
     else:  # POST
@@ -245,4 +249,5 @@ def thresholds():
                     json.dump(data, f, indent=2, ensure_ascii=False)
             return jsonify({"success": True, "message": "闾値設定を保存しました"})
         except Exception as e:
+            logger.error(f"閾値設定ファイル書き込みエラー: {threshold_file} - {e}")
             return jsonify({"success": False, "error": str(e)})

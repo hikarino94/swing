@@ -1,0 +1,1181 @@
+<!-- デイトレード管理画面 -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    /* カレンダーの枠線を確実に表示 */
+    .calendar-cell {
+        border: 1px solid #e5e7eb !important;
+    }
+    .calendar-cell.has-trades {
+        border: 2px solid #3b82f6 !important;
+    }
+    /* 取引なしの日は薄い枠線 */
+    .calendar-cell.bg-white {
+        border: 1px solid #f3f4f6 !important;
+    }
+    /* 土日の背景色 */
+    .calendar-cell.weekend {
+        background-color: #e5e7eb !important;
+    }
+    .calendar-cell.weekend.profit {
+        background-color: #d1fae5 !important;
+    }
+    .calendar-cell.weekend.loss {
+        background-color: #fee2e2 !important;
+    }
+    /* モバイル対応 */
+    @media (max-width: 640px) {
+        .mobile-calendar-cell {
+            min-height: 60px !important;
+            font-size: 0.75rem !important;
+        }
+        .mobile-hide {
+            display: none !important;
+        }
+        /* カレンダーのギャップを狭める */
+        .mobile-gap-narrow {
+            gap: 0.0625rem !important;
+        }
+        /* ボタンの最小高さを確保 */
+        button {
+            min-height: 44px !important;
+        }
+        /* タッチターゲットの最小サイズ確保 */
+        .touch-target {
+            min-width: 44px !important;
+            min-height: 44px !important;
+        }
+    }
+</style>
+<div class="space-y-6">
+    <!-- ヘッダー -->
+    <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6">
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2 sm:mb-4">📅 デイトレード記録</h2>
+        <p class="text-sm sm:text-base text-gray-600">先物・株式のデイトレード損益をカレンダー形式で管理します</p>
+    </div>
+
+    <!-- カレンダーナビゲーション -->
+    <div class="bg-white shadow-sm rounded-lg p-4">
+        <!-- モバイル用シンプルナビゲーション -->
+        <div class="sm:hidden">
+            <div class="flex items-center justify-between mb-3">
+                <button @click="previousMonth()" class="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg touch-target">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                </button>
+
+                <h3 class="text-base font-semibold" x-text="`${daytrade.currentYear}年 ${daytrade.currentMonth}月`"></h3>
+
+                <button @click="nextMonth()" class="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg touch-target">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="flex gap-2">
+                <!-- 土日表示切り替えボタン（モバイル） -->
+                <button @click="daytrade.hideWeekends = !daytrade.hideWeekends"
+                        class="flex-1 px-3 py-3 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium"
+                        :class="daytrade.hideWeekends ? 'bg-gray-200' : 'bg-gray-100'">
+                    <span x-text="daytrade.hideWeekends ? '土日表示' : '土日非表示'"></span>
+                </button>
+                <button @click="daytrade.compactMode = !daytrade.compactMode"
+                        class="flex-1 px-3 py-3 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg font-medium"
+                        :class="daytrade.compactMode ? 'bg-blue-200' : 'bg-blue-100'">
+                    <span x-text="daytrade.compactMode ? 'フル表示' : 'コンパクト'"></span>
+                </button>
+                <button @click="daytrade.showScreenshotMenu = !daytrade.showScreenshotMenu"
+                        class="relative px-4 py-3 text-sm bg-green-100 hover:bg-green-200 text-green-700 rounded-lg font-medium">
+                    📸 撮影
+                    <div x-show="daytrade.showScreenshotMenu" @click.away="daytrade.showScreenshotMenu = false"
+                         class="absolute top-full right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border z-50">
+                        <button @click.stop="takeDaytradeScreenshot(); daytrade.showScreenshotMenu = false"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 rounded-t-lg">
+                            全体を撮影
+                        </button>
+                        <button @click.stop="takeDaytradeCalendarScreenshot(); daytrade.showScreenshotMenu = false"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">
+                            カレンダーのみ
+                        </button>
+                        <button @click.stop="takeDaytradeSummaryScreenshot(); daytrade.showScreenshotMenu = false"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 rounded-b-lg">
+                            サマリーのみ
+                        </button>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- デスクトップ用ナビゲーション -->
+        <div class="hidden sm:flex items-center justify-between">
+            <button @click="previousMonth()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center">
+                <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+                前月
+            </button>
+
+            <div class="flex items-center space-x-4">
+                <h3 class="text-xl font-semibold" x-text="`${daytrade.currentYear}年 ${daytrade.currentMonth}月`"></h3>
+                <!-- 土日表示切り替えボタン（デスクトップ） -->
+                <button @click="daytrade.hideWeekends = !daytrade.hideWeekends"
+                        class="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center"
+                        :class="daytrade.hideWeekends ? 'bg-gray-200' : 'bg-gray-100'"
+                        title="土日の表示/非表示を切り替えます">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    <span x-text="daytrade.hideWeekends ? '土日表示' : '土日非表示'"></span>
+                </button>
+                <button @click="daytrade.compactMode = !daytrade.compactMode"
+                        class="px-3 py-1 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg flex items-center"
+                        :class="daytrade.compactMode ? 'bg-blue-200' : 'bg-blue-100'">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <template x-if="!daytrade.compactMode">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </template>
+                        <template x-if="daytrade.compactMode">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+                        </template>
+                    </svg>
+                    <span x-text="daytrade.compactMode ? 'フル表示' : 'コンパクト'"></span>
+                </button>
+                <div class="relative">
+                    <button @click="daytrade.showScreenshotMenu = !daytrade.showScreenshotMenu"
+                            class="px-3 py-1 text-sm bg-green-100 hover:bg-green-200 text-green-700 rounded-lg flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span>スクリーンショット</span>
+                    </button>
+                    <div x-show="daytrade.showScreenshotMenu" @click.away="daytrade.showScreenshotMenu = false"
+                         class="absolute top-full right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border z-50">
+                        <button @click.stop="takeDaytradeScreenshot(); daytrade.showScreenshotMenu = false"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 rounded-t-lg">
+                            全体を撮影
+                        </button>
+                        <button @click.stop="takeDaytradeCalendarScreenshot(); daytrade.showScreenshotMenu = false"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100">
+                            カレンダーのみ
+                        </button>
+                        <button @click.stop="takeDaytradeSummaryScreenshot(); daytrade.showScreenshotMenu = false"
+                                class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 rounded-b-lg">
+                            サマリーのみ
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <button @click="nextMonth()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center">
+                次月
+                <svg class="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- スクリーンショット対象エリア -->
+    <div id="daytrade-screenshot-area">
+        <!-- コンパクトモード：サマリーとカレンダーを横並び（デスクトップ）、縦並び（モバイル） -->
+        <div x-show="daytrade.compactMode" class="grid grid-cols-1 sm:grid-cols-12 gap-4">
+        <!-- 左側：サマリー情報（デスクトップ：4列分、モバイル：全幅） -->
+        <div id="daytrade-summary-area" class="col-span-1 sm:col-span-4 flex flex-col gap-4" x-show="daytrade.monthlySummary">
+            <!-- 総合サマリー（コンパクト） -->
+            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 h-[180px] sm:h-[272px]">
+                <h4 class="text-lg sm:text-xl font-semibold mb-2">
+                    <span x-text="`${daytrade.currentYear}年${daytrade.currentMonth}月 総合サマリー`"></span>
+                </h4>
+                <div class="text-2xl sm:text-3xl font-bold mb-2"
+                     :class="((daytrade.monthlySummary?.futures?.total_profit || 0) + (daytrade.monthlySummary?.stocks?.total_settlement || 0)) >= 0 ? 'text-green-600' : 'text-red-600'"
+                     x-text="formatCurrency((daytrade.monthlySummary?.futures?.total_profit || 0) + (daytrade.monthlySummary?.stocks?.total_settlement || 0))"></div>
+                <div class="grid grid-cols-2 gap-3 sm:gap-4 text-base sm:text-lg">
+                    <div>
+                        <div class="text-gray-600 mb-1 text-base sm:text-lg">先物</div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <span>損益:</span>
+                                <span :class="(daytrade.monthlySummary?.futures?.total_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'"
+                                      x-text="formatCurrency(daytrade.monthlySummary?.futures?.total_profit || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>勝率:</span>
+                                <span x-text="`${(daytrade.monthlySummary?.futures?.win_rate || 0).toFixed(0)}%`"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>最大DD:</span>
+                                <span class="text-orange-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_drawdown || 0)"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-gray-600 mb-1 text-base sm:text-lg">株式</div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <span>損益:</span>
+                                <span :class="(daytrade.monthlySummary?.stocks?.total_settlement || 0) >= 0 ? 'text-green-600' : 'text-red-600'"
+                                      x-text="formatCurrency(daytrade.monthlySummary?.stocks?.total_settlement || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>勝率:</span>
+                                <span x-text="`${(daytrade.monthlySummary?.stocks?.win_rate || 0).toFixed(0)}%`"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>銘柄数:</span>
+                                <span x-text="daytrade.monthlySummary?.stocks?.unique_stocks || 0"></span>
+                            </div>
+                            <template x-if="(daytrade.monthlySummary?.stocks?.dividend_count || 0) > 0">
+                                <div class="flex justify-between">
+                                    <span>配当金:</span>
+                                    <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.dividend_total || 0)"></span>
+                                </div>
+                            </template>
+                            <template x-if="(daytrade.monthlySummary?.stocks?.spot_count || 0) > 0">
+                                <div class="flex justify-between">
+                                    <span>現物損益:</span>
+                                    <span :class="(daytrade.monthlySummary?.stocks?.spot_total || 0) >= 0 ? 'text-green-600' : 'text-red-600'"
+                                          x-text="formatCurrency(daytrade.monthlySummary?.stocks?.spot_total || 0)"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 詳細統計（コンパクト） -->
+            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 h-[260px] sm:h-[280px]">
+                <h4 class="text-lg sm:text-xl font-semibold mb-2">詳細統計</h4>
+                <div class="grid grid-cols-2 gap-3 sm:gap-4 text-base sm:text-lg">
+                    <div>
+                        <div class="text-gray-600 mb-1 text-base sm:text-lg">先物</div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <span>取引日数:</span>
+                                <span x-text="daytrade.monthlySummary?.futures?.trading_days || 0"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>総取引数:</span>
+                                <span x-text="daytrade.monthlySummary?.futures?.total_trades || 0"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>勝ち/負け:</span>
+                                <span x-text="`${daytrade.monthlySummary?.futures?.win_count || 0}勝/${daytrade.monthlySummary?.futures?.loss_count || 0}敗`"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>最大日次利益:</span>
+                                <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_daily_profit || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>最大日次損失:</span>
+                                <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_daily_loss || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>平均利益:</span>
+                                <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.avg_win || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>平均損失:</span>
+                                <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.avg_loss || 0)"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-gray-600 mb-1 text-base sm:text-lg">株式</div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <span>取引日数:</span>
+                                <span x-text="daytrade.monthlySummary?.stocks?.trading_days || 0"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>総取引数:</span>
+                                <span x-text="daytrade.monthlySummary?.stocks?.total_trades || 0"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>勝ち/負け:</span>
+                                <span x-text="`${daytrade.monthlySummary?.stocks?.win_count || 0}勝/${daytrade.monthlySummary?.stocks?.loss_count || 0}敗`"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>最大日次利益:</span>
+                                <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_daily_profit || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>最大日次損失:</span>
+                                <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_daily_loss || 0)"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="border-t pt-2 mt-2 text-base sm:text-lg">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 text-base sm:text-lg">総取引日数:</span>
+                        <span x-text="Math.max(daytrade.monthlySummary?.futures?.trading_days || 0, daytrade.monthlySummary?.stocks?.trading_days || 0)"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">総取引回数:</span>
+                        <span x-text="(daytrade.monthlySummary?.futures?.total_trades || 0) + (daytrade.monthlySummary?.stocks?.total_trades || 0)"></span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 右側：カレンダー（デスクトップ：8列分、モバイル：全幅） -->
+        <div id="daytrade-calendar-area" class="col-span-1 sm:col-span-8 h-full">
+            <div class="bg-white shadow-sm rounded-lg p-2 sm:p-3 h-full flex flex-col">
+                <!-- 年月ヘッダー -->
+                <div class="text-center mb-2">
+                    <h3 class="text-xl sm:text-2xl font-bold text-gray-800" x-text="`${daytrade.currentYear}年 ${daytrade.currentMonth}月`"></h3>
+                </div>
+                <!-- 曜日ヘッダー -->
+                <div class="grid gap-0.5 mobile-gap-narrow"
+                     :class="daytrade.hideWeekends ? 'grid-cols-5' : 'grid-cols-7'">
+                    <template x-for="(day, index) in daytrade.hideWeekends ? ['月', '火', '水', '木', '金'] : ['日', '月', '火', '水', '木', '金', '土']">
+                        <div class="text-center font-semibold py-0.5 sm:py-1 text-xs sm:text-sm"
+                             :class="{
+                                 'text-red-600': !daytrade.hideWeekends && index === 0,
+                                 'text-blue-600': !daytrade.hideWeekends && index === 6,
+                                 'text-gray-700': daytrade.hideWeekends || (index > 0 && index < 6)
+                             }"
+                             x-text="day"></div>
+                    </template>
+                </div>
+
+                <!-- カレンダー日付（コンパクト） -->
+                <div class="grid gap-0.5 mobile-gap-narrow flex-1"
+                     :class="daytrade.hideWeekends ? 'grid-cols-5' : 'grid-cols-7'">
+                    <template x-for="(day, index) in daytrade.hideWeekends ? getFilteredCalendarDays() : daytrade.calendarDays" :key="index">
+                        <div
+                             class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[50px] sm:min-h-[70px] relative"
+                             :class="{
+                                 'bg-gray-100': !day.date,
+                                 'bg-white': day.date && !day.has_trades,
+                                 'has-trades': day.has_trades && day.date,
+                                 'weekend': day.date && (daytrade.hideWeekends ? false : (index % 7 === 0 || index % 7 === 6)),
+                                 'profit': day.date && day.total_profit > 0,
+                                 'loss': day.date && day.total_profit < 0,
+                                 'bg-green-50': day.date && day.total_profit > 0,
+                                 'bg-red-50': day.date && day.total_profit < 0
+                             }"
+                             @click="day.date && showDayDetails(day.date)">
+                            <template x-if="day.date">
+                                <div class="p-1 h-full flex flex-col">
+                                    <div class="text-2xl sm:text-3xl font-bold text-gray-700 text-center" x-text="day.day"></div>
+                                    <div class="flex-1 flex items-center justify-center">
+                                        <template x-if="day.total_profit !== 0">
+                                            <div class="text-xl sm:text-2xl font-bold text-center"
+                                                 :class="day.total_profit >= 0 ? 'text-green-700' : 'text-red-700'"
+                                                 x-text="formatCompactProfit(day.total_profit)"></div>
+                                        </template>
+                                        <template x-if="day.total_profit === 0">
+                                            <div class="text-xl sm:text-2xl text-gray-400 text-center">−</div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通常モード：サマリー情報 -->
+    <div x-show="!daytrade.compactMode" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6" x-show="daytrade.monthlySummary">
+        <!-- 先物サマリー -->
+        <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6">
+            <h4 class="text-xl sm:text-2xl font-semibold mb-2 sm:mb-3">先物取引サマリー</h4>
+            <div class="space-y-2 text-lg sm:text-xl">
+                <div class="flex justify-between">
+                    <span class="text-gray-600">取引日数:</span>
+                    <span x-text="daytrade.monthlySummary?.futures?.trading_days || 0"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">総取引数:</span>
+                    <span x-text="daytrade.monthlySummary?.futures?.total_trades || 0"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">合計損益:</span>
+                    <span :class="(daytrade.monthlySummary?.futures?.total_profit || 0) >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'"
+                          x-text="formatCurrency(daytrade.monthlySummary?.futures?.total_profit || 0)"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">勝率:</span>
+                    <span x-text="`${(daytrade.monthlySummary?.futures?.win_rate || 0).toFixed(1)}%`"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">勝ち/負け:</span>
+                    <span x-text="`${daytrade.monthlySummary?.futures?.win_count || 0}勝 / ${daytrade.monthlySummary?.futures?.loss_count || 0}敗`"></span>
+                </div>
+                <div class="border-t pt-2 mt-2">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">最大日次利益:</span>
+                        <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_daily_profit || 0)"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">最大日次損失:</span>
+                        <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_daily_loss || 0)"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">平均利益:</span>
+                        <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.avg_win || 0)"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">平均損失:</span>
+                        <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.avg_loss || 0)"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 株式サマリー -->
+        <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6">
+            <h4 class="text-xl sm:text-2xl font-semibold mb-2 sm:mb-3">株式取引サマリー</h4>
+            <div class="space-y-2 text-lg sm:text-xl">
+                <div class="flex justify-between">
+                    <span class="text-gray-600">取引日数:</span>
+                    <span x-text="daytrade.monthlySummary?.stocks?.trading_days || 0"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">総取引数:</span>
+                    <span x-text="daytrade.monthlySummary?.stocks?.total_trades || 0"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">決済損益:</span>
+                    <span :class="(daytrade.monthlySummary?.stocks?.total_settlement || 0) >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'"
+                          x-text="formatCurrency(daytrade.monthlySummary?.stocks?.total_settlement || 0)"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">銘柄数:</span>
+                    <span x-text="daytrade.monthlySummary?.stocks?.unique_stocks || 0"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">勝率:</span>
+                    <span x-text="`${(daytrade.monthlySummary?.stocks?.win_rate || 0).toFixed(1)}%`"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">勝ち/負け:</span>
+                    <span x-text="`${daytrade.monthlySummary?.stocks?.win_count || 0}勝 / ${daytrade.monthlySummary?.stocks?.loss_count || 0}敗`"></span>
+                </div>
+                <div class="border-t pt-2 mt-2">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">最大日次利益:</span>
+                        <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_daily_profit || 0)"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">最大日次損失:</span>
+                        <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_daily_loss || 0)"></span>
+                    </div>
+                </div>
+                <template x-if="(daytrade.monthlySummary?.stocks?.dividend_count || 0) > 0">
+                    <div class="border-t pt-2 mt-2">
+                        <div class="text-lg font-medium text-gray-700 mb-1">配当金</div>
+                        <div class="flex justify-between text-lg">
+                            <span class="text-gray-600">件数:</span>
+                            <span x-text="`${daytrade.monthlySummary?.stocks?.dividend_count || 0}件`"></span>
+                        </div>
+                        <div class="flex justify-between text-lg">
+                            <span class="text-gray-600">合計:</span>
+                            <span class="text-green-600 font-semibold" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.dividend_total || 0)"></span>
+                        </div>
+                    </div>
+                </template>
+                <template x-if="(daytrade.monthlySummary?.stocks?.spot_count || 0) > 0">
+                    <div class="border-t pt-2 mt-2">
+                        <div class="text-lg font-medium text-gray-700 mb-1">現物取引</div>
+                        <div class="flex justify-between text-lg">
+                            <span class="text-gray-600">件数:</span>
+                            <span x-text="`${daytrade.monthlySummary?.stocks?.spot_count || 0}件`"></span>
+                        </div>
+                        <div class="flex justify-between text-lg">
+                            <span class="text-gray-600">損益:</span>
+                            <span :class="(daytrade.monthlySummary?.stocks?.spot_total || 0) >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'"
+                                  x-text="formatCurrency(daytrade.monthlySummary?.stocks?.spot_total || 0)"></span>
+                        </div>
+                        <div class="flex justify-between text-lg">
+                            <span class="text-gray-600">勝率:</span>
+                            <span x-text="`${(daytrade.monthlySummary?.stocks?.spot_win_rate || 0).toFixed(1)}%`"></span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- 総合サマリー -->
+        <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6 col-span-1 md:col-span-2 lg:col-span-1">
+            <h4 class="text-xl sm:text-2xl font-semibold mb-2 sm:mb-3">総合サマリー</h4>
+            <div class="space-y-2">
+                <div class="flex justify-between text-xl sm:text-3xl">
+                    <span class="text-gray-700 font-medium">月間合計損益:</span>
+                    <span :class="((daytrade.monthlySummary?.futures?.total_profit || 0) + (daytrade.monthlySummary?.stocks?.total_settlement || 0)) >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'"
+                          x-text="formatCurrency((daytrade.monthlySummary?.futures?.total_profit || 0) + (daytrade.monthlySummary?.stocks?.total_settlement || 0))"></span>
+                </div>
+                <div class="border-t pt-2 mt-2 space-y-2 text-lg sm:text-xl">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">先物損益:</span>
+                        <span :class="(daytrade.monthlySummary?.futures?.total_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'"
+                              x-text="formatCurrency(daytrade.monthlySummary?.futures?.total_profit || 0)"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">株式損益:</span>
+                        <span :class="(daytrade.monthlySummary?.stocks?.total_settlement || 0) >= 0 ? 'text-green-600' : 'text-red-600'"
+                              x-text="formatCurrency(daytrade.monthlySummary?.stocks?.total_settlement || 0)"></span>
+                    </div>
+                    <div class="border-t pt-2 mt-2">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">総取引日数:</span>
+                            <span x-text="Math.max(daytrade.monthlySummary?.futures?.trading_days || 0, daytrade.monthlySummary?.stocks?.trading_days || 0)"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">総取引回数:</span>
+                            <span x-text="(daytrade.monthlySummary?.futures?.total_trades || 0) + (daytrade.monthlySummary?.stocks?.total_trades || 0)"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <!-- 通常モード：カレンダー -->
+        <div x-show="!daytrade.compactMode" class="bg-white shadow-sm rounded-lg p-3 sm:p-6">
+        <div class="w-full">
+            <!-- 年月ヘッダー -->
+            <div class="text-center mb-3">
+                <h3 class="text-xl sm:text-2xl font-bold text-gray-800" x-text="`${daytrade.currentYear}年 ${daytrade.currentMonth}月`"></h3>
+            </div>
+            <!-- 曜日ヘッダー -->
+            <div class="grid gap-0.5 sm:gap-1 mobile-gap-narrow mb-0.5 sm:mb-1"
+                 :class="daytrade.hideWeekends ? 'grid-cols-5' : 'grid-cols-7'">
+                <template x-for="(day, index) in daytrade.hideWeekends ? ['月', '火', '水', '木', '金'] : ['日', '月', '火', '水', '木', '金', '土']">
+                    <div class="text-center font-semibold py-0.5 sm:py-1 text-xs sm:text-base"
+                         :class="{
+                             'text-red-600': !daytrade.hideWeekends && index === 0,
+                             'text-blue-600': !daytrade.hideWeekends && index === 6,
+                             'text-gray-700': daytrade.hideWeekends || (index > 0 && index < 6)
+                         }"
+                         x-text="day"></div>
+                </template>
+            </div>
+
+            <!-- カレンダー日付 -->
+            <div class="grid gap-0.5 sm:gap-1 mobile-gap-narrow"
+                 :class="daytrade.hideWeekends ? 'grid-cols-5' : 'grid-cols-7'">
+                <template x-for="(day, index) in daytrade.hideWeekends ? getFilteredCalendarDays() : daytrade.calendarDays" :key="index">
+                    <div
+                         class="calendar-cell mobile-calendar-cell cursor-pointer hover:opacity-90 transition-opacity min-h-[100px] sm:min-h-[160px] relative"
+                         :class="{
+                             'bg-gray-100': !day.date,
+                             'bg-white': day.date && !day.has_trades,
+                             'has-trades': day.has_trades && day.date,
+                             'weekend': day.date && (daytrade.hideWeekends ? false : (index % 7 === 0 || index % 7 === 6)),
+                             'profit': day.date && day.total_profit > 0,
+                             'loss': day.date && day.total_profit < 0,
+                             'bg-green-50': day.date && day.total_profit > 0,
+                             'bg-red-50': day.date && day.total_profit < 0
+                         }"
+                         @click="day.date && showDayDetails(day.date)">
+                        <template x-if="day.date">
+                            <div class="p-1 sm:p-2 h-full flex flex-col">
+                                <div class="text-2xl sm:text-3xl font-bold text-gray-700 mb-1" x-text="day.day"></div>
+                                <div class="flex-1 flex flex-col justify-center space-y-1">
+                                    <!-- モバイル：合計のみ表示（コンパクト表記） -->
+                                    <div class="sm:hidden">
+                                        <template x-if="day.total_profit !== 0">
+                                            <div class="text-xl sm:text-2xl font-bold"
+                                                 :class="day.total_profit >= 0 ? 'text-green-700' : 'text-red-700'"
+                                                 x-text="formatCompactProfit(day.total_profit)"></div>
+                                        </template>
+                                        <template x-if="day.total_profit === 0">
+                                            <div class="text-xl sm:text-2xl text-gray-400">−</div>
+                                        </template>
+                                    </div>
+
+                                    <!-- デスクトップ：詳細表示 -->
+                                    <div class="hidden sm:block">
+                                        <!-- 先物損益 -->
+                                        <template x-if="day.futures_profit !== 0">
+                                            <div class="text-lg sm:text-xl"
+                                                 :class="day.futures_profit >= 0 ? 'text-green-600' : 'text-red-600'">
+                                                <span class="font-medium">先:</span>
+                                                <span x-text="formatCalendarProfit(day.futures_profit)"></span>
+                                            </div>
+                                        </template>
+                                        <!-- 株式損益 -->
+                                        <template x-if="day.stocks_profit !== 0">
+                                            <div class="text-lg sm:text-xl"
+                                                 :class="day.stocks_profit >= 0 ? 'text-green-600' : 'text-red-600'">
+                                                <span class="font-medium">株:</span>
+                                                <span x-text="formatCalendarProfit(day.stocks_profit)"></span>
+                                            </div>
+                                        </template>
+                                        <!-- 合計損益（区切り線付き） -->
+                                        <template x-if="day.total_profit !== 0">
+                                            <div class="border-t pt-1 mt-1">
+                                                <div class="text-xl sm:text-2xl font-bold"
+                                                     :class="day.total_profit >= 0 ? 'text-green-700' : 'text-red-700'"
+                                                     x-text="formatCalendarProfit(day.total_profit)"></div>
+                                            </div>
+                                        </template>
+                                        <template x-if="day.total_profit === 0">
+                                            <div class="text-center text-gray-400 text-xl sm:text-2xl">−</div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    </div>
+    <!-- スクリーンショット対象エリア終了 -->
+
+    <!-- 累積損益グラフ -->
+    <div class="bg-white shadow-sm rounded-lg p-3 sm:p-6 mt-4 sm:mt-6" id="cumulative-chart-area">
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 space-y-2 sm:space-y-0">
+            <h3 class="text-base sm:text-lg font-semibold">累積損益グラフ</h3>
+            <div class="flex flex-wrap gap-2">
+                <select x-model="daytrade.chartPeriod" @change="loadCumulativeChart()"
+                        class="px-2 sm:px-3 py-1.5 sm:py-1 border rounded-lg text-xs sm:text-sm">
+                    <option value="year">今年</option>
+                    <option value="month">今月</option>
+                    <option value="3months">3ヶ月</option>
+                    <option value="6months">6ヶ月</option>
+                    <option value="custom">期間指定</option>
+                </select>
+                <select x-model="daytrade.showDividend" @change="loadCumulativeChart()"
+                        class="px-2 sm:px-3 py-1.5 sm:py-1 border rounded-lg text-xs sm:text-sm">
+                    <option value="included">株式（配当込み）</option>
+                    <option value="excluded">株式（配当除外）</option>
+                </select>
+                <div x-show="daytrade.chartPeriod === 'custom'" class="flex items-center gap-1">
+                    <input type="date" x-model="daytrade.customStartDate"
+                           @change="loadCumulativeChart()"
+                           class="px-2 sm:px-3 py-1.5 sm:py-1 border rounded-lg text-xs sm:text-sm">
+                    <span class="text-xs sm:text-sm">〜</span>
+                    <input type="date" x-model="daytrade.customEndDate"
+                           @change="loadCumulativeChart()"
+                           class="px-2 sm:px-3 py-1.5 sm:py-1 border rounded-lg text-xs sm:text-sm">
+                </div>
+                <button @click="takeCumulativeChartScreenshot()"
+                        class="px-3 sm:px-3 py-1.5 sm:py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs sm:text-sm whitespace-nowrap">
+                    <span class="sm:hidden">📸</span>
+                    <span class="hidden sm:inline">📸 スクリーンショット</span>
+                </button>
+            </div>
+        </div>
+        <div class="relative" style="height: 400px;">
+            <canvas id="cumulativeChart"></canvas>
+        </div>
+        <style>
+            @media (min-width: 640px) {
+                #cumulative-chart-area > div:last-child {
+                    height: 900px !important;
+                }
+            }
+        </style>
+    </div>
+
+    <!-- 月別損益表 -->
+    <div class="bg-white shadow-sm rounded-lg p-3 sm:p-6 mt-4 sm:mt-6" id="monthly-profit-area">
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 space-y-2 sm:space-y-0">
+            <h3 class="text-base sm:text-lg font-semibold">月別損益</h3>
+            <div class="flex items-center gap-2">
+                <select x-model="daytrade.monthlyYear" @change="loadMonthlyProfit()"
+                        class="px-2 sm:px-3 py-1.5 sm:py-1 border rounded-lg text-xs sm:text-sm">
+                    <template x-for="year in daytrade.yearOptions">
+                        <option :value="year" x-text="year + '年'"></option>
+                    </template>
+                </select>
+                <button @click="takeMonthlyProfitScreenshot()"
+                        class="px-3 sm:px-3 py-1.5 sm:py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs sm:text-sm whitespace-nowrap">
+                    <span class="sm:hidden">📸</span>
+                    <span class="hidden sm:inline">📸 スクリーンショット</span>
+                </button>
+            </div>
+        </div>
+        <div class="overflow-x-auto -mx-3 sm:mx-0">
+            <table class="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-2 sm:px-3 py-1.5 sm:py-2 text-left text-xs font-medium text-gray-500 uppercase">月</th>
+                        <th class="px-2 sm:px-3 py-1.5 sm:py-2 text-right text-xs font-medium text-gray-500 uppercase">先物</th>
+                        <th class="px-2 sm:px-3 py-1.5 sm:py-2 text-right text-xs font-medium text-gray-500 uppercase">株式</th>
+                        <th class="px-2 sm:px-3 py-1.5 sm:py-2 text-right text-xs font-medium text-gray-500 uppercase">合計</th>
+                        <th class="px-2 sm:px-3 py-1.5 sm:py-2 text-right text-xs font-medium text-gray-500 uppercase mobile-hide">日数</th>
+                        <th class="px-2 sm:px-3 py-1.5 sm:py-2 text-right text-xs font-medium text-gray-500 uppercase mobile-hide">回数</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="month in daytrade.monthlyData" :key="month.month">
+                        <tr>
+                            <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm" x-text="month.month + '月'"></td>
+                            <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-right font-medium"
+                                :class="month.futures_profit >= 0 ? 'text-green-600' : 'text-red-600'"
+                                x-text="formatCurrency(month.futures_profit)"></td>
+                            <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-right font-medium"
+                                :class="month.stocks_profit >= 0 ? 'text-green-600' : 'text-red-600'"
+                                x-text="formatCurrency(month.stocks_profit)"></td>
+                            <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-right font-bold"
+                                :class="month.total_profit >= 0 ? 'text-green-700' : 'text-red-700'"
+                                x-text="formatCurrency(month.total_profit)"></td>
+                            <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-right mobile-hide"
+                                x-text="month.actual_trading_days || Math.max(month.futures_days, month.stocks_days)"></td>
+                            <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-right mobile-hide"
+                                x-text="month.futures_trades + month.stocks_trades"></td>
+                        </tr>
+                    </template>
+                    <!-- 年間合計行 -->
+                    <tr class="bg-gray-100 font-bold">
+                        <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm">年間合計</td>
+                        <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-right"
+                            :class="daytrade.yearlyTotal?.futures >= 0 ? 'text-green-700' : 'text-red-700'"
+                            x-text="formatCurrency(daytrade.yearlyTotal?.futures || 0)"></td>
+                        <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-right"
+                            :class="daytrade.yearlyTotal?.stocks >= 0 ? 'text-green-700' : 'text-red-700'"
+                            x-text="formatCurrency(daytrade.yearlyTotal?.stocks || 0)"></td>
+                        <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-right"
+                            :class="daytrade.yearlyTotal?.total >= 0 ? 'text-green-700' : 'text-red-700'"
+                            x-text="formatCurrency(daytrade.yearlyTotal?.total || 0)"></td>
+                        <td class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-right mobile-hide" colspan="2">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 取引履歴一覧 -->
+    <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6 mt-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">取引履歴</h3>
+            <div class="flex space-x-2">
+                <button @click="daytrade.showTradeForm = true; daytrade.editingTrade = null"
+                        class="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    新規登録
+                </button>
+                <button @click="toggleTradeList()"
+                        class="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm">
+                    <span x-text="daytrade.showTradeList ? '非表示' : '表示'"></span>
+                </button>
+            </div>
+        </div>
+
+        <div x-show="daytrade.showTradeList" x-cloak>
+            <!-- 期間フィルター -->
+            <div class="mb-4 flex space-x-2">
+                <input type="date" x-model="daytrade.tradeListStartDate"
+                       @change="loadTradeList()"
+                       class="px-3 py-1 border rounded-lg text-sm">
+                <span class="py-1">〜</span>
+                <input type="date" x-model="daytrade.tradeListEndDate"
+                       @change="loadTradeList()"
+                       class="px-3 py-1 border rounded-lg text-sm">
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">日付</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">種別</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">銘柄</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">取引</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">数量</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">価格</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">損益</th>
+                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <template x-for="trade in daytrade.tradeList" :key="trade.id">
+                            <tr>
+                                <td class="px-3 py-2 text-sm" x-text="trade.trade_date"></td>
+                                <td class="px-3 py-2 text-sm" x-text="trade.trade_category === 'futures' ? '先物' : '株式'"></td>
+                                <td class="px-3 py-2 text-sm" x-text="trade.name"></td>
+                                <td class="px-3 py-2 text-sm" x-text="trade.trade_type"></td>
+                                <td class="px-3 py-2 text-sm text-right" x-text="formatNumber(trade.quantity)"></td>
+                                <td class="px-3 py-2 text-sm text-right" x-text="formatNumber(trade.price)"></td>
+                                <td class="px-3 py-2 text-sm text-right font-medium"
+                                    :class="(trade.profit_loss || trade.settlement_amount || 0) >= 0 ? 'text-green-600' : 'text-red-600'"
+                                    x-text="formatCurrency(trade.profit_loss || trade.settlement_amount || 0)"></td>
+                                <td class="px-3 py-2 text-sm text-center">
+                                    <button @click="editTrade(trade)"
+                                            class="text-blue-600 hover:text-blue-800 mr-2">編集</button>
+                                    <button @click="deleteTrade(trade.id, trade.trade_category)"
+                                            class="text-red-600 hover:text-red-800">削除</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- ページネーション -->
+            <div class="mt-4 flex justify-between items-center" x-show="daytrade.tradeTotalPages > 1">
+                <div class="text-sm text-gray-600">
+                    <span x-text="`${daytrade.tradeTotal}件中 ${(daytrade.tradePage - 1) * 50 + 1}-${Math.min(daytrade.tradePage * 50, daytrade.tradeTotal)}件を表示`"></span>
+                </div>
+                <div class="flex space-x-2">
+                    <button @click="loadTradeList(daytrade.tradePage - 1)"
+                            :disabled="daytrade.tradePage === 1"
+                            class="px-3 py-1 border rounded-lg text-sm"
+                            :class="daytrade.tradePage === 1 ? 'bg-gray-100 text-gray-400' : 'hover:bg-gray-100'">
+                        前へ
+                    </button>
+                    <span class="px-3 py-1 text-sm" x-text="`${daytrade.tradePage} / ${daytrade.tradeTotalPages}`"></span>
+                    <button @click="loadTradeList(daytrade.tradePage + 1)"
+                            :disabled="daytrade.tradePage === daytrade.tradeTotalPages"
+                            class="px-3 py-1 border rounded-lg text-sm"
+                            :class="daytrade.tradePage === daytrade.tradeTotalPages ? 'bg-gray-100 text-gray-400' : 'hover:bg-gray-100'">
+                        次へ
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CSVインポートボタン -->
+    <div x-show="!daytrade.showImportForm" class="mt-6">
+        <button @click="daytrade.showImportForm = true"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+            </svg>
+            CSVファイルをインポート
+        </button>
+    </div>
+
+    <!-- CSVインポート (ボタンクリックで表示) -->
+    <div x-show="daytrade.showImportForm" class="bg-white shadow-sm rounded-lg p-4 sm:p-6 mt-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-base sm:text-lg font-semibold">CSVファイルのインポート</h3>
+            <button @click="daytrade.showImportForm = false"
+                    class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- 先物CSV -->
+            <div class="border rounded-lg p-4">
+                <h4 class="font-medium mb-3">先物取引データ</h4>
+                <form @submit.prevent="importFuturesCSV(); return false;">
+                    <input type="hidden" name="csrf_token" :value="csrfToken">
+                    <input type="file"
+                           x-ref="futuresFile"
+                           accept=".csv"
+                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                           required>
+                    <button type="submit"
+                            class="mt-3 w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                        インポート
+                    </button>
+                </form>
+            </div>
+
+            <!-- 株式CSV（信用取引） -->
+            <div class="border rounded-lg p-4">
+                <h4 class="font-medium mb-3">株式取引データ（信用）</h4>
+                <form @submit.prevent="importStocksCSV(); return false;">
+                    <input type="hidden" name="csrf_token" :value="csrfToken">
+                    <input type="file"
+                           x-ref="stocksFile"
+                           accept=".csv"
+                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                           required>
+                    <button type="submit"
+                            class="mt-3 w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                        インポート
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 現物・配当金CSV -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <div class="border rounded-lg p-4 md:col-span-2">
+                <h4 class="font-medium mb-3">現物取引・配当金データ</h4>
+                <p class="text-sm text-gray-600 mb-3">現物売却と配当金のデータをインポートします</p>
+                <form @submit.prevent="importSpotDividendCSV(); return false;">
+                    <input type="hidden" name="csrf_token" :value="csrfToken">
+                    <input type="file"
+                           x-ref="spotDividendFile"
+                           accept=".csv"
+                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                           required>
+                    <button type="submit"
+                            class="mt-3 w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                        インポート
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 取引登録・編集フォーム -->
+<div x-show="daytrade.showTradeForm"
+     x-cloak
+     @click.away="daytrade.showTradeForm = false"
+     @keydown.escape.window="daytrade.showTradeForm = false"
+     class="fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+
+        <div class="relative bg-white rounded-lg w-full sm:max-w-2xl">
+            <div class="p-4 sm:p-6">
+                <h3 class="text-lg font-semibold mb-4" x-text="daytrade.editingTrade ? '取引編集' : '取引登録'"></h3>
+
+                <form @submit.prevent="saveTrade()">
+                    <input type="hidden" name="csrf_token" :value="csrfToken">
+
+                    <div class="space-y-4">
+                        <!-- 取引種別 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">取引種別</label>
+                            <select x-model="daytrade.tradeForm.trade_category"
+                                    :disabled="daytrade.editingTrade"
+                                    class="w-full px-3 py-2 border rounded-lg" required>
+                                <option value="">選択してください</option>
+                                <option value="futures">先物</option>
+                                <option value="stocks">株式</option>
+                            </select>
+                        </div>
+
+                        <!-- 取引日 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">取引日</label>
+                            <input type="date" x-model="daytrade.tradeForm.trade_date"
+                                   class="w-full px-3 py-2 border rounded-lg" required>
+                        </div>
+
+                        <!-- 先物フォーム -->
+                        <template x-if="daytrade.tradeForm.trade_category === 'futures'">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">銘柄</label>
+                                    <input type="text" x-model="daytrade.tradeForm.symbol"
+                                           class="w-full px-3 py-2 border rounded-lg" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">取引区分</label>
+                                    <select x-model="daytrade.tradeForm.trade_type"
+                                            class="w-full px-3 py-2 border rounded-lg" required>
+                                        <option value="決済買">決済買</option>
+                                        <option value="決済売">決済売</option>
+                                    </select>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">価格</label>
+                                        <input type="number" x-model="daytrade.tradeForm.price"
+                                               step="0.01" class="w-full px-3 py-2 border rounded-lg" required>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">数量</label>
+                                        <input type="number" x-model="daytrade.tradeForm.quantity"
+                                               class="w-full px-3 py-2 border rounded-lg" required>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">約定金額</label>
+                                        <input type="number" x-model="daytrade.tradeForm.settlement_amount"
+                                               step="0.01" class="w-full px-3 py-2 border rounded-lg" required>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">決済損益</label>
+                                        <input type="number" x-model="daytrade.tradeForm.profit_loss"
+                                               step="0.01" class="w-full px-3 py-2 border rounded-lg" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- 株式フォーム -->
+                        <template x-if="daytrade.tradeForm.trade_category === 'stocks'">
+                            <div class="space-y-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">銘柄コード</label>
+                                        <input type="text" x-model="daytrade.tradeForm.code"
+                                               class="w-full px-3 py-2 border rounded-lg" required>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">銘柄名</label>
+                                        <input type="text" x-model="daytrade.tradeForm.name"
+                                               class="w-full px-3 py-2 border rounded-lg" required>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">取引区分</label>
+                                    <select x-model="daytrade.tradeForm.trade_type"
+                                            class="w-full px-3 py-2 border rounded-lg" required>
+                                        <option value="信用返済売">信用返済売</option>
+                                        <option value="信用返済買">信用返済買</option>
+                                        <option value="現物売">現物売</option>
+                                    </select>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">株数</label>
+                                        <input type="number" x-model="daytrade.tradeForm.quantity"
+                                               class="w-full px-3 py-2 border rounded-lg" required>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">平均単価</label>
+                                        <input type="number" x-model="daytrade.tradeForm.average_price"
+                                               step="0.01" class="w-full px-3 py-2 border rounded-lg" required>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">決済損益</label>
+                                    <input type="number" x-model="daytrade.tradeForm.settlement_amount"
+                                           step="0.01" class="w-full px-3 py-2 border rounded-lg">
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button type="button" @click="daytrade.showTradeForm = false"
+                                class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">
+                            キャンセル
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            保存
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 日別詳細モーダル -->
+<div x-show="daytrade.showDetailsModal"
+     x-cloak
+     @click.away="daytrade.showDetailsModal = false"
+     @keydown.escape.window="daytrade.showDetailsModal = false"
+     class="fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+
+        <div class="relative bg-white rounded-lg w-full sm:max-w-4xl max-h-[80vh] overflow-hidden">
+            <div class="p-4 sm:p-6">
+                <h3 class="text-base sm:text-lg font-semibold mb-4" x-text="`${daytrade.selectedDate} の取引詳細`"></h3>
+
+                <div class="overflow-y-auto max-h-[60vh]">
+                    <!-- 決済情報のみ表示 -->
+                    <div class="mb-4">
+                        <h4 class="font-medium mb-2">決済取引サマリー</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <!-- 先物決済 -->
+                            <template x-if="daytrade.dayDetails?.futures?.length > 0">
+                                <div class="border rounded-lg p-4">
+                                    <h5 class="font-medium text-gray-700 mb-2">先物決済</h5>
+                                    <div class="space-y-1">
+                                        <template x-for="trade in daytrade.dayDetails.futures.filter(t => t.trade_type.includes('決済'))" :key="trade.id">
+                                            <div class="flex justify-between text-sm">
+                                                <span x-text="`${trade.symbol} ${trade.quantity}枚`"></span>
+                                                <span :class="trade.profit_loss >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'"
+                                                      x-text="formatCurrency(trade.profit_loss)"></span>
+                                            </div>
+                                        </template>
+                                        <div class="border-t pt-1 mt-2">
+                                            <div class="flex justify-between font-medium">
+                                                <span>合計</span>
+                                                <span :class="daytrade.dayDetails.futures.filter(t => t.trade_type.includes('決済')).reduce((sum, t) => sum + t.profit_loss, 0) >= 0 ? 'text-green-700' : 'text-red-700'"
+                                                      x-text="formatCurrency(daytrade.dayDetails.futures.filter(t => t.trade_type.includes('決済')).reduce((sum, t) => sum + t.profit_loss, 0))"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- 株式決済 -->
+                            <template x-if="daytrade.dayDetails?.stocks?.filter(t => t.trade_type.includes('返済')).length > 0">
+                                <div class="border rounded-lg p-4">
+                                    <h5 class="font-medium text-gray-700 mb-2">株式決済</h5>
+                                    <div class="space-y-1">
+                                        <template x-for="trade in daytrade.dayDetails.stocks.filter(t => t.trade_type.includes('返済'))" :key="trade.id">
+                                            <div class="flex justify-between text-sm">
+                                                <span x-text="`${trade.code} ${trade.name} ${trade.quantity}株`"></span>
+                                                <span :class="(trade.settlement_amount || 0) >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'"
+                                                      x-text="formatCurrency(trade.settlement_amount || 0)"></span>
+                                            </div>
+                                        </template>
+                                        <div class="border-t pt-1 mt-2">
+                                            <div class="flex justify-between font-medium">
+                                                <span>合計</span>
+                                                <span :class="daytrade.dayDetails.stocks.filter(t => t.trade_type.includes('返済')).reduce((sum, t) => sum + (t.settlement_amount || 0), 0) >= 0 ? 'text-green-700' : 'text-red-700'"
+                                                      x-text="formatCurrency(daytrade.dayDetails.stocks.filter(t => t.trade_type.includes('返済')).reduce((sum, t) => sum + (t.settlement_amount || 0), 0))"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- 日計合計 -->
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="flex justify-between text-lg font-bold">
+                            <span>日計合計</span>
+                            <span :class="((daytrade.dayDetails?.futures?.filter(t => t.trade_type.includes('決済')).reduce((sum, t) => sum + t.profit_loss, 0) || 0) +
+                                           (daytrade.dayDetails?.stocks?.filter(t => t.trade_type.includes('返済')).reduce((sum, t) => sum + (t.settlement_amount || 0), 0) || 0)) >= 0 ? 'text-green-700' : 'text-red-700'"
+                                  x-text="formatCurrency((daytrade.dayDetails?.futures?.filter(t => t.trade_type.includes('決済')).reduce((sum, t) => sum + t.profit_loss, 0) || 0) +
+                                                         (daytrade.dayDetails?.stocks?.filter(t => t.trade_type.includes('返済')).reduce((sum, t) => sum + (t.settlement_amount || 0), 0) || 0))"></span>
+                        </div>
+                    </div>
+
+                    <!-- 株式取引 -->
+                    <template x-if="daytrade.dayDetails?.stocks?.length > 0">
+                        <div>
+                            <h4 class="font-medium mb-2">株式取引</h4>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-2 sm:px-3 py-2 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase">コード</th>
+                                            <th class="px-2 sm:px-3 py-2 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase mobile-hide">銘柄名</th>
+                                            <th class="px-2 sm:px-3 py-2 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase">取引</th>
+                                            <th class="px-2 sm:px-3 py-2 text-right text-xs sm:text-sm font-medium text-gray-500 uppercase mobile-hide">株数</th>
+                                            <th class="px-2 sm:px-3 py-2 text-right text-xs sm:text-sm font-medium text-gray-500 uppercase mobile-hide">単価</th>
+                                            <th class="px-2 sm:px-3 py-2 text-right text-xs sm:text-sm font-medium text-gray-500 uppercase">決済損益</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        <template x-for="trade in daytrade.dayDetails.stocks" :key="trade.id">
+                                            <tr>
+                                                <td class="px-2 sm:px-3 py-2 text-xs sm:text-sm" x-text="trade.code"></td>
+                                                <td class="px-2 sm:px-3 py-2 text-xs sm:text-sm mobile-hide" x-text="trade.name"></td>
+                                                <td class="px-2 sm:px-3 py-2 text-xs sm:text-sm" x-text="trade.trade_type"></td>
+                                                <td class="px-2 sm:px-3 py-2 text-xs sm:text-sm text-right mobile-hide" x-text="formatNumber(trade.quantity)"></td>
+                                                <td class="px-2 sm:px-3 py-2 text-xs sm:text-sm text-right mobile-hide" x-text="formatNumber(trade.average_price)"></td>
+                                                <td class="px-2 sm:px-3 py-2 text-xs sm:text-sm text-right font-semibold"
+                                                    :class="(trade.settlement_amount || 0) >= 0 ? 'text-green-600' : 'text-red-600'"
+                                                    x-text="formatCurrency(trade.settlement_amount || 0)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button @click="daytrade.showDetailsModal = false"
+                            class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors">
+                        閉じる
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

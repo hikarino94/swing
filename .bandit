@@ -8,6 +8,7 @@ skips:
   - B101  # assert_used - OK in tests
   - B104  # hardcoded_bind_all_interfaces
   - B105  # hardcoded_password_string
+  - B107  # hardcoded_password_default - OK for default empty string
   - B201  # flask_debug_true
   - B301  # pickle
   - B403  # import_pickle

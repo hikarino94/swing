@@ -133,3 +133,129 @@ class TestDatabaseUtilities:
 
         # コネクションが適切に閉じられたことを確認
         mock_conn.close.assert_called_once()
+
+
+class TestTableExists:
+    """table_exists関数のテスト"""
+
+    def test_table_exists_true(self):
+        """テーブルが存在する場合のテスト"""
+        from src.utils.db_utils import table_exists
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = ("users",)
+        mock_conn.cursor.return_value = mock_cursor
+
+        result = table_exists(mock_conn, "users")
+
+        assert result is True
+        mock_cursor.execute.assert_called_once()
+        # SQL文にテーブル名が含まれることを確認
+        sql_call = mock_cursor.execute.call_args[0][0]
+        assert "sqlite_master" in sql_call
+        assert mock_cursor.execute.call_args[0][1] == ("users",)
+
+    def test_table_exists_false(self):
+        """テーブルが存在しない場合のテスト"""
+        from src.utils.db_utils import table_exists
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = None
+        mock_conn.cursor.return_value = mock_cursor
+
+        result = table_exists(mock_conn, "nonexistent")
+
+        assert result is False
+
+
+class TestGetTableColumns:
+    """get_table_columns関数のテスト"""
+
+    def test_get_table_columns(self):
+        """テーブルのカラム名取得テスト"""
+        from src.utils.db_utils import get_table_columns
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        # PRAGMA table_infoの戻り値形式
+        mock_cursor.fetchall.return_value = [
+            (0, "id", "INTEGER", 0, None, 1),
+            (1, "name", "TEXT", 0, None, 0),
+            (2, "email", "TEXT", 0, None, 0),
+        ]
+        mock_conn.cursor.return_value = mock_cursor
+
+        result = get_table_columns(mock_conn, "users")
+
+        assert result == ["id", "name", "email"]
+        mock_cursor.execute.assert_called_once_with("PRAGMA table_info(users)")
+
+    def test_get_table_columns_empty(self):
+        """存在しないテーブルの場合のテスト"""
+        from src.utils.db_utils import get_table_columns
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        mock_conn.cursor.return_value = mock_cursor
+
+        result = get_table_columns(mock_conn, "nonexistent")
+
+        assert result == []
+
+
+class TestVacuumDatabase:
+    """vacuum_database関数のテスト"""
+
+    @patch("src.utils.db_utils.sqlite3.connect")
+    @patch("src.utils.db_utils.get_db_path")
+    @patch("src.utils.db_utils.logger")
+    def test_vacuum_database_default_path(
+        self, mock_logger, mock_get_path, mock_connect
+    ):
+        """デフォルトパスでのVACUUM実行テスト"""
+        from src.utils.db_utils import vacuum_database
+
+        mock_get_path.return_value = "/test/db/stock.db"
+        mock_conn = MagicMock()
+        mock_connect.return_value = mock_conn
+
+        vacuum_database()
+
+        mock_get_path.assert_called_once()
+        mock_connect.assert_called_once_with("/test/db/stock.db")
+        mock_conn.execute.assert_called_once_with("VACUUM")
+        mock_conn.close.assert_called_once()
+        mock_logger.info.assert_called_once_with("Database vacuum completed")
+
+    @patch("src.utils.db_utils.sqlite3.connect")
+    @patch("src.utils.db_utils.logger")
+    def test_vacuum_database_custom_path(self, mock_logger, mock_connect):
+        """カスタムパスでのVACUUM実行テスト"""
+        from src.utils.db_utils import vacuum_database
+
+        mock_conn = MagicMock()
+        mock_connect.return_value = mock_conn
+
+        vacuum_database("/custom/path/test.db")
+
+        mock_connect.assert_called_once_with("/custom/path/test.db")
+        mock_conn.execute.assert_called_once_with("VACUUM")
+        mock_conn.close.assert_called_once()
+
+    @patch("src.utils.db_utils.sqlite3.connect")
+    def test_vacuum_database_exception(self, mock_connect):
+        """VACUUM実行時の例外処理テスト"""
+        from src.utils.db_utils import vacuum_database
+
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = Exception("VACUUM failed")
+        mock_connect.return_value = mock_conn
+
+        with pytest.raises(Exception, match="VACUUM failed"):
+            vacuum_database("/test/db/stock.db")
+
+        # 例外が発生してもcloseが呼ばれることを確認
+        mock_conn.close.assert_called_once()

@@ -21,7 +21,7 @@ class AuthManager:
 
     @staticmethod
     def register_user(
-        username: str, email: str, password: str, role: str = "admin"
+        username: str, email: str = "", password: str = "", role: str = "admin"
     ) -> tuple[bool, str]:
         """
         新規ユーザー登録
@@ -39,8 +39,7 @@ class AuthManager:
         if not username or len(username) < 3:
             return False, "ユーザー名は3文字以上で入力してください"
 
-        if not email or "@" not in email:
-            return False, "有効なメールアドレスを入力してください"
+        # メールアドレスのチェックは削除（メール不要）
 
         if not password or len(password) < 8:
             return False, "パスワードは8文字以上で入力してください"
@@ -49,7 +48,8 @@ class AuthManager:
         if User.find_by_username(username):
             return False, "このユーザー名は既に使用されています"
 
-        if User.find_by_email(email):
+        # メールアドレスが入力されている場合のみ重複チェック
+        if email and User.find_by_email(email):
             return False, "このメールアドレスは既に登録されています"
 
         # ユーザー作成
@@ -83,7 +83,8 @@ class AuthManager:
         """
         # ユーザー検索
         user = User.find_by_username(username_or_email)
-        if not user:
+        if not user and "@" in username_or_email:
+            # メールアドレス形式の場合のみメールで検索
             user = User.find_by_email(username_or_email)
 
         if not user:

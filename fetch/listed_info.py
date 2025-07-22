@@ -58,7 +58,18 @@ def _fetch_listed_info(idtoken: str) -> pd.DataFrame:
     if resp.status_code != 200:
         raise RuntimeError(f"API error {resp.status_code}: {resp.text}")
 
-    js = resp.json()
+    try:
+        js = resp.json()
+    except requests.exceptions.JSONDecodeError as e:
+        # HTMLレスポンスの場合、最初の100文字を表示
+        content_type = resp.headers.get("Content-Type", "")
+        if "text/html" in content_type:
+            raise RuntimeError(
+                f"APIがHTMLを返しました。メンテナンス中またはアクセス制限の可能性があります。"
+                f"Content-Type: {content_type}, レスポンス: {resp.text[:200]}..."
+            ) from e
+        raise RuntimeError(f"API呼び出しエラー: {e}") from e
+
     if "message" in js:
         logger.info("API message: %s", js["message"])
     data = js.get("info", [])
