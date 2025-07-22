@@ -36,11 +36,7 @@ class TestInitSchema:
                     "users",
                     "sessions",
                     "holdings",
-                    "transactions",
-                    "fund_master",
-                    "fund_prices",
-                    "fund_holdings",
-                    "fund_transactions",
+                    # fund関連テーブルは削除された
                 ]
 
                 cursor.execute(
@@ -264,11 +260,7 @@ class TestDDL:
             "users",
             "sessions",
             "holdings",
-            "transactions",
-            "fund_master",
-            "fund_prices",
-            "fund_holdings",
-            "fund_transactions",
+            # fund関連テーブルは削除された
         ]
 
         for table in expected_tables:
@@ -287,7 +279,6 @@ class TestDDL:
             "idx_users_username",
             "idx_sessions_user_id",
             "idx_holdings_user_id",
-            "idx_transactions_user_id",
         ]
 
         for index in expected_indexes:
