@@ -1339,6 +1339,7 @@ window.holdingsManager = function() {
                     labels: sectorData.map(s => s.sector),
                     datasets: [{
                         data: sectorData.map(s => s.value),
+                        spacing: 0, // セグメント間の隙間をなくす
                         backgroundColor: [
                             '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
                             '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
@@ -1348,8 +1349,8 @@ window.holdingsManager = function() {
                             '#BE123C', '#0369A1', '#6D28D9', '#166534', '#9F1239',
                             '#0C4A6E', '#5B21B6', '#14532D', '#881337', '#082F49'
                         ],
-                        borderWidth: 1,
-                        borderColor: '#fff'
+                        borderWidth: 0,
+                        borderColor: 'transparent'
                     }]
                 },
                 options: {
@@ -1450,8 +1451,8 @@ window.holdingsManager = function() {
                             '#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981',
                             '#14B8A6', '#3B82F6', '#EF4444', '#F97316', '#84CC16'
                         ],
-                        borderWidth: 1,
-                        borderColor: '#fff'
+                        borderWidth: 0,
+                        borderColor: 'transparent'
                     }]
                 },
                 options: {
@@ -1573,8 +1574,8 @@ window.holdingsManager = function() {
                             '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
                             '#94A3B8'  // その他用の色
                         ],
-                        borderWidth: 1,
-                        borderColor: '#fff'
+                        borderWidth: 0,
+                        borderColor: 'transparent'
                     }]
                 },
                 options: {
