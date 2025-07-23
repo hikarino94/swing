@@ -422,32 +422,40 @@ def search_listed_info(keyword: str) -> list[dict[str, Any]]:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # 銘柄コードは4桁にパディング、5桁版も作成
-        padded_code = keyword.zfill(4) if keyword.isdigit() else keyword
-        padded_code_5digit = padded_code + "0" if keyword.isdigit() else keyword
-
-        # より柔軟な検索クエリ（5桁のコードで検索）
-        cursor.execute(
-            """
-            SELECT
-                SUBSTR(code, 1, 4) as code,
-                company_name,
-                market_name,
-                sector33_name
-            FROM listed_info
-            WHERE (code = ? OR code LIKE ? OR company_name LIKE ?)
-              AND (delete_flag = 0 OR delete_flag IS NULL)
-            ORDER BY
-                CASE WHEN code = ? THEN 0 ELSE 1 END,
-                code
-            LIMIT 50
-        """,
-            (
-                padded_code_5digit,
-                f"{padded_code_5digit}%",
-                f"%{keyword}%",
-                padded_code_5digit,
-            ),
-        )
+        # 数字の場合は前方一致検索（1桁目から）
+        if keyword.isdigit():
+            # 4桁コードで前方一致検索（DBには5桁で保存されているため、SUBSTRで比較）
+            cursor.execute(
+                """
+                SELECT DISTINCT
+                    SUBSTR(code, 1, 4) as code,
+                    company_name,
+                    market_name,
+                    sector33_name
+                FROM listed_info
+                WHERE SUBSTR(code, 1, 4) LIKE ?
+                  AND (delete_flag = 0 OR delete_flag IS NULL)
+                ORDER BY code
+                LIMIT 50
+            """,
+                (f"{keyword}%",),
+            )
+        else:
+            # 銘柄名の部分一致検索
+            cursor.execute(
+                """
+                SELECT
+                    SUBSTR(code, 1, 4) as code,
+                    company_name,
+                    market_name,
+                    sector33_name
+                FROM listed_info
+                WHERE company_name LIKE ?
+                  AND (delete_flag = 0 OR delete_flag IS NULL)
+                ORDER BY code
+                LIMIT 50
+            """,
+                (f"%{keyword}%",),
+            )
 
         return [dict(row) for row in cursor.fetchall()]

@@ -26,6 +26,48 @@ screening_bp = Blueprint("screening", __name__, url_prefix="/api/screening")
 request: RequestWithUser = cast(RequestWithUser, flask_request)
 
 
+@screening_bp.route("/search", methods=["GET"])
+@login_required
+def search_stocks():
+    """銘柄検索API"""
+    query = request.args.get("q", "").strip()
+
+    if not query or len(query) < 1:
+        return jsonify({"results": []})
+
+    try:
+        conn = sqlite3.connect(get_db_path())
+        conn.row_factory = sqlite3.Row
+
+        # コードまたは会社名で検索（大文字小文字を区別しない）
+        sql = """
+        SELECT DISTINCT
+            SUBSTR(code, 1, 4) as code,
+            company_name
+        FROM listed_info
+        WHERE delete_flag = 0
+        AND (SUBSTR(code, 1, 4) LIKE ? OR company_name LIKE ?)
+        ORDER BY code
+        LIMIT 20
+        """
+
+        search_pattern = f"%{query}%"
+        cursor = conn.cursor()
+        cursor.execute(sql, (search_pattern, search_pattern))
+
+        results = []
+        for row in cursor.fetchall():
+            results.append({"code": row["code"], "company_name": row["company_name"]})
+
+        conn.close()
+
+        return jsonify({"results": results})
+
+    except Exception as e:
+        logger.error(f"銘柄検索エラー: {e}")
+        return jsonify({"error": "銘柄検索に失敗しました", "results": []}), 500
+
+
 @screening_bp.route("/fundamental", methods=["POST"])
 @login_required
 @admin_required

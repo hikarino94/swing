@@ -885,6 +885,9 @@ function swingApp() {
             tradeTotalPages: 1,
             tradeListStartDate: '',
             tradeListEndDate: '',
+            // 銘柄検索
+            stockSearch: '',
+            searchResults: [],
             // 取引登録・編集
             showTradeForm: false,
             editingTrade: null,
@@ -902,7 +905,10 @@ function swingApp() {
                 code: '',
                 name: '',
                 average_price: ''
-            }
+            },
+            // 銘柄検索
+            stockSearch: '',
+            searchResults: []
         },
 
         // CSRFトークン
@@ -2045,6 +2051,48 @@ function swingApp() {
                 console.error('取引保存エラー:', error);
                 showNotification('error', '取引の保存に失敗しました');
             }
+        },
+
+        // 銘柄検索
+        async searchStocks() {
+            const query = this.daytrade.stockSearch;
+            if (!query || query.length < 1) {
+                this.daytrade.searchResults = [];
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/holdings/search?keyword=${encodeURIComponent(query)}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': window.csrf_token ? window.csrf_token() : '{{ csrf_token() }}'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this.daytrade.searchResults = data.stocks || [];
+                } else {
+                    console.error('銘柄検索エラー:', data.message);
+                    this.daytrade.searchResults = [];
+                }
+            } catch (error) {
+                console.error('銘柄検索エラー:', error);
+                this.daytrade.searchResults = [];
+            }
+        },
+
+        // 銘柄選択
+        selectStock(stock) {
+            if (this.daytrade.tradeForm.trade_category === 'futures') {
+                this.daytrade.tradeForm.symbol = stock.code;
+            } else if (this.daytrade.tradeForm.trade_category === 'stocks') {
+                this.daytrade.tradeForm.code = stock.code;
+                this.daytrade.tradeForm.name = stock.company_name;
+            }
+            this.daytrade.stockSearch = '';
+            this.daytrade.searchResults = [];
         },
 
         // 取引の削除

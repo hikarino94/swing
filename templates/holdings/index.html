@@ -8,7 +8,7 @@
                         class="btn btn-primary w-full sm:w-auto px-3 py-2 text-sm sm:text-base">
                     📥 CSVインポート
                 </button>
-                <button @click="showAddModal = true"
+                <button @click="showAddModal = true; stockSearch = ''; searchResults = []"
                         class="btn btn-secondary w-full sm:w-auto px-3 py-2 text-sm sm:text-base">
                     ➕ 手動追加
                 </button>
@@ -511,7 +511,7 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700">銘柄検索</label>
                         <input type="text" x-model="stockSearch"
-                               @input="searchStocks()"
+                               @input="debounceSearch()"
                                placeholder="銘柄コードまたは銘柄名"
                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
 
@@ -697,6 +697,7 @@ window.holdingsManager = function() {
             average_price: 0
         },
         editData: {},
+        searchTimer: null,
 
         init() {
             this.loadAccounts();
@@ -843,29 +844,39 @@ window.holdingsManager = function() {
         },
 
         async searchStocks() {
-            console.log('searchStocks called:', this.stockSearch);
-            if (this.stockSearch.length < 1) {
+            console.log('=== searchStocks CALLED ===');
+            console.log('searchStocks called with:', this.stockSearch);
+            console.log('Current modal state:', { showAddModal: this.showAddModal, showEditModal: this.showEditModal });
+            console.log('this object:', this);
+
+            if (!this.stockSearch || this.stockSearch.length < 1) {
+                console.log('Search text too short, clearing results');
                 this.searchResults = [];
                 return;
             }
 
             try {
                 const csrfToken = window.csrf_token ? window.csrf_token() : '{{ csrf_token() }}';
-                const response = await fetch(`/api/holdings/search?keyword=${encodeURIComponent(this.stockSearch)}`, {
+                const url = `/api/holdings/search?keyword=${encodeURIComponent(this.stockSearch)}`;
+                console.log('Fetching:', url);
+
+                const response = await fetch(url, {
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
                         'X-CSRFToken': csrfToken
                     }
                 });
 
+                console.log('Response status:', response.status);
                 const data = await response.json();
+                console.log('Response data:', data);
 
                 if (data.success) {
                     this.searchResults = data.stocks;
-                    console.log('Search results:', this.searchResults);
+                    console.log('Search results set:', this.searchResults.length, 'items');
                 } else {
                     this.searchResults = [];
-                    console.error('Search failed:', data);
+                    console.error('Search failed:', data.message || 'Unknown error');
                 }
             } catch (error) {
                 console.error('Error searching stocks:', error);
@@ -878,6 +889,19 @@ window.holdingsManager = function() {
             this.addData.code = stock.code;
             this.stockSearch = `${stock.code} - ${stock.company_name}`;
             this.searchResults = [];
+        },
+
+        debounceSearch() {
+            console.log('debounceSearch called, stockSearch:', this.stockSearch);
+
+            if (this.searchTimer) {
+                clearTimeout(this.searchTimer);
+            }
+
+            this.searchTimer = setTimeout(() => {
+                console.log('Executing search after debounce');
+                this.searchStocks();
+            }, 300);
         },
 
         async addHolding() {
