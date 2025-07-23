@@ -271,14 +271,13 @@
         </div>
 
         <!-- ポートフォリオ分析タブ -->
-        <template x-if="activeTab === 'analysis'">
-        <div>
+        <div x-show="activeTab === 'analysis'" x-transition>
             <div x-show="analysisLoading" class="text-center py-8">
                 <div class="spinner mx-auto mb-4"></div>
                 <p class="text-gray-600">分析データを読み込んでいます...</p>
             </div>
 
-            <div x-show="!analysisLoading && analysisData" x-init="if (analysisData) { $nextTick(() => { setTimeout(() => renderCharts(), 500); }); }">
+            <div x-show="!analysisLoading && analysisData">
                 <!-- 概要統計 -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                     <div class="bg-gray-50 rounded-lg p-4">
@@ -397,7 +396,6 @@
                 分析データがありません
             </div>
         </div>
-        </template>
     </div>
 
     <!-- CSVインポートモーダル -->
@@ -650,37 +648,41 @@ window.holdingsManager = function() {
             this.loadHoldings();
 
             // Chart.jsが確実に読み込まれるのを待つ
-            if (typeof Chart === 'undefined') {
-                window.addEventListener('load', () => {
-                    console.log('Window loaded, Chart.js available:', typeof Chart !== 'undefined');
-                });
-            }
+            this.waitForChartJs().then(() => {
+                console.log('Chart.js is ready');
+            });
 
             // セクタータイプが変更されたらチャートを再描画
             this.$watch('sectorType', () => {
                 if (this.analysisData && this.activeTab === 'analysis') {
-                    setTimeout(() => {
+                    this.$nextTick(() => {
                         this.renderSectorChart();
-                    }, 50);
+                    });
                 }
             });
 
             // タブが切り替わったときの処理
             this.$watch('activeTab', (newTab) => {
                 if (newTab === 'analysis') {
-                    // タブの表示状態を確認
                     console.log('Tab switched to analysis');
-                    // DOMが完全に更新されるのを待つ
-                    this.$nextTick(() => {
-                        // さらに遅延を追加してタブの切り替えが完了するのを待つ
-                        setTimeout(() => {
-                            // データがある場合のみチャートを描画
-                            if (this.analysisData) {
-                                console.log('Rendering charts after tab switch');
-                                this.renderCharts();
-                            }
-                        }, 300);
-                    });
+                    // 分析データをロード
+                    this.switchToAnalysisTabHandler();
+                }
+            });
+        },
+
+        // Chart.jsの読み込みを待つヘルパー関数
+        waitForChartJs() {
+            return new Promise((resolve) => {
+                if (typeof Chart !== 'undefined') {
+                    resolve();
+                } else {
+                    const checkInterval = setInterval(() => {
+                        if (typeof Chart !== 'undefined') {
+                            clearInterval(checkInterval);
+                            resolve();
+                        }
+                    }, 100);
                 }
             });
         },
@@ -1127,10 +1129,13 @@ window.holdingsManager = function() {
             if (this.analysisLoading || (this.analysisData && this.selectedAccount === this.lastAnalyzedAccount)) {
                 // 既にデータがある場合は、チャートの再描画のみ行う
                 if (this.analysisData) {
+                    // Chart.jsが読み込まれているか確認
+                    await this.waitForChartJs();
                     this.$nextTick(() => {
-                        setTimeout(() => {
+                        // DOM要素の存在を確認してから描画
+                        this.waitForChartElements().then(() => {
                             this.renderCharts();
-                        }, 200);
+                        });
                     });
                 }
                 return;
@@ -1157,12 +1162,12 @@ window.holdingsManager = function() {
                     this.analysisData = data.analysis;
                     this.lastAnalyzedAccount = this.selectedAccount;
 
-                    // チャートを描画（タイミングを遅らせる）
+                    // Chart.jsとDOM要素の準備を待ってからチャートを描画
+                    await this.waitForChartJs();
                     this.$nextTick(() => {
-                        // Alpine.jsの$nextTickだけでは不十分な場合があるため、setTimeoutも使用
-                        setTimeout(() => {
+                        this.waitForChartElements().then(() => {
                             this.renderCharts();
-                        }, 200);
+                        });
                     });
                 } else {
                     console.error('Failed to load analysis:', data);
@@ -1176,15 +1181,29 @@ window.holdingsManager = function() {
             }
         },
 
+        // チャート要素の存在を確認する関数
+        waitForChartElements() {
+            return new Promise((resolve) => {
+                const checkElements = () => {
+                    const sectorChart = document.getElementById('sectorChart');
+                    const marketChart = document.getElementById('marketChart');
+                    const dividendChart = document.getElementById('dividendAmountChart');
+                    const perfChart = document.getElementById('performanceChart');
+
+                    if (sectorChart && marketChart && dividendChart && perfChart) {
+                        console.log('All chart elements found');
+                        resolve();
+                    } else {
+                        console.log('Waiting for chart elements...');
+                        setTimeout(checkElements, 100);
+                    }
+                };
+                checkElements();
+            });
+        },
+
         renderCharts() {
             console.log('renderCharts called', this.analysisData);
-
-            // Chart.jsが読み込まれているか確認
-            if (typeof Chart === 'undefined') {
-                console.error('Chart.js is not loaded yet, retrying...');
-                setTimeout(() => this.renderCharts(), 500);
-                return;
-            }
 
             if (!this.analysisData) {
                 console.error('No analysis data available');
@@ -1192,61 +1211,68 @@ window.holdingsManager = function() {
             }
 
             // 既存のチャートインスタンスを全て破棄
-            if (this.sectorChartInstance) {
-                this.sectorChartInstance.destroy();
-                this.sectorChartInstance = null;
-            }
-            if (this.marketChartInstance) {
-                this.marketChartInstance.destroy();
-                this.marketChartInstance = null;
-            }
-            if (this.dividendAmountChartInstance) {
-                this.dividendAmountChartInstance.destroy();
-                this.dividendAmountChartInstance = null;
-            }
-            if (this.performanceChartInstance) {
-                this.performanceChartInstance.destroy();
-                this.performanceChartInstance = null;
+            this.destroyAllCharts();
+
+            // 各チャートを順番に描画（エラーハンドリング付き）
+            try {
+                // セクター別円グラフ
+                this.renderSectorChart();
+            } catch (error) {
+                console.error('Error rendering sector chart:', error);
             }
 
-            // DOM要素が存在するか確認
-            const chartIds = ['sectorChart', 'marketChart', 'dividendAmountChart', 'performanceChart'];
-            let allElementsFound = true;
-            chartIds.forEach(id => {
-                const element = document.getElementById(id);
-                if (!element) {
-                    console.error(`Chart element not found: ${id}`);
-                    allElementsFound = false;
-                } else {
-                    console.log(`Chart element found: ${id}`, element);
+            try {
+                // 市場別円グラフ
+                this.renderMarketChart();
+            } catch (error) {
+                console.error('Error rendering market chart:', error);
+            }
+
+            try {
+                // 年間配当額分布
+                this.renderDividendAmountChart();
+            } catch (error) {
+                console.error('Error rendering dividend chart:', error);
+            }
+
+            try {
+                // パフォーマンス分布チャート
+                this.renderPerformanceChart();
+            } catch (error) {
+                console.error('Error rendering performance chart:', error);
+            }
+
+            try {
+                // ヒートマップ
+                this.renderHeatmap();
+            } catch (error) {
+                console.error('Error rendering heatmap:', error);
+            }
+        },
+
+        // 全てのチャートインスタンスを破棄
+        destroyAllCharts() {
+            const charts = [
+                'sectorChartInstance',
+                'marketChartInstance',
+                'dividendAmountChartInstance',
+                'performanceChartInstance'
+            ];
+
+            charts.forEach(chartName => {
+                if (this[chartName]) {
+                    try {
+                        this[chartName].destroy();
+                    } catch (e) {
+                        console.error(`Error destroying ${chartName}:`, e);
+                    }
+                    this[chartName] = null;
                 }
             });
-
-            if (!allElementsFound) {
-                console.error('Some chart elements are missing, delaying render');
-                setTimeout(() => this.renderCharts(), 500);
-                return;
-            }
-
-            // セクター別円グラフ
-            this.renderSectorChart();
-
-            // 市場別円グラフ
-            this.renderMarketChart();
-
-            // 年間配当額分布
-            this.renderDividendAmountChart();
-
-            // パフォーマンス分布チャート
-            this.renderPerformanceChart();
-
-            // ヒートマップ
-            this.renderHeatmap();
         },
 
         renderSectorChart() {
             console.log('renderSectorChart called');
-            console.log('Chart.js loaded?', typeof Chart !== 'undefined');
 
             const ctx = document.getElementById('sectorChart');
             if (!ctx) {
@@ -1254,29 +1280,27 @@ window.holdingsManager = function() {
                 return;
             }
 
-            console.log('sectorChart element:', ctx);
-            console.log('Canvas display style:', window.getComputedStyle(ctx).display);
-            console.log('Canvas parent display:', window.getComputedStyle(ctx.parentElement).display);
+            // 親要素の表示状態を確認
+            const parent = ctx.parentElement;
+            const isVisible = parent.offsetWidth > 0 && parent.offsetHeight > 0;
 
-            // 既存のチャートがあれば破棄
-            if (this.sectorChartInstance) {
-                console.log('Destroying existing sector chart');
-                this.sectorChartInstance.destroy();
+            if (!isVisible) {
+                console.warn('Chart container is not visible, waiting...');
+                // 親要素が表示されるまで待つ
+                setTimeout(() => this.renderSectorChart(), 200);
+                return;
             }
 
             const sectorData = this.sectorType === '17'
                 ? this.analysisData.sector17_breakdown
                 : this.analysisData.sector33_breakdown;
 
-            console.log('Sector data:', sectorData);
+            if (!sectorData || sectorData.length === 0) {
+                console.warn('No sector data available');
+                return;
+            }
 
-            // Canvas要素のサイズ確認（設定はしない）
-            const parentWidth = ctx.parentElement.offsetWidth;
-            const parentHeight = ctx.parentElement.offsetHeight;
-            console.log('Parent dimensions:', parentWidth, parentHeight);
-
-            // Chart.jsがresponsiveモードで自動的にサイズを管理するため、
-            // 手動でcanvasのサイズを設定しない
+            console.log(`Rendering sector chart with ${sectorData.length} sectors`);
 
             try {
                 this.sectorChartInstance = new Chart(ctx, {
@@ -1776,8 +1800,17 @@ window.holdingsManager = function() {
         switchToAnalysisTab() {
             console.log('switchToAnalysisTab called');
             this.activeTab = 'analysis';
+            // loadAnalysisは$watchで呼ばれるので、ここでは不要
+        },
+
+        // タブ切り替え時のハンドラー（$watchから呼ばれる）
+        async switchToAnalysisTabHandler() {
+            // Chart.jsが読み込まれるのを待つ
+            await this.waitForChartJs();
+
+            // DOMが更新されるのを待つ
             this.$nextTick(() => {
-                // タブ切り替えが完了してから分析データをロード
+                // 少し遅延を入れてから分析データをロード
                 setTimeout(() => {
                     this.loadAnalysis();
                 }, 100);
