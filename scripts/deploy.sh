@@ -30,7 +30,12 @@ fi
 echo "🗄️  PostgreSQLデータベースをチェックしています..."
 if ! fly postgres list | grep -q "swing-db"; then
     echo "📊 PostgreSQLデータベースを作成しています..."
-    fly postgres create --name swing-db --region nrt --initial-cluster-size 1 --vm-size shared-cpu-1x
+    echo "🆓 無料枠のDevelopment構成を使用します（256MB RAM、shared-cpu-1x、1GBストレージ）"
+    fly postgres create --name swing-db --region nrt \
+        --initial-cluster-size 1 \
+        --vm-size shared-cpu-1x \
+        --volume-size 1 \
+        --development
 
     # データベースをアプリにアタッチ
     echo "🔗 データベースをアプリにアタッチしています..."
@@ -93,6 +98,7 @@ fly secrets set \
 # 7. デプロイ実行
 echo ""
 echo "🚀 アプリケーションをデプロイしています..."
+echo "🆓 無料枠内の設定でデプロイします（shared-cpu-1x、256MB RAM）"
 fly deploy --app swing-trading-tool
 
 # 8. デプロイ後の確認
@@ -113,3 +119,15 @@ echo "fly logs --app swing-trading-tool"
 echo ""
 echo "🌐 アプリケーションを開くには:"
 echo "fly open --app swing-trading-tool"
+
+echo ""
+echo "💰 課金情報を確認するには:"
+echo "fly billing --app swing-trading-tool"
+
+echo ""
+echo "⚠️  重要: 以下の無料枠制限が適用されています:"
+echo "  - アプリ: shared-cpu-1x (256MB RAM)"
+echo "  - PostgreSQL: Development構成 (256MB RAM, 1GBストレージ)"
+echo "  - ボリューム: 1GB"
+echo "  - 自動スケーリング: 無効"
+echo "  - マシン自動停止: 有効（アイドル時）"

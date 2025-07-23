@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}データクリーンアップ設定 - Swing Trading Tool{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('settings.index') }}">設定</a></li>
+            <li class="breadcrumb-item active">データクリーンアップ</li>
+        </ol>
+    </nav>
+
+    <h1 class="h3 mb-4">データクリーンアップ設定</h1>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('settings.data_cleanup') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <!-- 機能の有効/無効 -->
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="enabled" name="enabled"
+                                    {% if cleanup_config.enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="enabled">
+                                    データクリーンアップ機能を有効にする
+                                </label>
+                            </div>
+                            <small class="text-muted">
+                                有効にすると、スケジューラーが毎日午前3時に自動的にクリーンアップを実行します。
+                            </small>
+                        </div>
+
+                        <!-- 非アクティブユーザー設定 -->
+                        <div class="mb-4">
+                            <h5>非アクティブユーザーの削除</h5>
+                            <div class="mb-3">
+                                <label for="inactive_user_days" class="form-label">
+                                    削除対象期間（日数）
+                                </label>
+                                <input type="number" class="form-control" id="inactive_user_days"
+                                    name="inactive_user_days" min="7" max="365"
+                                    value="{{ cleanup_config.inactive_user_days }}">
+                                <small class="text-muted">
+                                    指定した日数以上ログインしていないユーザーとその関連データを削除します。
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- 古い株価データ設定 -->
+                        <div class="mb-4">
+                            <h5>古い株価データの削除</h5>
+                            <div class="mb-3">
+                                <label for="old_price_days" class="form-label">
+                                    保持期間（日数）
+                                </label>
+                                <input type="number" class="form-control" id="old_price_days"
+                                    name="old_price_days" min="7" max="365"
+                                    value="{{ cleanup_config.old_price_days }}">
+                                <small class="text-muted">
+                                    指定した日数より古い株価データを削除します。
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- 安全設定 -->
+                        <div class="mb-4">
+                            <h5>安全設定</h5>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="backup_before_delete"
+                                    name="backup_before_delete"
+                                    {% if cleanup_config.backup_before_delete %}checked{% endif %}>
+                                <label class="form-check-label" for="backup_before_delete">
+                                    削除前にバックアップを作成
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="dry_run"
+                                    name="dry_run"
+                                    {% if cleanup_config.dry_run %}checked{% endif %}>
+                                <label class="form-check-label" for="dry_run">
+                                    ドライランモード（実際の削除を行わない）
+                                </label>
+                            </div>
+                            <small class="text-muted">
+                                ドライランモードでは、削除対象の確認のみ行い、実際の削除は行いません。
+                            </small>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>設定を保存
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="previewCleanup()">
+                                <i class="fas fa-eye me-2"></i>削除対象をプレビュー
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="executeCleanup()">
+                                <i class="fas fa-trash-alt me-2"></i>今すぐ実行
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- プレビュー結果表示エリア -->
+            <div class="card" id="preview-results" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0">削除対象プレビュー</h5>
+                </div>
+                <div class="card-body">
+                    <div id="preview-content">
+                        <!-- プレビュー内容をここに表示 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 警告メッセージ -->
+            <div class="alert alert-warning mt-3">
+                <h6 class="alert-heading">
+                    <i class="fas fa-exclamation-triangle me-2"></i>注意事項
+                </h6>
+                <ul class="mb-0">
+                    <li>削除されたデータは復元できません</li>
+                    <li>バックアップは定期的に確認してください</li>
+                    <li>本番環境では慎重に設定してください</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 削除対象をプレビュー
+function previewCleanup() {
+    const data = {
+        inactive_user_days: document.getElementById('inactive_user_days').value,
+        old_price_days: document.getElementById('old_price_days').value
+    };
+
+    fetch('{{ url_for("settings.preview_cleanup") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showPreviewResults(data);
+        } else {
+            alert('プレビューの取得に失敗しました: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('エラーが発生しました');
+    });
+}
+
+// プレビュー結果を表示
+function showPreviewResults(data) {
+    const previewDiv = document.getElementById('preview-results');
+    const contentDiv = document.getElementById('preview-content');
+
+    let html = '<h6>非アクティブユーザー</h6>';
+    html += `<p>削除対象: ${data.inactive_users.count}人</p>`;
+
+    if (data.inactive_users.users.length > 0) {
+        html += '<ul class="small">';
+        data.inactive_users.users.forEach(user => {
+            html += `<li>${user.username} (${user.email})<br>最終ログイン: ${user.last_login || '未ログイン'}</li>`;
+        });
+        if (data.inactive_users.count > 10) {
+            html += '<li>... 他 ' + (data.inactive_users.count - 10) + '人</li>';
+        }
+        html += '</ul>';
+    }
+
+    html += '<hr>';
+    html += '<h6>古い株価データ</h6>';
+    html += `<p>削除対象: ${data.old_prices.count.toLocaleString()}件</p>`;
+    html += `<p>推定サイズ: ${data.old_prices.estimated_size_mb}MB</p>`;
+    html += `<p>基準日: ${data.old_prices.cutoff_date}以前</p>`;
+
+    contentDiv.innerHTML = html;
+    previewDiv.style.display = 'block';
+}
+
+// クリーンアップを実行
+function executeCleanup() {
+    if (!confirm('本当にデータクリーンアップを実行しますか？\nこの操作は取り消せません。')) {
+        return;
+    }
+
+    fetch('{{ url_for("settings.execute_cleanup") }}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message + '\n\n' +
+                  '削除されたユーザー: ' + data.results.inactive_users.deleted + '人\n' +
+                  '削除された株価データ: ' + data.results.old_prices.deleted.toLocaleString() + '件');
+
+            // ページをリロード
+            location.reload();
+        } else {
+            alert('クリーンアップの実行に失敗しました: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('エラーが発生しました');
+    });
+}
+</script>
+{% endblock %}

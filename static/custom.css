@@ -1,0 +1,87 @@
+/* カスタムCSS */
+
+/* Font Awesome アイコンの間隔調整 */
+.fa, .fas, .far, .fab {
+    margin-right: 0.25rem;
+}
+
+/* 設定画面のメニューカード */
+.settings-menu-card {
+    transition: all 0.2s ease-in-out;
+}
+
+.settings-menu-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* アラートメッセージのスタイル改善 */
+.alert {
+    border-radius: 0.5rem;
+}
+
+/* フォームのスタイル改善 */
+.form-check-input:checked {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+}
+
+.form-switch .form-check-input {
+    width: 3rem;
+    height: 1.5rem;
+}
+
+/* ボタンのスタイル改善 */
+.btn {
+    font-weight: 500;
+    transition: all 0.2s ease-in-out;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* カードのスタイル改善 */
+.card {
+    border-radius: 0.5rem;
+    border: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+/* プレビュー結果のスタイル */
+#preview-results {
+    position: sticky;
+    top: 1rem;
+}
+
+/* ローディングスピナー */
+.spinner-border {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+/* テーブルのスタイル改善 */
+.table {
+    font-size: 0.9rem;
+}
+
+.table th {
+    font-weight: 600;
+    background-color: #f8f9fa;
+}
+
+/* リストグループのスタイル改善 */
+.list-group-item {
+    border-radius: 0.375rem;
+    margin-bottom: 0.25rem;
+    transition: all 0.2s ease-in-out;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa;
+}

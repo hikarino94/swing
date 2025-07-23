@@ -36,10 +36,24 @@ def update_listed_info() -> None:
     _run("python -m fetch.listed_info")
 
 
+def cleanup_database() -> None:
+    """データベースクリーンアップを実行"""
+    # 設定を確認
+    cleanup_config = config.config.get("data_cleanup", {})
+    if not cleanup_config.get("enabled", False):
+        logger.info("データクリーンアップは無効に設定されています")
+        return
+
+    # dry_run 設定を確認
+    dry_run_flag = "--execute" if not cleanup_config.get("dry_run", True) else ""
+    _run(f"python -m src.cli.cleanup_database {dry_run_flag} --force")
+
+
 # スケジュール設定を設定ファイルから読み込み
 fetch_quotes_config = config.get_scheduler_config("fetch_quotes")
 fetch_statements_config = config.get_scheduler_config("fetch_statements")
 update_listed_info_config = config.get_scheduler_config("update_listed_info")
+cleanup_config = config.config.get("data_cleanup", {})
 
 if fetch_quotes_config.get("frequency") == "daily":
     schedule.every().day.at(fetch_quotes_config.get("time", "20:00")).do(fetch_quotes)
@@ -53,6 +67,18 @@ if update_listed_info_config.get("frequency") == "monday":
     schedule.every().monday.at(update_listed_info_config.get("time", "06:00")).do(
         update_listed_info
     )
+
+# データクリーンアップスケジュール
+if cleanup_config.get("enabled", False):
+    cleanup_schedule = cleanup_config.get("schedule", {})
+    if cleanup_schedule.get("frequency") == "daily":
+        schedule.every().day.at(cleanup_schedule.get("time", "03:00")).do(
+            cleanup_database
+        )
+        logger.info(
+            "データクリーンアップを%sにスケジュールしました",
+            cleanup_schedule.get("time", "03:00"),
+        )
 
 
 def main() -> None:

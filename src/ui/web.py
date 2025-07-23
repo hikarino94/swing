@@ -151,6 +151,11 @@ from src.ui.health import health_bp
 
 app.register_blueprint(health_bp)
 
+# 設定画面の登録
+from src.ui.routes.settings import settings_bp
+
+app.register_blueprint(settings_bp)
+
 
 # メインページルート
 @app.route("/")

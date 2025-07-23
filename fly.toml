@@ -40,8 +40,8 @@ kill_timeout = "5s"
 
   [services.concurrency]
     type = "connections"
-    hard_limit = 25
-    soft_limit = 20
+    hard_limit = 10  # 無料枠向けに制限
+    soft_limit = 5   # 無料枠向けに制限
 
   [[services.tcp_checks]]
     interval = "15s"
@@ -69,8 +69,24 @@ kill_timeout = "5s"
 # fly postgres create --name swing-db --region nrt
 # fly postgres attach swing-db
 
-# メモリとCPUの設定
+# 無料枠内のリソース設定
+# Fly.ioの無料枠: 3 shared-cpu-1x VMs (256MB RAM each)
 [[vm]]
   cpu_kind = "shared"
   cpus = 1
-  memory_mb = 512
+  memory_mb = 256  # 無料枠の最小メモリ
+
+# 自動スケーリングを無効化（課金を防ぐため）
+[metrics]
+  port = 9091
+  path = "/metrics"  # メトリクス無効化
+
+# スケーリング設定
+[processes]
+  app = "gunicorn src.ui.web:app"
+
+# マシン数を1台に固定
+[[services]]
+  auto_stop_machines = true  # アイドル時は自動停止
+  auto_start_machines = true  # リクエスト時に自動起動
+  min_machines_running = 0   # 最小稼働数を0に（コスト削減）

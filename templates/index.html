@@ -691,6 +691,22 @@
 
         <!-- 設定タブ -->
         <div x-show="activeTab === 'settings' && (userRole === 'admin' || userRole === '')" class="space-y-6">
+            <!-- システム設定メニュー -->
+            <div class="bg-white shadow rounded-lg p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">システム設定</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <a href="{{ url_for('settings.data_cleanup') }}" class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                        <h4 class="font-medium text-gray-900 mb-2">
+                            <i class="fas fa-trash-alt text-gray-600 mr-2"></i>データクリーンアップ
+                        </h4>
+                        <p class="text-sm text-gray-600">
+                            古いデータや非アクティブユーザーを自動削除して、データベース容量を節約します。
+                        </p>
+                    </a>
+                </div>
+            </div>
+
+            <!-- 閾値設定 -->
             <div class="bg-white shadow rounded-lg p-6">
                 <h3 class="text-lg font-medium text-gray-900 mb-4">閾値設定</h3>
                 <div class="mb-4">

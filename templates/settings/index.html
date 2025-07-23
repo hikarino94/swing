@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}設定 - Swing Trading Tool{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4">設定</h1>
+
+    <div class="row">
+        <div class="col-md-3">
+            <!-- 設定メニュー -->
+            <div class="list-group">
+                <a href="{{ url_for('settings.data_cleanup') }}" class="list-group-item list-group-item-action">
+                    <i class="fas fa-trash-alt me-2"></i>データクリーンアップ
+                </a>
+                <a href="#" class="list-group-item list-group-item-action disabled">
+                    <i class="fas fa-bell me-2"></i>通知設定 <small class="text-muted">(準備中)</small>
+                </a>
+                <a href="#" class="list-group-item list-group-item-action disabled">
+                    <i class="fas fa-chart-line me-2"></i>スクリーニング設定 <small class="text-muted">(準備中)</small>
+                </a>
+            </div>
+        </div>
+
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">システム設定</h5>
+                    <p class="card-text">各種設定を管理できます。</p>
+
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>データクリーンアップ機能</strong>
+                        <p class="mb-0 mt-2">
+                            データベース容量を削減するため、古いデータを自動的に削除する機能です。
+                            {% if cleanup_config.enabled %}
+                            <span class="badge bg-success">有効</span>
+                            {% else %}
+                            <span class="badge bg-secondary">無効</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

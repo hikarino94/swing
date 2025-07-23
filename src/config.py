@@ -243,6 +243,15 @@ MODEL_DIR = config.model_dir
 THRESHOLDS_FILE = str(config.get_file_path("thresholds"))
 
 
+def load_config() -> dict[str, Any]:
+    """設定ファイルを読み込んで返す
+
+    Returns:
+        設定の辞書
+    """
+    return config._config
+
+
 def get_idtoken() -> str:
     """IDトークンを取得
 
