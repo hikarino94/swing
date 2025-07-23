@@ -391,60 +391,6 @@
                 </div>
 
 
-                <!-- 上位・下位銘柄 -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                    <!-- 上位銘柄 -->
-                    <div class="bg-gray-50 rounded-lg p-3 sm:p-4">
-                        <h3 class="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-green-600">📈 利益上位銘柄</h3>
-                        <table class="w-full text-sm">
-                            <thead>
-                                <tr class="border-b">
-                                    <th class="text-left py-2">銘柄</th>
-                                    <th class="text-right py-2">評価損益</th>
-                                    <th class="text-right py-2">損益率</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="stock in (analysisData && analysisData.top_gainers) || []" :key="stock.code">
-                                    <tr class="border-b">
-                                        <td class="py-2">
-                                            <span x-text="stock.code" class="font-mono"></span>
-                                            <span x-text="stock.name" class="text-xs text-gray-600 block"></span>
-                                        </td>
-                                        <td class="text-right py-2 text-green-600" x-text="formatPrice(stock.profit_loss)"></td>
-                                        <td class="text-right py-2 text-green-600" x-text="formatPercentage(stock.profit_loss_ratio)"></td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- 下位銘柄 -->
-                    <div class="bg-gray-50 rounded-lg p-3 sm:p-4">
-                        <h3 class="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-red-600">📉 損失上位銘柄</h3>
-                        <table class="w-full text-sm">
-                            <thead>
-                                <tr class="border-b">
-                                    <th class="text-left py-2">銘柄</th>
-                                    <th class="text-right py-2">評価損益</th>
-                                    <th class="text-right py-2">損益率</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="stock in (analysisData && analysisData.top_losers) || []" :key="stock.code">
-                                    <tr class="border-b">
-                                        <td class="py-2">
-                                            <span x-text="stock.code" class="font-mono"></span>
-                                            <span x-text="stock.name" class="text-xs text-gray-600 block"></span>
-                                        </td>
-                                        <td class="text-right py-2 text-red-600" x-text="formatPrice(stock.profit_loss)"></td>
-                                        <td class="text-right py-2 text-red-600" x-text="formatPercentage(stock.profit_loss_ratio)"></td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
             </div>
 
             <div x-show="!analysisLoading && !analysisData" class="text-center py-8 text-gray-500">
