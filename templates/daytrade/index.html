@@ -244,76 +244,92 @@
             </div>
 
             <!-- 詳細統計（コンパクト） -->
-            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4 h-[260px] sm:h-[280px]">
+            <div class="bg-white shadow-sm rounded-lg p-3 sm:p-4">
                 <h4 class="text-lg sm:text-xl font-semibold mb-2">詳細統計</h4>
-                <div class="grid grid-cols-2 gap-3 sm:gap-4 text-base sm:text-lg">
+                <div class="grid grid-cols-2 gap-2 sm:gap-3 text-sm sm:text-base">
                     <div>
-                        <div class="text-gray-600 mb-1 text-base sm:text-lg">先物</div>
-                        <div class="space-y-1">
+                        <div class="text-gray-600 mb-1 text-sm sm:text-base font-medium">先物</div>
+                        <div class="space-y-0.5">
                             <div class="flex justify-between">
-                                <span>取引日数:</span>
-                                <span x-text="daytrade.monthlySummary?.futures?.trading_days || 0"></span>
+                                <span class="text-xs sm:text-sm">取引日数:</span>
+                                <span class="text-xs sm:text-sm" x-text="daytrade.monthlySummary?.futures?.trading_days || 0"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span>総取引数:</span>
-                                <span x-text="daytrade.monthlySummary?.futures?.total_trades || 0"></span>
+                                <span class="text-xs sm:text-sm">総取引数:</span>
+                                <span class="text-xs sm:text-sm" x-text="daytrade.monthlySummary?.futures?.total_trades || 0"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span>勝ち/負け:</span>
-                                <span x-text="`${daytrade.monthlySummary?.futures?.win_count || 0}勝/${daytrade.monthlySummary?.futures?.loss_count || 0}敗`"></span>
+                                <span class="text-xs sm:text-sm">勝ち/負け:</span>
+                                <span class="text-xs sm:text-sm" x-text="`${daytrade.monthlySummary?.futures?.win_count || 0}勝/${daytrade.monthlySummary?.futures?.loss_count || 0}敗`"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span>最大日次利益:</span>
-                                <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_daily_profit || 0)"></span>
+                                <span class="text-xs sm:text-sm">最大日次利<span class="hidden sm:inline">益</span>:</span>
+                                <span class="text-green-600 text-xs sm:text-sm" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_daily_profit || 0)"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span>最大日次損失:</span>
-                                <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_daily_loss || 0)"></span>
+                                <span class="text-xs sm:text-sm">最大日次損<span class="hidden sm:inline">失</span>:</span>
+                                <span class="text-red-600 text-xs sm:text-sm" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_daily_loss || 0)"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span>平均利益:</span>
-                                <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.avg_win || 0)"></span>
+                                <span class="text-xs sm:text-sm">平均利益:</span>
+                                <span class="text-green-600 text-xs sm:text-sm" x-text="formatCurrency(daytrade.monthlySummary?.futures?.avg_win || 0)"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span>平均損失:</span>
-                                <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.futures?.avg_loss || 0)"></span>
+                                <span class="text-xs sm:text-sm">平均損失:</span>
+                                <span class="text-red-600 text-xs sm:text-sm" x-text="formatCurrency(daytrade.monthlySummary?.futures?.avg_loss || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-xs sm:text-sm">最大DD<span class="hidden sm:inline">:</span></span>
+                                <span class="text-red-600 text-xs sm:text-sm" x-text="formatCurrency(daytrade.monthlySummary?.futures?.max_drawdown || 0)"></span>
                             </div>
                         </div>
                     </div>
                     <div>
-                        <div class="text-gray-600 mb-1 text-base sm:text-lg">株式</div>
-                        <div class="space-y-1">
+                        <div class="text-gray-600 mb-1 text-sm sm:text-base font-medium">株式</div>
+                        <div class="space-y-0.5">
                             <div class="flex justify-between">
-                                <span>取引日数:</span>
-                                <span x-text="daytrade.monthlySummary?.stocks?.trading_days || 0"></span>
+                                <span class="text-xs sm:text-sm">取引日数:</span>
+                                <span class="text-xs sm:text-sm" x-text="daytrade.monthlySummary?.stocks?.trading_days || 0"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span>総取引数:</span>
-                                <span x-text="daytrade.monthlySummary?.stocks?.total_trades || 0"></span>
+                                <span class="text-xs sm:text-sm">総取引数:</span>
+                                <span class="text-xs sm:text-sm" x-text="daytrade.monthlySummary?.stocks?.total_trades || 0"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span>勝ち/負け:</span>
-                                <span x-text="`${daytrade.monthlySummary?.stocks?.win_count || 0}勝/${daytrade.monthlySummary?.stocks?.loss_count || 0}敗`"></span>
+                                <span class="text-xs sm:text-sm">勝ち/負け:</span>
+                                <span class="text-xs sm:text-sm" x-text="`${daytrade.monthlySummary?.stocks?.win_count || 0}勝/${daytrade.monthlySummary?.stocks?.loss_count || 0}敗`"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span>最大日次利益:</span>
-                                <span class="text-green-600" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_daily_profit || 0)"></span>
+                                <span class="text-xs sm:text-sm">最大日次利<span class="hidden sm:inline">益</span>:</span>
+                                <span class="text-green-600 text-xs sm:text-sm" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_daily_profit || 0)"></span>
                             </div>
                             <div class="flex justify-between">
-                                <span>最大日次損失:</span>
-                                <span class="text-red-600" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_daily_loss || 0)"></span>
+                                <span class="text-xs sm:text-sm">最大日次損<span class="hidden sm:inline">失</span>:</span>
+                                <span class="text-red-600 text-xs sm:text-sm" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_daily_loss || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-xs sm:text-sm">配当<span class="hidden sm:inline">受取</span>:</span>
+                                <span class="text-blue-600 text-xs sm:text-sm" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.dividend_total || 0)"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-xs sm:text-sm">取引銘柄<span class="hidden sm:inline">数</span>:</span>
+                                <span class="text-xs sm:text-sm" x-text="daytrade.monthlySummary?.stocks?.unique_stocks || 0"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-xs sm:text-sm">最大DD<span class="hidden sm:inline">:</span></span>
+                                <span class="text-red-600 text-xs sm:text-sm" x-text="formatCurrency(daytrade.monthlySummary?.stocks?.max_drawdown || 0)"></span>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="border-t pt-2 mt-2 text-base sm:text-lg">
+                <div class="border-t pt-1 mt-1">
                     <div class="flex justify-between">
-                        <span class="text-gray-600 text-base sm:text-lg">総取引日数:</span>
-                        <span x-text="Math.max(daytrade.monthlySummary?.futures?.trading_days || 0, daytrade.monthlySummary?.stocks?.trading_days || 0)"></span>
+                        <span class="text-gray-600 text-xs sm:text-sm">総取引日数:</span>
+                        <span class="text-xs sm:text-sm" x-text="Math.max(daytrade.monthlySummary?.futures?.trading_days || 0, daytrade.monthlySummary?.stocks?.trading_days || 0)"></span>
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-gray-600">総取引回数:</span>
-                        <span x-text="(daytrade.monthlySummary?.futures?.total_trades || 0) + (daytrade.monthlySummary?.stocks?.total_trades || 0)"></span>
+                        <span class="text-gray-600 text-xs sm:text-sm">総取引回数:</span>
+                        <span class="text-xs sm:text-sm" x-text="(daytrade.monthlySummary?.futures?.total_trades || 0) + (daytrade.monthlySummary?.stocks?.total_trades || 0)"></span>
                     </div>
                 </div>
             </div>
