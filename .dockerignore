@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+
+# データベース
+*.db
+*.db-shm
+*.db-wal
+db/stock.db*
+
+# 設定ファイル（機密情報）
+config/*.json
+!config/config.json.example
+
+# データファイル
+data/
+*.xlsx
+*.csv
+
+# テスト関連
+htmlcov/
+.coverage
+.pytest_cache/
+tests/reports/
+
+# 開発関連
+.git/
+.gitignore
+.github/
+.env
+.env.*
+!.env.example
+
+# IDEファイル
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ドキュメント
+*.md
+!README.md
+docs/
+
+# ログファイル
+*.log
+logs/
+
+# MLモデル（必要に応じて本番環境では含める）
+*.pkl
+*.joblib
+
+# その他
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+.ruff_cache/

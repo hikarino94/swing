@@ -1,4 +1,7 @@
-"""データベース操作の共通ユーティリティ"""
+"""データベース操作の共通ユーティリティ
+
+SQLiteとPostgreSQLの両方をサポートする共通インターフェースを提供します。
+"""
 
 import sqlite3
 from collections.abc import Iterator
@@ -6,7 +9,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from src.config import get_db_path
+from src.config import get_database_type, get_db_path
+from src.database import get_database_adapter
+from src.database.base import DatabaseAdapter
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -15,41 +20,60 @@ logger = get_logger(__name__)
 @contextmanager
 def get_db_connection(
     db_path: str | Path | None = None, optimize: bool = True
-) -> Iterator[sqlite3.Connection]:
+) -> Iterator[sqlite3.Connection | DatabaseAdapter]:
     """データベース接続のコンテキストマネージャー
 
     Args:
-        db_path: データベースファイルパス（省略時はデフォルトDBを使用）
-        optimize: パフォーマンス最適化を行うかどうか
+        db_path: データベースファイルパス（SQLiteの場合のみ使用）
+        optimize: パフォーマンス最適化を行うかどうか（SQLiteの場合のみ）
 
     Yields:
-        sqlite3.Connection: データベース接続
+        Union[sqlite3.Connection, DatabaseAdapter]: データベース接続
 
     Example:
         with get_db_connection() as conn:
+            # SQLiteの場合
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM prices")
+            # PostgreSQLの場合（アダプター経由）
+            cursor = conn.execute("SELECT * FROM prices")
     """
-    if db_path is None:
-        db_path = get_db_path()
+    database_type = get_database_type()
 
-    conn = sqlite3.connect(db_path)
-    try:
-        if optimize:
-            # パフォーマンス最適化設定
-            conn.execute("PRAGMA cache_size = -64000")  # 64MB
-            conn.execute("PRAGMA temp_store = MEMORY")
-            conn.execute("PRAGMA mmap_size = 268435456")  # 256MB
-            conn.execute("PRAGMA synchronous = NORMAL")
-            conn.execute("PRAGMA journal_mode = WAL")
+    # PostgreSQLの場合はアダプターを使用
+    if database_type in ("postgres", "postgresql"):
+        adapter = get_database_adapter()
+        try:
+            adapter.connect()
+            yield adapter
+        except Exception as e:
+            logger.error(f"Database error: {e}")
+            adapter.rollback()
+            raise
+        finally:
+            adapter.disconnect()
+    else:
+        # SQLiteの場合は従来通り
+        if db_path is None:
+            db_path = get_db_path()
 
-        yield conn
-    except Exception as e:
-        logger.error(f"Database error: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+        conn = sqlite3.connect(db_path)
+        try:
+            if optimize:
+                # パフォーマンス最適化設定
+                conn.execute("PRAGMA cache_size = -64000")  # 64MB
+                conn.execute("PRAGMA temp_store = MEMORY")
+                conn.execute("PRAGMA mmap_size = 268435456")  # 256MB
+                conn.execute("PRAGMA synchronous = NORMAL")
+                conn.execute("PRAGMA journal_mode = WAL")
+
+            yield conn
+        except Exception as e:
+            logger.error(f"Database error: {e}")
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
 
 def execute_query(
@@ -187,3 +211,57 @@ def vacuum_database(db_path: str | Path | None = None) -> None:
         logger.info("Database vacuum completed")
     finally:
         conn.close()
+
+
+# 新しいアダプター互換の関数
+@contextmanager
+def get_db_adapter() -> Iterator[DatabaseAdapter]:
+    """データベースアダプターを取得するコンテキストマネージャー
+
+    PostgreSQLとSQLiteの両方で統一的なインターフェースを提供します。
+
+    Yields:
+        DatabaseAdapter: データベースアダプター
+
+    Example:
+        with get_db_adapter() as db:
+            cursor = db.execute("SELECT * FROM prices WHERE code = ?", ("1234",))
+            rows = db.fetchall(cursor)
+    """
+    adapter = get_database_adapter()
+    try:
+        adapter.connect()
+        yield adapter
+        adapter.commit()
+    except Exception as e:
+        logger.error(f"Database error: {e}")
+        adapter.rollback()
+        raise
+    finally:
+        adapter.disconnect()
+
+
+def execute_adapter_query(query: str, params: tuple | dict | None = None) -> list[dict]:
+    """アダプター経由でクエリを実行して結果を辞書形式で返す
+
+    Args:
+        query: 実行するSQL文
+        params: クエリパラメータ
+
+    Returns:
+        クエリ結果の辞書のリスト
+    """
+    with get_db_adapter() as db:
+        cursor = db.execute(query, params)
+        rows = db.fetchall(cursor)
+
+        # 結果を辞書形式に変換
+        if rows and hasattr(rows[0], "keys"):
+            # PostgreSQLの場合（RealDictCursor）
+            return [dict(row) for row in rows]
+        elif rows and hasattr(cursor, "description"):
+            # SQLiteの場合
+            columns = [col[0] for col in cursor.description]
+            return [dict(zip(columns, row, strict=False)) for row in rows]
+        else:
+            return []

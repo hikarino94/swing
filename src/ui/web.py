@@ -5,6 +5,7 @@ Swing Trading Tool - モダンなWeb UI版
 """
 
 import argparse
+import os
 import sqlite3
 from pathlib import Path
 from typing import cast
@@ -45,7 +46,7 @@ app = Flask(__name__, template_folder=str(template_dir))
 app.config["SECRET_KEY"] = get_secret_key()
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SECURE"] = False  # 本番環境ではTrue
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("ENVIRONMENT") == "production"
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["PERMANENT_SESSION_LIFETIME"] = 3600 * 24 * 30  # 30日間
 app.config["SESSION_COOKIE_NAME"] = "swing_session"
@@ -144,6 +145,11 @@ app.register_blueprint(utils_bp)
 app.register_blueprint(results_bp)
 app.register_blueprint(daytrade_bp)
 app.register_blueprint(holdings_bp)
+
+# ヘルスチェックエンドポイントの登録
+from src.ui.health import health_bp
+
+app.register_blueprint(health_bp)
 
 
 # メインページルート

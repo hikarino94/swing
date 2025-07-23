@@ -190,6 +190,45 @@ def get_db_path() -> str:
     return os.environ.get("DATABASE_PATH", config.db_path)
 
 
+def get_database_type() -> str:
+    """データベースタイプを取得（環境変数DATABASE_TYPEを優先）
+
+    Returns:
+        データベースタイプ（sqlite/postgres）。デフォルトはsqlite
+    """
+    return os.environ.get("DATABASE_TYPE", "sqlite").lower()
+
+
+def get_postgres_config() -> dict[str, Any]:
+    """PostgreSQL接続設定を取得
+
+    Returns:
+        PostgreSQL接続設定の辞書
+    """
+    # DATABASE_URLが設定されている場合はそれを優先（Fly.io標準）
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        return {"database_url": database_url}
+
+    # 個別の環境変数から設定を構築
+    return {
+        "host": os.environ.get("POSTGRES_HOST", "localhost"),
+        "port": int(os.environ.get("POSTGRES_PORT", "5432")),
+        "database": os.environ.get("POSTGRES_DB", "swing"),
+        "user": os.environ.get("POSTGRES_USER", "postgres"),
+        "password": os.environ.get("POSTGRES_PASSWORD", ""),
+    }
+
+
+def is_production() -> bool:
+    """本番環境かどうかを判定
+
+    Returns:
+        本番環境の場合True
+    """
+    return os.environ.get("ENVIRONMENT", "development").lower() == "production"
+
+
 # 後方互換性のため、最初の評価時の値も保持
 DB_PATH = get_db_path()
 

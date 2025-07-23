@@ -27,10 +27,21 @@ WSGIRequestHandler.protocol_version = "HTTP/1.1"
 
 
 def get_secret_key():
-    """セキュアなシークレットキーを取得または生成"""
+    """セキュアなシークレットキーを取得または生成
+
+    本番環境では必ず環境変数SECRET_KEYを設定すること。
+    開発環境でのみファイルベースのキー生成を使用。
+    """
     secret_key = os.environ.get("SECRET_KEY")
     if not secret_key:
-        # シークレットキーをファイルに保存して再利用
+        # 本番環境では環境変数の設定を必須とする
+        if os.environ.get("ENVIRONMENT") == "production":
+            raise ValueError(
+                "本番環境ではSECRET_KEY環境変数の設定が必須です。"
+                "fly secrets set SECRET_KEY=your-secret-key で設定してください。"
+            )
+
+        # 開発環境でのみファイルベースのキー生成を許可
         secret_key_file = project_root / "config" / ".secret_key"
         if secret_key_file.exists():
             secret_key = secret_key_file.read_text().strip()
