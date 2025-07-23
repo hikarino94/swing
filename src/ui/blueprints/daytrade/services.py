@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from src.config import get_db_path
+from src.utils.business_day import parse_trade_datetime
 from src.utils.logging_config import get_logger
 
 logger = get_logger("daytrade_service")
@@ -111,12 +112,12 @@ class DaytradeService:
                             skipped_count += 1
                             continue
 
-                        # 約定日時から取引日を取得（日付部分のみ）
-                        trade_datetime = row["約定日時"]
-                        # 日付部分を抽出（YYYY/MM/DD HH:MM:SS形式から）
-                        trade_date = datetime.strptime(
-                            trade_datetime.split(" ")[0], "%Y/%m/%d"
-                        ).strftime("%Y-%m-%d")
+                        # 約定日時から取引日を取得（営業日調整あり）
+                        trade_datetime_str = row["約定日時"]
+                        actual_datetime, adjusted_date = parse_trade_datetime(
+                            trade_datetime_str
+                        )
+                        trade_date = adjusted_date.strftime("%Y-%m-%d")
 
                         # 決済損益の処理（+記号を除去）
                         profit_loss_str = row.get("決済損益", "0")
@@ -151,9 +152,9 @@ class DaytradeService:
                         """,
                             (
                                 self.user_id,
-                                trade_date,
+                                trade_date,  # 調整後の取引日
                                 row["約定番号"],
-                                row["約定日時"],
+                                trade_datetime_str,  # 元の約定日時
                                 row.get("市場", ""),
                                 row["銘柄"],
                                 row["取引"],
@@ -559,7 +560,7 @@ class DaytradeService:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
 
-            # 先物の日別損益
+            # 先物の日別損益（調整後の取引日でグループ化）
             cursor.execute(
                 """
                 SELECT trade_date, SUM(profit_loss) as daily_profit
