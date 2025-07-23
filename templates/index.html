@@ -474,19 +474,16 @@
                 <div class="bg-white shadow rounded-lg p-6">
                     <h3 class="text-lg font-medium text-gray-900 mb-4">IDトークン更新</h3>
                     <div class="space-y-4">
-                        <div class="text-sm text-gray-600 mb-2">
-                            ※ 空欄の場合はaccount.jsonから自動的に読み込まれます
-                        </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">メールアドレス</label>
                             <input type="email" x-model="utilities.token.email"
-                                   placeholder="空欄の場合はaccount.jsonから読み込み"
+                                   placeholder="メールアドレスを入力"
                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">パスワード</label>
                             <input type="password" x-model="utilities.token.password"
-                                   placeholder="空欄の場合はaccount.jsonから読み込み"
+                                   placeholder="パスワードを入力"
                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
                         <button @click="updateToken()" class="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 text-base font-medium w-full sm:w-auto">
@@ -891,6 +888,7 @@ function swingApp() {
             // 取引登録・編集
             showTradeForm: false,
             editingTrade: null,
+            futuresMonth: '', // 先物限月選択用
             tradeForm: {
                 trade_category: '',
                 trade_date: '',
@@ -899,16 +897,12 @@ function swingApp() {
                 trade_type: '',
                 price: '',
                 quantity: '',
-                settlement_amount: '',
                 profit_loss: '',
                 // 株式
                 code: '',
                 name: '',
                 average_price: ''
-            },
-            // 銘柄検索
-            stockSearch: '',
-            searchResults: []
+            }
         },
 
         // CSRFトークン
@@ -2009,6 +2003,29 @@ function swingApp() {
             }
         },
 
+        // 新規取引フォームを開く
+        openNewTradeForm() {
+            this.daytrade.editingTrade = null;
+            this.daytrade.tradeForm = {
+                trade_category: '',
+                trade_date: new Date().toISOString().split('T')[0], // 今日の日付をデフォルトに
+                // 先物
+                symbol: '',
+                trade_type: '',
+                price: '',
+                quantity: '',
+                profit_loss: '',
+                // 株式
+                code: '',
+                name: '',
+                average_price: ''
+            };
+            this.daytrade.stockSearch = '';
+            this.daytrade.searchResults = [];
+            this.daytrade.futuresMonth = '';
+            this.daytrade.showTradeForm = true;
+        },
+
         // 取引の編集
         editTrade(trade) {
             this.daytrade.editingTrade = trade;
@@ -2020,25 +2037,45 @@ function swingApp() {
                 trade_type: trade.trade_type || '',
                 price: trade.price || '',
                 quantity: trade.quantity || '',
-                settlement_amount: trade.settlement_amount || '',
                 profit_loss: trade.profit_loss || '',
                 // 株式
                 code: trade.code || '',
                 name: trade.name || '',
                 average_price: trade.price || ''
             };
+            this.daytrade.stockSearch = '';
+            this.daytrade.searchResults = [];
+
+            // 先物の場合、限月を解析して設定
+            if (trade.trade_category === 'futures' && trade.name) {
+                const match = trade.name.match(/(\d{2})\/(\d{2})/);
+                if (match) {
+                    this.daytrade.futuresMonth = match[1] + match[2];
+                } else {
+                    this.daytrade.futuresMonth = '';
+                }
+            } else {
+                this.daytrade.futuresMonth = '';
+            }
+
             this.daytrade.showTradeForm = true;
         },
 
         // 取引の保存
         async saveTrade() {
             try {
+                // 先物取引の場合、settlement_amountを0に設定
+                const formData = {...this.daytrade.tradeForm};
+                if (formData.trade_category === 'futures') {
+                    formData.settlement_amount = 0;
+                }
+
                 const method = this.daytrade.editingTrade ? 'PUT' : 'POST';
                 const url = this.daytrade.editingTrade
                     ? `/api/daytrade/trade/${this.daytrade.editingTrade.id}`
                     : '/api/daytrade/trade';
 
-                const response = await apiCall(url.replace('/api', ''), this.daytrade.tradeForm, method);
+                const response = await apiCall(url.replace('/api', ''), formData, method);
 
                 if (response.success) {
                     showNotification('success', this.daytrade.editingTrade ? '取引を更新しました' : '取引を登録しました');
@@ -2093,6 +2130,38 @@ function swingApp() {
             }
             this.daytrade.stockSearch = '';
             this.daytrade.searchResults = [];
+        },
+
+        // 先物限月リストを取得
+        getFuturesMonths() {
+            const months = [];
+            const today = new Date();
+
+            for (let i = 0; i < 6; i++) {
+                const targetDate = new Date(today.getFullYear(), today.getMonth() + i, 1);
+                const year = targetDate.getFullYear();
+                const month = targetDate.getMonth() + 1;
+                const yearStr = year.toString().slice(-2);
+                const monthStr = month.toString().padStart(2, '0');
+
+                months.push({
+                    value: `${yearStr}${monthStr}`,
+                    label: `${year}年${month}月限`
+                });
+            }
+
+            return months;
+        },
+
+        // 先物銘柄名を更新
+        updateFuturesSymbol() {
+            if (this.daytrade.futuresMonth) {
+                const year = '20' + this.daytrade.futuresMonth.slice(0, 2);
+                const month = this.daytrade.futuresMonth.slice(2, 4);
+                this.daytrade.tradeForm.symbol = `ミニ日経225先物 ${this.daytrade.futuresMonth.slice(0, 2)}/${month}`;
+            } else {
+                this.daytrade.tradeForm.symbol = '';
+            }
         },
 
         // 取引の削除
