@@ -153,6 +153,9 @@
                 </div>
                 <div class="flex items-center space-x-4">
                     {% if user %}
+                    <a href="{{ url_for('manual') }}" class="text-sm text-blue-600 hover:text-blue-800">
+                        <i class="fas fa-book"></i> マニュアル
+                    </a>
                     <span class="text-sm text-gray-600">
                         {{ user.username }}
                     </span>

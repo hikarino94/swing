@@ -39,8 +39,9 @@ logger = get_logger("web")
 # プロジェクトルートとテンプレートディレクトリのパスを設定
 project_root = Path(__file__).resolve().parent.parent.parent
 template_dir = project_root / "templates"
+static_dir = project_root / "static"
 
-app = Flask(__name__, template_folder=str(template_dir))
+app = Flask(__name__, template_folder=str(template_dir), static_folder=str(static_dir))
 
 # アプリケーション設定
 app.config["SECRET_KEY"] = get_secret_key()
@@ -122,7 +123,7 @@ def after_request(response):
         "style-src 'self' 'unsafe-inline' "
         "https://cdn.jsdelivr.net; "
         "font-src 'self' data:; "
-        "img-src 'self' data: https:; "
+        "img-src 'self' data: https: /static/; "
         "connect-src 'self';"
     )
     response.headers["Content-Security-Policy"] = csp_policy
@@ -240,6 +241,21 @@ def import_page():
         return redirect(url_for("auth.login"))
 
     return redirect(url_for("index", tab="import"))
+
+
+@app.route("/manual")
+def manual():
+    """マニュアルページ"""
+    # 認証チェック
+    if "session_id" not in session:
+        return redirect(url_for("auth.login"))
+
+    user = AuthManager.get_user_by_session(session["session_id"])
+    if not user:
+        session.clear()
+        return redirect(url_for("auth.login"))
+
+    return render_template("manual.html", user=user)
 
 
 if __name__ == "__main__":

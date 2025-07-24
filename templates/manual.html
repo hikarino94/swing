@@ -1,335 +1,248 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ユーザーマニュアル - Stock Screening Tool</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-    <style>
-        /* Tailwind classes converted to regular CSS */
-        .manual-content h2 {
-            font-size: 1.5rem; /* text-2xl */
-            font-weight: 700; /* font-bold */
-            margin-top: 2rem; /* mt-8 */
-            margin-bottom: 1rem; /* mb-4 */
-            color: #1f2937; /* text-gray-800 */
-            border-bottom-width: 2px; /* border-b-2 */
-            border-bottom-color: #3b82f6; /* border-blue-500 */
-            padding-bottom: 0.5rem; /* pb-2 */
-        }
-        .manual-content h3 {
-            font-size: 1.25rem; /* text-xl */
-            font-weight: 600; /* font-semibold */
-            margin-top: 1.5rem; /* mt-6 */
-            margin-bottom: 0.75rem; /* mb-3 */
-            color: #374151; /* text-gray-700 */
-        }
-        .manual-content h4 {
-            font-size: 1.125rem; /* text-lg */
-            font-weight: 500; /* font-medium */
-            margin-top: 1rem; /* mt-4 */
-            margin-bottom: 0.5rem; /* mb-2 */
-            color: #4b5563; /* text-gray-600 */
-        }
-        .manual-content p {
-            margin-bottom: 1rem; /* mb-4 */
-            color: #4b5563; /* text-gray-600 */
-            line-height: 1.625; /* leading-relaxed */
-        }
-        .manual-content ul {
-            list-style-type: disc; /* list-disc */
-            list-style-position: inside; /* list-inside */
-            margin-bottom: 1rem; /* mb-4 */
-            color: #4b5563; /* text-gray-600 */
-        }
-        .manual-content ol {
-            list-style-type: decimal; /* list-decimal */
-            list-style-position: inside; /* list-inside */
-            margin-bottom: 1rem; /* mb-4 */
-            color: #4b5563; /* text-gray-600 */
-        }
-        .manual-content li {
-            margin-bottom: 0.5rem; /* mb-2 */
-        }
-        .manual-content code {
-            background-color: #f3f4f6; /* bg-gray-100 */
-            padding-left: 0.5rem; /* px-2 */
-            padding-right: 0.5rem; /* px-2 */
-            padding-top: 0.25rem; /* py-1 */
-            padding-bottom: 0.25rem; /* py-1 */
-            border-radius: 0.25rem; /* rounded */
-            font-size: 0.875rem; /* text-sm */
-            font-family: monospace; /* font-mono */
-        }
-        .manual-content pre {
-            background-color: #f3f4f6; /* bg-gray-100 */
-            padding: 1rem; /* p-4 */
-            border-radius: 0.25rem; /* rounded */
-            margin-bottom: 1rem; /* mb-4 */
-            overflow-x: auto; /* overflow-x-auto */
-        }
-        .manual-content .note {
-            background-color: #eff6ff; /* bg-blue-50 */
-            border-left-width: 4px; /* border-l-4 */
-            border-left-color: #3b82f6; /* border-blue-500 */
-            padding: 1rem; /* p-4 */
-            margin-bottom: 1rem; /* mb-4 */
-        }
-        .manual-content .warning {
-            background-color: #fffbeb; /* bg-yellow-50 */
-            border-left-width: 4px; /* border-l-4 */
-            border-left-color: #f59e0b; /* border-yellow-500 */
-            padding: 1rem; /* p-4 */
-            margin-bottom: 1rem; /* mb-4 */
-        }
-        .manual-content table {
-            width: 100%; /* w-full */
-            margin-bottom: 1rem; /* mb-4 */
-            border-collapse: collapse; /* border-collapse */
-        }
-        .manual-content th {
-            background-color: #f3f4f6; /* bg-gray-100 */
-            border: 1px solid #d1d5db; /* border border-gray-300 */
-            padding-left: 1rem; /* px-4 */
-            padding-right: 1rem; /* px-4 */
-            padding-top: 0.5rem; /* py-2 */
-            padding-bottom: 0.5rem; /* py-2 */
-            text-align: left; /* text-left */
-            font-weight: 600; /* font-semibold */
-        }
-        .manual-content td {
-            border: 1px solid #d1d5db; /* border border-gray-300 */
-            padding-left: 1rem; /* px-4 */
-            padding-right: 1rem; /* px-4 */
-            padding-top: 0.5rem; /* py-2 */
-            padding-bottom: 0.5rem; /* py-2 */
-        }
-    </style>
-</head>
-<body class="bg-gray-50" x-data="{ activeSection: 'overview' }">
-    <div class="container mx-auto px-4 py-8 max-w-7xl">
-        <!-- ヘッダー -->
-        <div class="bg-white shadow rounded-lg mb-6 p-6">
-            <div class="flex justify-between items-center">
-                <h1 class="text-3xl font-bold text-gray-900">ユーザーマニュアル</h1>
-                <a href="/" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
-                    アプリケーションに戻る
-                </a>
+{% extends "base.html" %}
+
+{% block title %}ユーザーマニュアル - Swing Trading Tool{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-7xl" x-data="{ activeSection: 'overview' }">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- サイドバー -->
+        <div class="lg:col-span-1">
+            <div class="bg-white shadow rounded-lg p-4 sticky top-4">
+                <h2 class="text-lg font-semibold mb-4">目次</h2>
+                <nav class="space-y-2">
+                    <a href="#" @click="activeSection = 'overview'"
+                       :class="activeSection === 'overview' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'"
+                       class="block px-3 py-2 rounded-md transition">システム概要</a>
+                    <a href="#" @click="activeSection = 'screening'"
+                       :class="activeSection === 'screening' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'"
+                       class="block px-3 py-2 rounded-md transition">スクリーニング</a>
+                    <a href="#" @click="activeSection = 'backtest'"
+                       :class="activeSection === 'backtest' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'"
+                       class="block px-3 py-2 rounded-md transition">バックテスト</a>
+                    <a href="#" @click="activeSection = 'holdings'"
+                       :class="activeSection === 'holdings' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'"
+                       class="block px-3 py-2 rounded-md transition">保有銘柄管理</a>
+                    <a href="#" @click="activeSection = 'daytrade'"
+                       :class="activeSection === 'daytrade' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'"
+                       class="block px-3 py-2 rounded-md transition">デイトレード</a>
+                    <a href="#" @click="activeSection = 'import'"
+                       :class="activeSection === 'import' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'"
+                       class="block px-3 py-2 rounded-md transition">データインポート</a>
+                    <a href="#" @click="activeSection = 'settings'"
+                       :class="activeSection === 'settings' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'"
+                       class="block px-3 py-2 rounded-md transition">設定</a>
+                </nav>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <!-- サイドバー -->
-            <div class="lg:col-span-1">
-                <div class="bg-white shadow rounded-lg p-4 sticky top-4">
-                    <h2 class="text-lg font-semibold mb-4">目次</h2>
-                    <nav class="space-y-2">
-                        <a href="#" @click="activeSection = 'overview'"
-                           :class="activeSection === 'overview' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'"
-                           class="block px-3 py-2 rounded-md transition">概要</a>
-                        <a href="#" @click="activeSection = 'portfolio'"
-                           :class="activeSection === 'portfolio' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'"
-                           class="block px-3 py-2 rounded-md transition">ポートフォリオ管理</a>
-                        <a href="#" @click="activeSection = 'trading'"
-                           :class="activeSection === 'trading' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'"
-                           class="block px-3 py-2 rounded-md transition">トレード管理</a>
-                        <a href="#" @click="activeSection = 'account'"
-                           :class="activeSection === 'account' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'"
-                           class="block px-3 py-2 rounded-md transition">アカウント管理</a>
-                        <a href="#" @click="activeSection = 'faq'"
-                           :class="activeSection === 'faq' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'"
-                           class="block px-3 py-2 rounded-md transition">よくある質問</a>
-                    </nav>
-                </div>
-            </div>
+        <!-- メインコンテンツ -->
+        <div class="lg:col-span-3">
+            <div class="bg-white shadow rounded-lg p-6">
+                <h1 class="text-3xl font-bold text-gray-900 mb-6">ユーザーマニュアル</h1>
 
-            <!-- メインコンテンツ -->
-            <div class="lg:col-span-3">
-                <div class="bg-white shadow rounded-lg p-6">
-                    <div class="manual-content">
-                        <!-- 概要 -->
-                        <div x-show="activeSection === 'overview'">
-                            <h2>システム概要</h2>
-                            <p>
-                                Stock Screening Toolは、日本株式市場の分析と取引管理を支援するWebアプリケーションです。
-                                主に以下の機能を提供しています：
-                            </p>
-                            <ul>
-                                <li>ポートフォリオ管理 - 保有銘柄の管理と損益計算</li>
-                                <li>トレード管理 - 取引履歴の記録と分析</li>
-                            </ul>
+                <!-- 概要 -->
+                <div x-show="activeSection === 'overview'">
+                    <h2 class="text-2xl font-bold mt-8 mb-4 text-gray-800 border-b-2 border-blue-500 pb-2">システム概要</h2>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        Swing Trading Toolは、J-Quants APIを活用した日本株式市場の分析ツールです。
+                        ファンダメンタル分析、テクニカル分析、機械学習を用いたスクリーニング機能と、
+                        バックテストによる戦略検証機能を提供します。
+                    </p>
 
-                            <h3>はじめに</h3>
-                            <p>このシステムを使用するには、まずアカウントを作成する必要があります。</p>
-                            <ol>
-                                <li>トップページの「新規登録」リンクをクリック</li>
-                                <li>ユーザー名とパスワードを入力（パスワードは8文字以上）</li>
-                                <li>「アカウントを作成」ボタンをクリック</li>
-                                <li>作成したアカウントでログイン</li>
-                            </ol>
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">主な機能</h3>
+                    <ul class="list-disc list-inside mb-4 text-gray-600">
+                        <li class="mb-2">ファンダメンタル・テクニカル・ML分析によるスクリーニング</li>
+                        <li class="mb-2">過去データを用いたバックテスト</li>
+                        <li class="mb-2">保有銘柄の管理とポートフォリオ分析</li>
+                        <li class="mb-2">デイトレード向け分析機能</li>
+                        <li class="mb-2">自動データ更新（スケジューラー）</li>
+                        <li class="mb-2">Excelエクスポート機能</li>
+                    </ul>
 
-                            <div class="note">
-                                <p><strong>注意：</strong> パスワードは安全に管理してください。忘れた場合は管理者にお問い合わせください。</p>
-                            </div>
-                        </div>
-
-                        <!-- ポートフォリオ管理 -->
-                        <div x-show="activeSection === 'portfolio'" style="display: none;">
-                            <h2>ポートフォリオ管理</h2>
-                            <p>
-                                ポートフォリオ管理機能では、保有銘柄の登録・管理と損益計算を行うことができます。
-                            </p>
-
-                            <h3>保有銘柄の登録</h3>
-                            <ol>
-                                <li>「保有銘柄」タブをクリック</li>
-                                <li>「新規追加」ボタンをクリック</li>
-                                <li>以下の情報を入力：
-                                    <ul>
-                                        <li>銘柄コード（4桁の数字）</li>
-                                        <li>取得日</li>
-                                        <li>取得単価</li>
-                                        <li>保有数量</li>
-                                    </ul>
-                                </li>
-                                <li>「登録」ボタンをクリック</li>
-                            </ol>
-
-                            <h3>保有銘柄の確認</h3>
-                            <p>登録した保有銘柄は一覧表示されます。各銘柄について以下の情報が表示されます：</p>
-                            <table>
-                                <tr>
-                                    <th>項目</th>
-                                    <th>説明</th>
-                                </tr>
-                                <tr>
-                                    <td>銘柄名</td>
-                                    <td>企業名</td>
-                                </tr>
-                                <tr>
-                                    <td>現在値</td>
-                                    <td>最新の株価</td>
-                                </tr>
-                                <tr>
-                                    <td>評価額</td>
-                                    <td>現在値 × 保有数量</td>
-                                </tr>
-                                <tr>
-                                    <td>損益</td>
-                                    <td>評価額 - 取得額</td>
-                                </tr>
-                                <tr>
-                                    <td>損益率</td>
-                                    <td>損益 ÷ 取得額 × 100</td>
-                                </tr>
-                            </table>
-
-                            <h3>保有銘柄の編集・削除</h3>
-                            <ul>
-                                <li><strong>編集：</strong> 各行の「編集」ボタンをクリックして情報を更新</li>
-                                <li><strong>削除：</strong> 各行の「削除」ボタンをクリックして銘柄を削除</li>
-                            </ul>
-
-                            <div class="warning">
-                                <p><strong>注意：</strong> 削除した銘柄は復元できません。削除前に必ず確認してください。</p>
-                            </div>
-                        </div>
-
-                        <!-- トレード管理 -->
-                        <div x-show="activeSection === 'trading'" style="display: none;">
-                            <h2>トレード管理</h2>
-                            <p>
-                                トレード管理機能では、売買履歴の記録と分析を行うことができます。
-                            </p>
-
-                            <h3>取引の記録</h3>
-                            <ol>
-                                <li>「取引管理」タブをクリック</li>
-                                <li>「新規取引」ボタンをクリック</li>
-                                <li>以下の情報を入力：
-                                    <ul>
-                                        <li>取引日時</li>
-                                        <li>銘柄コード</li>
-                                        <li>売買区分（買い/売り）</li>
-                                        <li>数量</li>
-                                        <li>単価</li>
-                                        <li>手数料（任意）</li>
-                                        <li>メモ（任意）</li>
-                                    </ul>
-                                </li>
-                                <li>「登録」ボタンをクリック</li>
-                            </ol>
-
-                            <h3>取引履歴の確認</h3>
-                            <p>登録した取引は一覧表示されます。以下の機能が利用できます：</p>
-                            <ul>
-                                <li><strong>期間指定：</strong> 表示する取引の期間を指定</li>
-                                <li><strong>銘柄フィルタ：</strong> 特定の銘柄のみを表示</li>
-                                <li><strong>売買区分フィルタ：</strong> 買い/売りのみを表示</li>
-                                <li><strong>並び替え：</strong> 日付、銘柄、金額などで並び替え</li>
-                            </ul>
-
-                            <h3>取引分析</h3>
-                            <p>取引履歴から以下の分析情報を確認できます：</p>
-                            <ul>
-                                <li>期間別損益</li>
-                                <li>銘柄別損益</li>
-                                <li>勝率（利益が出た取引の割合）</li>
-                                <li>平均保有期間</li>
-                                <li>最大利益/最大損失</li>
-                            </ul>
-
-                            <h3>データのエクスポート</h3>
-                            <p>取引履歴はCSV形式でエクスポートできます。「エクスポート」ボタンをクリックしてダウンロードしてください。</p>
-                        </div>
-
-                        <!-- アカウント管理 -->
-                        <div x-show="activeSection === 'account'" style="display: none;">
-                            <h2>アカウント管理</h2>
-
-                            <h3>パスワードの変更</h3>
-                            <ol>
-                                <li>画面右上のユーザー名をクリック</li>
-                                <li>「アカウント設定」を選択</li>
-                                <li>「パスワード変更」セクションで新しいパスワードを入力</li>
-                                <li>「変更を保存」ボタンをクリック</li>
-                            </ol>
-
-                            <h3>ログアウト</h3>
-                            <p>画面右上の「ログアウト」ボタンをクリックしてログアウトできます。</p>
-
-                            <div class="note">
-                                <p><strong>ヒント：</strong> セキュリティのため、使用後は必ずログアウトすることをお勧めします。</p>
-                            </div>
-                        </div>
-
-                        <!-- よくある質問 -->
-                        <div x-show="activeSection === 'faq'" style="display: none;">
-                            <h2>よくある質問</h2>
-
-                            <h3>Q: 銘柄の現在値はどのように更新されますか？</h3>
-                            <p>A: 銘柄の現在値は自動的に最新の市場データから取得されます。データは取引時間中は定期的に更新されます。</p>
-
-                            <h3>Q: 複数のポートフォリオを管理できますか？</h3>
-                            <p>A: 現在のバージョンでは、1つのアカウントにつき1つのポートフォリオのみ管理できます。</p>
-
-                            <h3>Q: データのバックアップはどのように行いますか？</h3>
-                            <p>A: システムは自動的にデータをバックアップしています。また、取引履歴はCSV形式でエクスポートして保存することができます。</p>
-
-                            <h3>Q: スマートフォンから使用できますか？</h3>
-                            <p>A: はい、レスポンシブデザインに対応しているため、スマートフォンやタブレットからも快適に使用できます。</p>
-
-                            <h3>Q: パスワードを忘れてしまいました</h3>
-                            <p>A: パスワードリセット機能は現在実装されていません。管理者にお問い合わせください。</p>
-
-                            <h3>Q: エラーが発生した場合はどうすればよいですか？</h3>
-                            <p>A: エラーメッセージの内容を記録し、管理者に報告してください。可能であれば、エラーが発生した操作の手順も併せてお知らせください。</p>
-                        </div>
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4">
+                        <p><strong>初回セットアップ：</strong> J-Quants APIの認証情報を設定から登録してください。</p>
                     </div>
+                </div>
+
+                <!-- スクリーニング -->
+                <div x-show="activeSection === 'screening'" style="display: none;">
+                    <h2 class="text-2xl font-bold mt-8 mb-4 text-gray-800 border-b-2 border-blue-500 pb-2">スクリーニング</h2>
+
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">ファンダメンタル分析</h3>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        財務データに基づいて銘柄を選別します。PER、PBR、配当利回りなどの指標を使用します。
+                    </p>
+                    <ol class="list-decimal list-inside mb-4 text-gray-600">
+                        <li class="mb-2">「スクリーニング」タブを選択</li>
+                        <li class="mb-2">「ファンダメンタル分析」セクションで条件を設定</li>
+                        <li class="mb-2">「実行」ボタンをクリック</li>
+                        <li class="mb-2">結果が表示されたら「Excelダウンロード」で保存可能</li>
+                    </ol>
+
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">テクニカル分析</h3>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        移動平均線、RSI、MACDなどのテクニカル指標を用いた分析を行います。
+                    </p>
+
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">ML分析</h3>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        機械学習モデルを使用して、将来の株価上昇確率を予測します。
+                    </p>
+                </div>
+
+                <!-- バックテスト -->
+                <div x-show="activeSection === 'backtest'" style="display: none;">
+                    <h2 class="text-2xl font-bold mt-8 mb-4 text-gray-800 border-b-2 border-blue-500 pb-2">バックテスト</h2>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        過去のデータを使用して、投資戦略の有効性を検証します。
+                    </p>
+
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">実行手順</h3>
+                    <ol class="list-decimal list-inside mb-4 text-gray-600">
+                        <li class="mb-2">「バックテスト」タブを選択</li>
+                        <li class="mb-2">分析タイプ（ファンダメンタル/テクニカル/ML）を選択</li>
+                        <li class="mb-2">期間と初期資金を設定</li>
+                        <li class="mb-2">保有日数を指定</li>
+                        <li class="mb-2">「実行」ボタンをクリック</li>
+                    </ol>
+
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">結果の見方</h3>
+                    <ul class="list-disc list-inside mb-4 text-gray-600">
+                        <li class="mb-2">総リターン：投資期間全体の収益率</li>
+                        <li class="mb-2">年率リターン：年換算した収益率</li>
+                        <li class="mb-2">最大ドローダウン：最大の資産減少率</li>
+                        <li class="mb-2">シャープレシオ：リスク調整後リターン</li>
+                    </ul>
+                </div>
+
+                <!-- 保有銘柄管理 -->
+                <div x-show="activeSection === 'holdings'" style="display: none;">
+                    <h2 class="text-2xl font-bold mt-8 mb-4 text-gray-800 border-b-2 border-blue-500 pb-2">保有銘柄管理</h2>
+
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">CSVインポート機能</h3>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        証券会社から取得したCSVファイルをインポートして、保有銘柄を一括登録できます。
+                    </p>
+
+                    <h4 class="text-lg font-medium mt-4 mb-2 text-gray-600">対応証券会社</h4>
+                    <ul class="list-disc list-inside mb-4 text-gray-600">
+                        <li class="mb-2">SBI証券</li>
+                        <li class="mb-2">楽天証券</li>
+                        <li class="mb-2">松井証券</li>
+                        <li class="mb-2">マネックス証券</li>
+                        <li class="mb-2">auカブコム証券</li>
+                    </ul>
+
+                    <h4 class="text-lg font-medium mt-4 mb-2 text-gray-600">インポート手順</h4>
+                    <ol class="list-decimal list-inside mb-4 text-gray-600">
+                        <li class="mb-2">証券会社のWebサイトにログイン</li>
+                        <li class="mb-2">保有銘柄一覧ページへ移動</li>
+                        <li class="mb-2">CSVダウンロードボタンをクリック</li>
+                        <li class="mb-2">本ツールの「保有銘柄」タブでCSVをインポート</li>
+                    </ol>
+
+                    <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-4">
+                        <p><strong>注意：</strong> 証券会社ごとにCSVフォーマットが異なるため、インポート時に証券会社を選択してください。</p>
+                    </div>
+
+                    <h4 class="text-lg font-medium mt-4 mb-2 text-gray-600">CSVダウンロード場所（例：SBI証券）</h4>
+                    <img src="/static/images/sbi_csv_download.png" alt="SBI証券のCSVダウンロード画面" class="border rounded mb-4 max-w-full">
+                    <p class="text-sm text-gray-500 mb-4">※画像は参考例です。実際の画面と異なる場合があります。</p>
+
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">ポートフォリオ分析</h3>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        保有銘柄の構成比や業種別分散などを視覚的に確認できます。
+                    </p>
+                </div>
+
+                <!-- デイトレード -->
+                <div x-show="activeSection === 'daytrade'" style="display: none;">
+                    <h2 class="text-2xl font-bold mt-8 mb-4 text-gray-800 border-b-2 border-blue-500 pb-2">デイトレード</h2>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        デイトレード向けの短期売買分析機能です。日中の値動きや出来高の変化を分析します。
+                    </p>
+
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">営業日集計</h3>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        過去の取引データを営業日ごとに集計し、パフォーマンスを分析します。
+                    </p>
+                </div>
+
+                <!-- データインポート -->
+                <div x-show="activeSection === 'import'" style="display: none;">
+                    <h2 class="text-2xl font-bold mt-8 mb-4 text-gray-800 border-b-2 border-blue-500 pb-2">データインポート</h2>
+
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">株価データの更新</h3>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        J-Quants APIから最新の株価データを取得します。
+                    </p>
+                    <ol class="list-decimal list-inside mb-4 text-gray-600">
+                        <li class="mb-2">「インポート」タブを選択</li>
+                        <li class="mb-2">「データ取得」セクションで期間を指定</li>
+                        <li class="mb-2">「日次株価取得」ボタンをクリック</li>
+                    </ol>
+
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">自動更新（スケジューラー）</h3>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        スケジューラーを使用すると、データを自動的に更新できます。
+                    </p>
+                    <ul class="list-disc list-inside mb-4 text-gray-600">
+                        <li class="mb-2">日次株価：毎日20:00に実行</li>
+                        <li class="mb-2">財務データ：毎日20:30に実行</li>
+                        <li class="mb-2">上場銘柄情報：毎週月曜6:00に実行</li>
+                    </ul>
+                </div>
+
+                <!-- 設定 -->
+                <div x-show="activeSection === 'settings'" style="display: none;">
+                    <h2 class="text-2xl font-bold mt-8 mb-4 text-gray-800 border-b-2 border-blue-500 pb-2">設定</h2>
+
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">J-Quants API設定</h3>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        J-Quants APIを使用するには、アカウント情報の登録が必要です。
+                    </p>
+                    <ol class="list-decimal list-inside mb-4 text-gray-600">
+                        <li class="mb-2">「設定」タブを選択</li>
+                        <li class="mb-2">「J-Quants設定」セクションにメールアドレスとパスワードを入力</li>
+                        <li class="mb-2">「保存」ボタンをクリック</li>
+                    </ol>
+
+                    <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700">データ管理</h3>
+                    <p class="mb-4 text-gray-600 leading-relaxed">
+                        データベースのメンテナンス機能を提供します。
+                    </p>
+                    <ul class="list-disc list-inside mb-4 text-gray-600">
+                        <li class="mb-2">論理削除フラグの削除：不要なデータを物理削除</li>
+                        <li class="mb-2">古いバックテスト結果の削除：ストレージ容量の最適化</li>
+                    </ul>
                 </div>
             </div>
         </div>
     </div>
-</body>
-</html>
+</div>
+
+<style>
+    /* マニュアル用のカスタムスタイル */
+    .manual-content h2 {
+        @apply text-2xl font-bold mt-8 mb-4 text-gray-800 border-b-2 border-blue-500 pb-2;
+    }
+    .manual-content h3 {
+        @apply text-xl font-semibold mt-6 mb-3 text-gray-700;
+    }
+    .manual-content h4 {
+        @apply text-lg font-medium mt-4 mb-2 text-gray-600;
+    }
+    .manual-content p {
+        @apply mb-4 text-gray-600 leading-relaxed;
+    }
+    .manual-content ul {
+        @apply list-disc list-inside mb-4 text-gray-600;
+    }
+    .manual-content ol {
+        @apply list-decimal list-inside mb-4 text-gray-600;
+    }
+    .manual-content li {
+        @apply mb-2;
+    }
+</style>
+{% endblock %}
