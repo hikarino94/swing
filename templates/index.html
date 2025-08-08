@@ -1573,6 +1573,7 @@ function swingApp() {
 
                 // 元のスタイルを保存
                 const originalWidth = element.style.width;
+                const originalHeight = element.style.height;
                 const originalTransform = element.style.transform;
 
                 // 一時的にサイズを調整
@@ -1581,17 +1582,23 @@ function swingApp() {
 
                 await new Promise(resolve => setTimeout(resolve, 100));
 
+                const height = element.scrollHeight;
+                element.style.height = `${height}px`;
+
                 const canvas = await html2canvas(element, {
                     backgroundColor: '#f3f4f6',
                     scale: 3,
                     width: 1200,
+                    height,
                     windowWidth: 1200,
+                    windowHeight: height,
                     logging: false,
                     useCORS: true
                 });
 
                 // スタイルを元に戻す
                 element.style.width = originalWidth || '';
+                element.style.height = originalHeight || '';
                 element.style.transform = originalTransform || '';
 
                 // ダウンロード
@@ -1614,6 +1621,7 @@ function swingApp() {
 
                 // 元のスタイルを保存
                 const originalWidth = element.style.width;
+                const originalHeight = element.style.height;
                 const originalTransform = element.style.transform;
 
                 // 一時的にサイズを調整
@@ -1622,17 +1630,23 @@ function swingApp() {
 
                 await new Promise(resolve => setTimeout(resolve, 100));
 
+                const height = element.scrollHeight;
+                element.style.height = `${height}px`;
+
                 const canvas = await html2canvas(element, {
                     backgroundColor: '#f3f4f6',
                     scale: 3,
                     width: 600,
+                    height,
                     windowWidth: 600,
+                    windowHeight: height,
                     logging: false,
                     useCORS: true
                 });
 
                 // スタイルを元に戻す
                 element.style.width = originalWidth || '';
+                element.style.height = originalHeight || '';
                 element.style.transform = originalTransform || '';
 
                 // ダウンロード
