@@ -545,7 +545,6 @@ class DaytradeService:
                     )
 
                     csv_reader = csv.reader(lines[data_start_index:])
-                    dividend_sum_imported = 0.0
                     for row_index, row in enumerate(
                         csv_reader, start=data_start_index + 1
                     ):
@@ -673,37 +672,11 @@ class DaytradeService:
                                 ),
                             )
                             dividend_imported_count += 1
-                            dividend_sum_imported += settlement_amount
                         except Exception as e:
                             errors.append(f"行 {row_index}: {str(e)}")
                             logger.error(
                                 f"配当のりCSVインポートエラー (行 {row_index}): {e}"
                             )
-
-                    # 上部サマリーに「合計」等がある場合は検算し、ズレがあれば警告としてerrorsに追加
-                    try:
-                        summary_expected = None
-                        summary_pattern_keywords = ["合計", "総額", "合計金額", "小計"]
-                        for ln in lines[: max(0, data_start_index - 1)]:
-                            if any(k in ln for k in summary_pattern_keywords):
-                                m = _re.search(r"(\d[\d,]*)", ln)
-                                if m:
-                                    summary_expected = float(
-                                        m.group(1).replace(",", "")
-                                    )
-                        if (
-                            summary_expected is not None
-                            and abs(dividend_sum_imported - summary_expected) > 0.5
-                        ):
-                            msg = (
-                                f"配当金額の検算にズレ: 取り込み合計={dividend_sum_imported:.0f}円 / "
-                                f"サマリー表記={summary_expected:.0f}円"
-                            )
-                            errors.append(msg)
-                            logger.warning(msg)
-                    except Exception as _e:
-                        # 検算ができなくても致命的ではないため、情報ログに記録して継続
-                        logger.info(f"配当検算スキップ: {_e}")
 
                 conn.commit()
 
