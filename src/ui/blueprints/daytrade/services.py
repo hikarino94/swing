@@ -368,7 +368,6 @@ class DaytradeService:
             debug_lines = list(csv_reader)
 
             spot_imported_count = 0
-            dividend_imported_count = 0
             skipped_count = 0
             errors = []
 
@@ -468,57 +467,9 @@ class DaytradeService:
                             spot_imported_count += 1
 
                         elif "株式配当金" in trade_type or "信用配当金" in trade_type:
-                            # 配当金の処理
-                            code = row[0].strip()  # 銘柄コード
-                            name = row[1].strip()  # 銘柄名
-                            trade_date = datetime.strptime(row[3], "%Y/%m/%d").strftime(
-                                "%Y-%m-%d"
-                            )  # 約定日
-                            # 損益金額/徴収額から配当金額を取得
-                            dividend_str = row[11].replace(",", "").replace("+", "")
-                            dividend_amount = (
-                                float(dividend_str)
-                                if dividend_str and dividend_str != "--"
-                                else 0
-                            )
-
-                            if dividend_amount > 0:
-                                # 配当金として保存
-                                cursor.execute(
-                                    """
-                                    INSERT INTO daytrade_stocks (
-                                        user_id, trade_date, code, name, market,
-                                        trade_type, term, custody_type,
-                                        delivery_date, quantity, average_price,
-                                        commission_tax, capital_gains_tax, settlement_amount,
-                                        day_trade_amount
-                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                    """,
-                                    (
-                                        self.user_id,
-                                        trade_date,
-                                        code,
-                                        name,
-                                        "",  # market
-                                        "配当金",
-                                        "",  # term
-                                        "",  # custody_type
-                                        (
-                                            datetime.strptime(
-                                                row[6], "%Y/%m/%d"
-                                            ).strftime("%Y-%m-%d")
-                                            if row[6]
-                                            else None
-                                        ),  # 受渡日
-                                        0,  # quantity
-                                        0,  # average_price
-                                        0,  # commission_tax
-                                        0,  # capital_gains_tax（配当税は別途処理）
-                                        dividend_amount,  # settlement_amount（配当金額）
-                                        0,  # day_trade_amount
-                                    ),
-                                )
-                                dividend_imported_count += 1
+                            # 仕様変更: 現物取引履歴CSVからの配当は取り込まない
+                            skipped_count += 1
+                            continue
                         else:
                             # その他の取引はスキップ
                             skipped_count += 1
@@ -537,7 +488,8 @@ class DaytradeService:
 
             return {
                 "spot_imported": spot_imported_count,
-                "dividend_imported": dividend_imported_count,
+                # 後方互換のためキーは残すが常に0
+                "dividend_imported": 0,
                 "skipped": skipped_count,
                 "errors": errors,
             }

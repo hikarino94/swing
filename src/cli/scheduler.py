@@ -39,7 +39,7 @@ def update_listed_info() -> None:
 def cleanup_database() -> None:
     """データベースクリーンアップを実行"""
     # 設定を確認
-    cleanup_config = config.config.get("data_cleanup", {})
+    cleanup_config = config.get("data_cleanup", {})
     if not cleanup_config.get("enabled", False):
         logger.info("データクリーンアップは無効に設定されています")
         return
@@ -53,7 +53,7 @@ def cleanup_database() -> None:
 fetch_quotes_config = config.get_scheduler_config("fetch_quotes")
 fetch_statements_config = config.get_scheduler_config("fetch_statements")
 update_listed_info_config = config.get_scheduler_config("update_listed_info")
-cleanup_config = config.config.get("data_cleanup", {})
+cleanup_config = config.get("data_cleanup", {})
 
 if fetch_quotes_config.get("frequency") == "daily":
     schedule.every().day.at(fetch_quotes_config.get("time", "20:00")).do(fetch_quotes)
