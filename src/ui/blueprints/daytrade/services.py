@@ -498,6 +498,199 @@ class DaytradeService:
             logger.error(f"現物・配当金CSVインポートエラー: {e}")
             raise
 
+    def import_dividends_csv(self, file) -> dict[str, Any]:
+        """配当専用CSVのインポート
+
+        想定レイアウト（例、'配当.csv'）:
+        - ファイル冒頭に集計行がありうる
+        - 明細ヘッダー例1: 受渡日, 口座, 摘要, 銘柄, 数量, 配当（円貨）
+        - 明細ヘッダー例2: 受渡日, 口座, 商品, 銘柄名, 数量, 受取額(税引後・円)
+        - データ例: 2025/6/30, 特定/一般, 配当金(円貨), 〇〇 7229, 100, 2,869
+
+        既存の現物取込処理には影響を与えない。
+        """
+        try:
+            # まずバイナリとして読み込む
+            content_bytes = file.read()
+
+            # エンコーディングを自動検出（UTF-8, Shift-JIS, CP932の順で試す）
+            try:
+                if content_bytes.startswith(b"\xef\xbb\xbf"):
+                    content = content_bytes.decode("utf-8-sig")
+                else:
+                    content = content_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                try:
+                    content = content_bytes.decode("shift-jis")
+                except UnicodeDecodeError:
+                    content = content_bytes.decode("cp932")
+
+            lines = [line for line in content.strip().split("\n") if line.strip()]
+
+            # ヘッダー行を探索（受渡/受渡日 と 銘柄/銘柄名 と 配当/受取額 を含む）
+            header_index = -1
+            for i, line in enumerate(lines[:50]):  # 冒頭50行を探索（十分なバッファ）
+                if (
+                    ("受渡" in line or "受渡日" in line)
+                    and ("銘柄" in line or "銘柄名" in line)
+                    and (("配当" in line) or ("受取額" in line))
+                ):
+                    header_index = i
+                    break
+
+            if header_index == -1:
+                raise ValueError(
+                    "配当CSVのヘッダーが見つかりません（'受渡', '銘柄', '配当/受取額' を含む行が必要です）"
+                )
+
+            # ヘッダーのカラム名からインデックスを特定
+            header_row = next(csv.reader([lines[header_index]]))
+            headers = [h.strip() for h in header_row]
+            date_idx = product_idx = name_idx = qty_idx = amount_idx = code_idx = None
+            for idx, col in enumerate(headers):
+                if ("受渡" in col) and date_idx is None:
+                    date_idx = idx
+                if ("摘要" in col or "商品" in col) and product_idx is None:
+                    product_idx = idx
+                # "銘柄コード" がある場合は優先取得
+                if (
+                    "銘柄コード" in col or (col.endswith("コード") and "銘柄" in col)
+                ) and code_idx is None:
+                    code_idx = idx
+                if (
+                    ("銘柄名" in col) or ("銘柄" in col and "コード" not in col)
+                ) and name_idx is None:
+                    name_idx = idx
+                if ("数量" in col or "株数" in col) and qty_idx is None:
+                    qty_idx = idx
+                if ("配当" in col or "受取額" in col) and amount_idx is None:
+                    amount_idx = idx
+
+            # 必須項目（受渡日、銘柄名/銘柄、金額）は存在する必要がある
+            if date_idx is None or name_idx is None or amount_idx is None:
+                raise ValueError(f"ヘッダー解析に失敗しました: headers={headers}")
+
+            # データ行のCSVパーサ
+            csv_reader = csv.reader(lines[header_index + 1 :])
+
+            imported_count = 0
+            skipped_count = 0
+            errors: list[str] = []
+
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+
+                for row_num, row in enumerate(csv_reader, start=header_index + 2):
+                    try:
+                        # 最低限の列数チェック
+                        if not row or len(row) < len(headers):
+                            skipped_count += 1
+                            continue
+
+                        raw_date = row[date_idx].strip()
+                        # 日付の正規化（YYYY-MM-DD）
+                        try:
+                            trade_date = datetime.strptime(
+                                raw_date, "%Y/%m/%d"
+                            ).strftime("%Y-%m-%d")
+                        except Exception:
+                            # 想定外の形式はスキップ
+                            skipped_count += 1
+                            continue
+
+                        # 銘柄名/銘柄（末尾コードがあれば抽出）
+                        name_with_code = (
+                            row[name_idx].strip() if len(row) > name_idx else ""
+                        )
+                        code = ""
+                        name = name_with_code
+                        # 銘柄末尾の4桁～5桁コードを抽出（REIT等で4桁以外の可能性も考慮）
+                        # 末尾に空白+数字が付く形式を優先
+                        parts = name_with_code.rsplit(" ", 1)
+                        if len(parts) == 2 and parts[1].isdigit():
+                            name = parts[0]
+                            code = parts[1]
+                        # 専用のコード列がある場合は優先
+                        if (
+                            code_idx is not None
+                            and len(row) > code_idx
+                            and row[code_idx].strip()
+                        ):
+                            code = row[code_idx].strip()
+
+                        # 数量（あれば整数、なくても0にする）
+                        quantity_str = "0"
+                        if qty_idx is not None and len(row) > qty_idx:
+                            quantity_str = (
+                                (row[qty_idx] or "")
+                                .replace(",", "")
+                                .replace("株", "")
+                                .strip()
+                            )
+                        try:
+                            quantity = int(float(quantity_str)) if quantity_str else 0
+                        except Exception:
+                            quantity = 0
+
+                        # 配当金額（円）
+                        amount_str = (
+                            (row[amount_idx] or "").replace(",", "").strip()
+                            if len(row) > amount_idx
+                            else "0"
+                        )
+                        try:
+                            dividend_amount = float(amount_str) if amount_str else 0.0
+                        except Exception:
+                            dividend_amount = 0.0
+
+                        # 専用CSV想定のため、商品/摘要の内容によるフィルタリングは行わない
+
+                        # レコード挿入（配当は trade_type='配当金'、日計り等は常に0）
+                        cursor.execute(
+                            """
+                            INSERT INTO daytrade_stocks (
+                                user_id, code, name, market, trade_type, term,
+                                custody_type, trade_date, delivery_date, quantity,
+                                average_price, commission_tax, capital_gains_tax,
+                                settlement_amount, day_trade_amount
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                self.user_id,
+                                code,
+                                name,
+                                "",  # market
+                                "配当金",
+                                "",  # term
+                                "",  # custody_type
+                                trade_date,
+                                None,  # delivery_date（配当はtrade_date基準で集計）
+                                quantity,
+                                0,  # average_price（配当のため0）
+                                0,  # commission_tax
+                                0,  # capital_gains_tax
+                                dividend_amount,  # settlement_amount
+                                0,  # day_trade_amount
+                            ),
+                        )
+                        imported_count += 1
+
+                    except Exception as e:
+                        errors.append(f"行 {row_num}: {str(e)}")
+                        logger.error(f"配当CSVインポートエラー (行 {row_num}): {e}")
+
+                conn.commit()
+
+            return {
+                "imported": imported_count,
+                "skipped": skipped_count,
+                "errors": errors,
+            }
+
+        except Exception as e:
+            logger.error(f"配当CSVインポートエラー: {e}")
+            raise
+
     def get_calendar_data(self, year: int, month: int) -> dict[str, Any]:
         """指定月のカレンダーデータを取得"""
         start_date = f"{year:04d}-{month:02d}-01"

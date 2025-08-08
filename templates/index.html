@@ -1400,6 +1400,40 @@ function swingApp() {
             }
         },
 
+        async importDividendsCSV() {
+            const fileInput = this.$refs.dividendsFile;
+            if (!fileInput || !fileInput.files.length) {
+                showNotification('error', 'ファイルを選択してください');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('csrf_token', this.csrfToken);
+
+            try {
+                const response = await fetch('/api/daytrade/import/dividends', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('success', result.message || '配当CSVをインポートしました');
+                    fileInput.value = '';
+                    this.loadCalendarData();
+                    // 配当は累積グラフや月次にも反映されるため更新
+                    this.loadCumulativeChart();
+                    this.loadMonthlyProfit();
+                } else {
+                    showNotification('error', result.error || 'インポートに失敗しました');
+                }
+            } catch (error) {
+                console.error('インポートエラー:', error);
+                showNotification('error', 'インポート中にエラーが発生しました');
+            }
+        },
+
         formatCurrency(value) {
             if (value === null || value === undefined) return '¥0';
             return '¥' + value.toLocaleString('ja-JP');

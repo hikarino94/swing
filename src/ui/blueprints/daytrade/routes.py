@@ -181,6 +181,42 @@ def import_spot_dividend():
         return jsonify({"error": str(e)}), 500
 
 
+@daytrade_bp.route("/import/dividends", methods=["POST"])
+@trader_allowed
+def import_dividends():
+    """配当専用CSVのインポート"""
+    if not validate_csrf_token(request):
+        return jsonify({"error": "Invalid CSRF token"}), 403
+
+    if "file" not in request.files:
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+
+    try:
+        service = DaytradeService(request.current_user.id)
+        result = service.import_dividends_csv(file)
+
+        message = f"配当データ{result['imported']}件をインポートしました"
+        if result.get("skipped", 0) > 0:
+            message += f"（{result['skipped']}件スキップ）"
+        if result.get("errors"):
+            message += f"（エラー {len(result['errors'])}件）"
+
+        return jsonify(
+            {
+                "success": True,
+                "message": message,
+                "details": result,
+            }
+        )
+    except Exception as e:
+        logger.error(f"配当データインポートエラー: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @daytrade_bp.route("/summary/<year>/<month>", methods=["GET"])
 @trader_allowed
 def monthly_summary(year: str, month: str):
