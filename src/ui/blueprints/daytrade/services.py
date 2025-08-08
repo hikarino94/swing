@@ -967,6 +967,21 @@ class DaytradeService:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
 
+            # 年間表示の場合は、株式の受渡し抽出の上限を「年末」まで拡張する
+            # 条件: start_date がその年の 01-01 の場合に限り適用
+            try:
+                end_year = datetime.strptime(end_date, "%Y-%m-%d").year
+            except Exception:
+                end_year = datetime.now().year
+            stocks_delivery_end = end_date
+            if start_date == f"{end_year:04d}-01-01":
+                stocks_delivery_end = f"{end_year:04d}-12-31"
+
+            # 年間表示の場合は、先物も受渡日で年末までを対象に含める
+            futures_delivery_end = end_date
+            if start_date == f"{end_year:04d}-01-01":
+                futures_delivery_end = f"{end_year:04d}-12-31"
+
             # 日別の損益データを取得（配当を分離）
             cursor.execute(
                 """
@@ -978,17 +993,29 @@ class DaytradeService:
                     COALESCE(s.dividend_amount, 0) as dividend_amount
                 FROM (
                     SELECT DISTINCT date FROM (
+                        -- 先物は「取引日」でプロットするが、抽出は取引日または受渡日基準
                         SELECT trade_date as date FROM daytrade_futures
-                        WHERE user_id = ? AND trade_date BETWEEN ? AND ?
+                        WHERE user_id = ? AND (
+                            trade_date BETWEEN ? AND ?
+                            OR (delivery_date BETWEEN ? AND ?)
+                        )
                         UNION
+                        -- 配当は取引日基準
                         SELECT trade_date as date FROM daytrade_stocks
-                        WHERE user_id = ? AND trade_date BETWEEN ? AND ?
+                        WHERE user_id = ? AND trade_type = '配当金' AND trade_date BETWEEN ? AND ?
+                        UNION
+                        -- 株式（配当以外）は受渡日で抽出、プロットは取引日
+                        SELECT trade_date as date FROM daytrade_stocks
+                        WHERE user_id = ? AND trade_type != '配当金' AND delivery_date BETWEEN ? AND ?
                     )
                 ) d
                 LEFT JOIN (
                     SELECT trade_date, SUM(profit_loss) as daily_profit
                     FROM daytrade_futures
-                    WHERE user_id = ? AND trade_date BETWEEN ? AND ?
+                    WHERE user_id = ? AND (
+                        trade_date BETWEEN ? AND ?
+                        OR (delivery_date BETWEEN ? AND ?)
+                    )
                     GROUP BY trade_date
                 ) f ON d.date = f.trade_date
                 LEFT JOIN (
@@ -1006,25 +1033,43 @@ class DaytradeService:
                             ELSE 0
                         END) as dividend_amount
                     FROM daytrade_stocks
-                    WHERE user_id = ? AND trade_date BETWEEN ? AND ?
+                    WHERE user_id = ? AND (
+                        (trade_type = '配当金' AND trade_date BETWEEN ? AND ?)
+                        OR
+                        (trade_type != '配当金' AND delivery_date BETWEEN ? AND ?)
+                    )
                       AND (trade_type LIKE '%返済%' OR trade_type = '現物売却' OR trade_type = '配当金')
                     GROUP BY trade_date
                 ) s ON d.date = s.trade_date
                 ORDER BY d.date
             """,
                 (
+                    # d: futures (trade_date OR delivery_date)
                     self.user_id,
                     start_date,
                     end_date,
+                    start_date,
+                    futures_delivery_end,
+                    # d: stocks dividends (trade_date)
                     self.user_id,
                     start_date,
                     end_date,
+                    # d: stocks non-dividends (delivery_date)
+                    self.user_id,
+                    start_date,
+                    stocks_delivery_end,
+                    # f: futures daily profit (trade_date OR delivery_date)
                     self.user_id,
                     start_date,
                     end_date,
+                    start_date,
+                    futures_delivery_end,
+                    # s: stocks daily aggregates
                     self.user_id,
                     start_date,
                     end_date,
+                    start_date,
+                    stocks_delivery_end,
                 ),
             )
 
