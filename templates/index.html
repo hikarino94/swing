@@ -1569,7 +1569,12 @@ function swingApp() {
         // カレンダーのみのスクリーンショット
         async takeDaytradeCalendarScreenshot() {
             try {
-                const element = document.getElementById('daytrade-calendar-area');
+                const elementId = this.daytrade.compactMode ? 'daytrade-calendar-area' : 'daytrade-calendar-area-normal';
+                const element = document.getElementById(elementId);
+
+                if (!element) {
+                    throw new Error(`要素が見つかりません: ${elementId}`);
+                }
 
                 // 元のスタイルを保存
                 const originalWidth = element.style.width;
@@ -1577,7 +1582,10 @@ function swingApp() {
                 const originalTransform = element.style.transform;
 
                 // 一時的にサイズを調整
-                element.style.width = '1200px';
+                const computedWidth = this.daytrade.compactMode
+                    ? 1200
+                    : Math.max(1200, element.scrollWidth || element.clientWidth || 1200);
+                element.style.width = `${computedWidth}px`;
                 element.style.transform = 'scale(1)';
 
                 await new Promise(resolve => setTimeout(resolve, 100));
@@ -1588,9 +1596,9 @@ function swingApp() {
                 const canvas = await html2canvas(element, {
                     backgroundColor: '#f3f4f6',
                     scale: 3,
-                    width: 1200,
+                    width: computedWidth,
                     height,
-                    windowWidth: 1200,
+                    windowWidth: computedWidth,
                     windowHeight: height,
                     logging: false,
                     useCORS: true
@@ -1617,7 +1625,12 @@ function swingApp() {
         // サマリーのみのスクリーンショット
         async takeDaytradeSummaryScreenshot() {
             try {
-                const element = document.getElementById('daytrade-summary-area');
+                const elementId = this.daytrade.compactMode ? 'daytrade-summary-area' : 'daytrade-summary-area-normal';
+                const element = document.getElementById(elementId);
+
+                if (!element) {
+                    throw new Error(`要素が見つかりません: ${elementId}`);
+                }
 
                 // 元のスタイルを保存
                 const originalWidth = element.style.width;
@@ -1625,7 +1638,9 @@ function swingApp() {
                 const originalTransform = element.style.transform;
 
                 // 一時的にサイズを調整
-                element.style.width = '600px';
+                const baseWidth = this.daytrade.compactMode ? 600 : 1200;
+                const computedWidth = Math.max(baseWidth, element.scrollWidth || element.clientWidth || baseWidth);
+                element.style.width = `${computedWidth}px`;
                 element.style.transform = 'scale(1)';
 
                 await new Promise(resolve => setTimeout(resolve, 100));
@@ -1636,9 +1651,9 @@ function swingApp() {
                 const canvas = await html2canvas(element, {
                     backgroundColor: '#f3f4f6',
                     scale: 3,
-                    width: 600,
+                    width: computedWidth,
                     height,
-                    windowWidth: 600,
+                    windowWidth: computedWidth,
                     windowHeight: height,
                     logging: false,
                     useCORS: true
