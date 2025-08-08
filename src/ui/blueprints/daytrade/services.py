@@ -645,6 +645,28 @@ class DaytradeService:
                             )
                             settlement_amount = float(amount_str) if amount_str else 0.0
 
+                            # 既存重複のスキップ（同一ユーザー・日付・コード・銘柄名・金額・取引種別=配当金）
+                            cursor.execute(
+                                """
+                                SELECT id FROM daytrade_stocks
+                                WHERE user_id = ? AND trade_type = '配当金'
+                                  AND trade_date = ? AND code = ? AND name = ?
+                                  AND CAST(settlement_amount AS REAL) = CAST(? AS REAL)
+                                LIMIT 1
+                                """,
+                                (
+                                    self.user_id,
+                                    trade_date,
+                                    code,
+                                    name,
+                                    settlement_amount,
+                                ),
+                            )
+                            existed = cursor.fetchone()
+                            if existed:
+                                skipped_count += 1
+                                continue
+
                             cursor.execute(
                                 """
                                 INSERT INTO daytrade_stocks (
