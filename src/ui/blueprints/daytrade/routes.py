@@ -172,7 +172,7 @@ def import_spot_dividend():
         return jsonify(
             {
                 "success": True,
-                "message": f"現物{result['spot_imported']}件・配当{result['dividend_imported']}件をインポートしました",
+                "message": f"現物取引{result['spot_imported']}件をインポートしました（配当は取り込み対象外）",
                 "details": result,
             }
         )

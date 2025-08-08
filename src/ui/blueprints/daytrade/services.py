@@ -324,365 +324,172 @@ class DaytradeService:
             raise
 
     def import_spot_dividend_csv(self, file) -> dict[str, Any]:
-        """現物取引・配当金CSVのインポート
-
-        サポート形式:
-        - 証券会社の現物取引履歴CSV（現物売却のみ取り込み。配当はスキップ）
-        - 「配当のり」CSV（配当行を daytrade_stocks の trade_type='配当金' として取り込み）
-        """
+        """現物取引・配当金CSVのインポート"""
         try:
             # まずバイナリとして読み込む
             content_bytes = file.read()
 
             # エンコーディングを自動検出
-            def decode_bytes(data: bytes) -> str:
+            try:
+                # UTF-8 with BOMを試す
+                if content_bytes.startswith(b"\xef\xbb\xbf"):
+                    content = content_bytes.decode("utf-8-sig")
+                else:
+                    # UTF-8を試す
+                    content = content_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                # Shift-JISを試す
                 try:
-                    if data.startswith(b"\xef\xbb\xbf"):
-                        return data.decode("utf-8-sig")
-                    return data.decode("utf-8")
+                    content = content_bytes.decode("shift-jis")
                 except UnicodeDecodeError:
-                    for enc in ("shift-jis", "cp932"):
-                        try:
-                            return data.decode(enc)
-                        except UnicodeDecodeError:
-                            continue
-                # 最後のフォールバック
-                return data.decode("utf-8", errors="replace")
+                    # CP932を試す
+                    content = content_bytes.decode("cp932")
 
-            content = decode_bytes(content_bytes)
-            lines = [line.strip() for line in content.split("\n") if line is not None]
+            lines = content.strip().split("\n")
 
-            # 1) まず「現物取引履歴CSV」形式を検出
-            spot_header_index = -1
+            # ヘッダー行を探す
+            header_index = -1
             for i, line in enumerate(lines):
-                if ("銘柄コード" in line) and ("銘柄" in line) and ("取引" in line):
-                    spot_header_index = i
+                if "銘柄コード" in line and "銘柄" in line and "取引" in line:
+                    header_index = i
                     break
 
+            if header_index == -1:
+                raise ValueError("CSVヘッダーが見つかりません")
+
+            # ヘッダー行を取得（デバッグ用）
+            # header_line = lines[header_index]
+            # headers = header_line.split(",")  # 現在は使用していない
+
+            # データ行を処理
+            csv_reader = csv.reader(lines[header_index + 1 :])
+
+            # CSVデータを読み込む
+            debug_lines = list(csv_reader)
+
             spot_imported_count = 0
-            dividend_imported_count = 0
             skipped_count = 0
-            errors: list[str] = []
+            errors = []
 
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
 
-                if spot_header_index != -1:
-                    # 既存の現物CSV処理（従来仕様）
-                    csv_reader = csv.reader(lines[spot_header_index + 1 :])
-                    debug_lines = list(csv_reader)
+                for row_num, row in enumerate(debug_lines, start=header_index + 2):
+                    try:
+                        # 空行のスキップ
+                        if not row or not row[0] or not row[0].strip():
+                            continue
 
-                    for row_num, row in enumerate(
-                        debug_lines, start=spot_header_index + 2
-                    ):
-                        try:
-                            if not row or not row[0] or not str(row[0]).strip():
-                                continue
-                            if len(row) < 12:
-                                continue
-                            if row[0] in [
-                                "譲渡益税徴収額",
-                                "譲渡益税還付金",
-                                "配当所得税徴収額",
-                            ]:
-                                skipped_count += 1
-                                continue
-                            if len(row) <= 5:
-                                logger.warning(
-                                    f"行 {row_num}: 列数が不足しています ({len(row)}列)"
-                                )
-                                skipped_count += 1
-                                continue
+                        # 最低限必要な列数（12列）のチェック
+                        if len(row) < 12:
+                            continue
 
-                            trade_type = row[5]
-                            if "現物売" in trade_type:
-                                code = row[0].strip()
-                                name = row[1].strip()
-                                trade_date = datetime.strptime(
-                                    row[3], "%Y/%m/%d"
-                                ).strftime("%Y-%m-%d")
-                                quantity = int(
-                                    row[4].replace("株", "").replace(",", "")
-                                )
-                                sell_amount = float(row[7].replace(",", ""))
-                                acquisition_amount = (
-                                    float(row[10].replace(",", ""))
-                                    if row[10] and row[10] != "--"
-                                    else 0
-                                )
-                                profit_loss = sell_amount - acquisition_amount
+                        # 特殊な行（譲渡益税徴収額など）のスキップ
+                        if row[0] in [
+                            "譲渡益税徴収額",
+                            "譲渡益税還付金",
+                            "配当所得税徴収額",
+                        ]:
+                            skipped_count += 1
+                            continue
 
-                                cursor.execute(
-                                    """
-                                    INSERT INTO daytrade_stocks (
-                                        user_id, trade_date, code, name, market,
-                                        trade_type, term, custody_type,
-                                        delivery_date, quantity, average_price,
-                                        commission_tax, capital_gains_tax, settlement_amount,
-                                        day_trade_amount
-                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                    """,
-                                    (
-                                        self.user_id,
-                                        trade_date,
-                                        code,
-                                        name,
-                                        "",
-                                        "現物売却",
-                                        "",
-                                        "",
-                                        (
-                                            datetime.strptime(
-                                                row[6], "%Y/%m/%d"
-                                            ).strftime("%Y-%m-%d")
-                                            if row[6]
-                                            else None
-                                        ),
-                                        quantity,
-                                        (sell_amount / quantity if quantity > 0 else 0),
-                                        0,
-                                        0,
-                                        profit_loss,
-                                        0,
-                                    ),
-                                )
-                                spot_imported_count += 1
-                            elif (
-                                "株式配当金" in trade_type or "信用配当金" in trade_type
-                            ):
-                                # 従来仕様: 現物取引履歴CSVの配当は取り込まない
-                                skipped_count += 1
-                                continue
-                            else:
-                                skipped_count += 1
-                        except Exception as e:
-                            errors.append(f"行 {row_num}: {str(e)}")
-                            logger.error(
-                                f"現物・配当金データインポートエラー (行 {row_num}): {e}"
+                        # 取引区分を確認
+                        if len(row) <= 5:
+                            logger.warning(
+                                f"行 {row_num}: 列数が不足しています ({len(row)}列)"
                             )
-                            import traceback
+                            skipped_count += 1
+                            continue
 
-                            logger.error(f"詳細: {traceback.format_exc()}")
+                        trade_type = row[5]  # 取引
 
-                else:
-                    # 2) 「配当のり」CSV 形式の検出と処理（拡張版）
-                    # - ヘッダー行が様々な表記でも検出する
-                    # - ヘッダーが無い（テーブルのみ）場合でも、データ行の先頭日付から取り込み可能にする
+                        if "現物売" in trade_type:
+                            # 現物売却の処理
+                            code = row[0].strip()  # 銘柄コード
+                            name = row[1].strip()  # 銘柄名
+                            trade_date = datetime.strptime(row[3], "%Y/%m/%d").strftime(
+                                "%Y-%m-%d"
+                            )  # 約定日
+                            quantity_str = (
+                                row[4].replace("株", "").replace(",", "")
+                            )  # 数量
+                            quantity = int(quantity_str)
+                            sell_amount = float(
+                                row[7].replace(",", "")
+                            )  # 売却/決済金額
+                            # 取得金額を取得（売却/決済金額と同じカラムに入っている場合もある）
+                            acquisition_amount = (
+                                float(row[10].replace(",", ""))
+                                if row[10] and row[10] != "--"
+                                else 0
+                            )  # 取得/新規金額
 
-                    import re as _re
+                            # 損益を計算（売却金額 - 取得金額）
+                            profit_loss = sell_amount - acquisition_amount
 
-                    amount_keywords = [
-                        "金額",
-                        "受取金額",
-                        "受領金額",
-                        "入金額",
-                        "配当金",
-                        "配当金額",
-                        "支払金額",
-                    ]
-                    name_keywords = ["銘柄", "銘柄名", "対象銘柄", "名称"]
-
-                    dividend_header_index = -1
-                    header_cols: list[str] | None = None
-
-                    for i, line in enumerate(lines):
-                        # 候補: いずれかの金額系キーワード AND いずれかの銘柄系キーワードを含む
-                        if any(k in line for k in amount_keywords) and any(
-                            k in line for k in name_keywords
-                        ):
-                            dividend_header_index = i
-                            header_cols = [
-                                c.strip().strip('"') for c in line.split(",")
-                            ]
-                            break
-
-                    # ヘッダーが見つからない場合、データ開始行を推定（先頭カラムが日付の行）
-                    data_start_index = -1
-                    if dividend_header_index != -1:
-                        data_start_index = dividend_header_index + 1
-                    else:
-                        date_pattern = _re.compile(r'^\s*"?\d{4}/\d{1,2}/\d{1,2}')
-                        for i, line in enumerate(lines):
-                            if date_pattern.match(line):
-                                data_start_index = i
-                                break
-
-                    if data_start_index == -1:
-                        raise ValueError(
-                            "CSVヘッダーが見つかりません（現物/配当のいずれの形式にも一致しません）"
-                        )
-
-                    # ヘルパ：ヘッダーからカラム位置を推定
-                    def find_index(
-                        keywords: list[str], default: int | None
-                    ) -> int | None:
-                        if not header_cols:
-                            return default
-                        for idx, col in enumerate(header_cols):
-                            if any(kw in col for kw in keywords):
-                                return idx
-                        return default
-
-                    date_idx = find_index(
-                        ["受取日", "入金日", "受領日", "支払日", "発生日", "日付"], 0
-                    )
-                    account_idx = find_index(
-                        ["口座", "預り", "預り区分", "口座種別"], 1
-                    )
-                    name_idx = find_index(["銘柄", "銘柄名", "対象銘柄", "名称"], 3)
-                    qty_idx = find_index(["数量", "株数", "口数", "保有数量"], 4)
-                    amount_idx = find_index(
-                        [
-                            "受取金額",
-                            "受領金額",
-                            "入金額",
-                            "配当金",
-                            "配当金額",
-                            "支払金額",
-                            "金額",
-                        ],
-                        5,
-                    )
-
-                    csv_reader = csv.reader(lines[data_start_index:])
-                    for row_index, row in enumerate(
-                        csv_reader, start=data_start_index + 1
-                    ):
-                        try:
-                            # 空行/不正行スキップ
-                            if not row or not any(str(c).strip() for c in row):
-                                continue
-
-                            # 安全のため長さ不足はスキップ
-                            if len(row) < 2:
-                                skipped_count += 1
-                                continue
-
-                            # 日付
-                            date_token = (
-                                row[date_idx]
-                                if (date_idx is not None and len(row) > (date_idx or 0))
-                                else row[0]
-                            )
-                            # 一部フォーマットで日付に時刻が付く場合を許容
-                            date_token = str(date_token).split()[0]
-                            trade_date = datetime.strptime(
-                                date_token.strip(), "%Y/%m/%d"
-                            ).strftime("%Y-%m-%d")
-
-                            custody_type = (
-                                row[account_idx].strip()
-                                if (
-                                    account_idx is not None
-                                    and len(row) > (account_idx or 0)
-                                    and row[account_idx]
-                                )
-                                else ""
-                            )
-
-                            name_and_code = (
-                                row[name_idx].strip()
-                                if (name_idx is not None and len(row) > (name_idx or 0))
-                                else ""
-                            )
-
-                            # 銘柄コード推定（末尾4桁数字、なければ最後のトークン数字）
-                            m = _re.search(r"(\d{4})$", name_and_code)
-                            if m:
-                                code = m.group(1)
-                                name = name_and_code[: m.start()].rstrip()
-                            else:
-                                parts = name_and_code.split()
-                                last = parts[-1] if parts else ""
-                                code = last if last.isdigit() else ""
-                                name = (
-                                    name_and_code if not code else " ".join(parts[:-1])
-                                )
-
-                            # 数量（任意）
-                            quantity = 0
-                            if qty_idx is not None and len(row) > (qty_idx or 0):
-                                try:
-                                    quantity = int(
-                                        str(row[qty_idx])
-                                        .replace(",", "")
-                                        .replace("株", "")
-                                        .strip()
-                                        or "0"
-                                    )
-                                except ValueError:
-                                    quantity = 0
-
-                            # 金額列の推定：ヘッダーが無い場合は右側の数値列を優先
-                            amount_token = None
-                            if amount_idx is not None and len(row) > (amount_idx or 0):
-                                amount_token = row[amount_idx]
-                            else:
-                                # 右から走査して数値に解釈できる列を採用
-                                for col in reversed(row):
-                                    parsed_value = None
-                                    try:
-                                        parsed_value = float(
-                                            str(col)
-                                            .replace(",", "")
-                                            .replace("円", "")
-                                            .strip()
-                                        )
-                                    except (ValueError, TypeError):
-                                        parsed_value = None
-                                    if parsed_value is not None:
-                                        amount_token = col
-                                        break
-
-                            amount_str = (
-                                str(amount_token)
-                                .replace(",", "")
-                                .replace("円", "")
-                                .strip()
-                                if amount_token is not None
-                                else "0"
-                            )
-                            settlement_amount = float(amount_str) if amount_str else 0.0
-
+                            # 現物取引として保存
                             cursor.execute(
                                 """
                                 INSERT INTO daytrade_stocks (
-                                    user_id, code, name, market, trade_type, term,
-                                    custody_type, trade_date, delivery_date, quantity,
-                                    average_price, commission_tax, capital_gains_tax,
-                                    settlement_amount, day_trade_amount
+                                    user_id, trade_date, code, name, market,
+                                    trade_type, term, custody_type,
+                                    delivery_date, quantity, average_price,
+                                    commission_tax, capital_gains_tax, settlement_amount,
+                                    day_trade_amount
                                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 """,
                                 (
                                     self.user_id,
+                                    trade_date,
                                     code,
                                     name,
-                                    "",
-                                    "配当金",
-                                    "",
-                                    custody_type,
-                                    trade_date,
-                                    None,
+                                    "",  # market
+                                    "現物売却",
+                                    "",  # term
+                                    "",  # custody_type
+                                    (
+                                        datetime.strptime(row[6], "%Y/%m/%d").strftime(
+                                            "%Y-%m-%d"
+                                        )
+                                        if row[6]
+                                        else None
+                                    ),  # 受渡日
                                     quantity,
-                                    0.0,
-                                    0.0,
-                                    0.0,
-                                    settlement_amount,
-                                    0.0,
+                                    (
+                                        sell_amount / quantity if quantity > 0 else 0
+                                    ),  # 平均単価
+                                    0,  # commission_tax
+                                    0,  # capital_gains_tax（後で税金処理で更新される可能性）
+                                    profit_loss,  # settlement_amount（損益）
+                                    0,  # day_trade_amount
                                 ),
                             )
-                            dividend_imported_count += 1
-                        except Exception as e:
-                            errors.append(f"行 {row_index}: {str(e)}")
-                            logger.error(
-                                f"配当のりCSVインポートエラー (行 {row_index}): {e}"
-                            )
+                            spot_imported_count += 1
+
+                        elif "株式配当金" in trade_type or "信用配当金" in trade_type:
+                            # 仕様変更: 現物取引履歴CSVからの配当は取り込まない
+                            skipped_count += 1
+                            continue
+                        else:
+                            # その他の取引はスキップ
+                            skipped_count += 1
+
+                    except Exception as e:
+                        errors.append(f"行 {row_num}: {str(e)}")
+                        logger.error(
+                            f"現物・配当金データインポートエラー (行 {row_num}): {e}"
+                        )
+                        # 詳細なエラー情報をログに記録
+                        import traceback
+
+                        logger.error(f"詳細: {traceback.format_exc()}")
 
                 conn.commit()
 
             return {
                 "spot_imported": spot_imported_count,
-                "dividend_imported": dividend_imported_count,
+                # 後方互換のためキーは残すが常に0
+                "dividend_imported": 0,
                 "skipped": skipped_count,
                 "errors": errors,
             }
